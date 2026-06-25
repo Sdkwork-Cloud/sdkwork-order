@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@sdkwork/appbase-pc-react": ["../sdkwork-appbase/packages/pc-react/foundation/sdkwork-appbase-pc-react/src/index.ts"],
+      "@sdkwork/ui-pc-react": ["../sdkwork-ui/sdkwork-ui-pc-react/src/index.ts"],
+      "@sdkwork/ui-pc-react/theme": ["../sdkwork-ui/sdkwork-ui-pc-react/src/theme/index.ts"],
+      "@sdkwork/utils": ["../sdkwork-utils/packages/sdkwork-utils-typescript/src/index.ts"],
+      "@sdkwork/order-contracts": ["packages/common/order/sdkwork-order-contracts/src/index.ts"],
+      "@sdkwork/order-service": ["packages/common/order/sdkwork-order-service/src/index.ts"],
+      "@sdkwork/order-sdk-ports": ["packages/common/order/sdkwork-order-sdk-ports/src/index.ts"],
+      "@sdkwork/order-pc-core": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-core/src/index.ts"],
+      "@sdkwork/order-pc-shell": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-shell/src/index.tsx"],
+      "@sdkwork/order-pc-order": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-order/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["node", "@testing-library/jest-dom"]
+  }
+}

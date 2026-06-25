@@ -1,0 +1,85 @@
+use crate::{CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand};
+
+fn stable_request_hash(parts: &[&str]) -> String {
+    parts
+        .iter()
+        .map(|part| {
+            part.chars()
+                .map(|character| {
+                    if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                        character
+                    } else {
+                        '-'
+                    }
+                })
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+pub fn checkout_session_request_hash(command: &CreateCheckoutSessionCommand) -> String {
+    let lines = command
+        .lines
+        .iter()
+        .map(|line| format!("{}:{}", line.sku_id, line.quantity))
+        .collect::<Vec<_>>()
+        .join(",");
+    stable_request_hash(&[
+        "checkout-session",
+        &command.tenant_id,
+        command.organization_id.as_deref().unwrap_or("global"),
+        &command.owner_user_id,
+        &command.currency_code,
+        &lines,
+        &command.request_no,
+    ])
+}
+
+pub fn checkout_quote_request_hash(command: &CreateCheckoutQuoteCommand) -> String {
+    stable_request_hash(&[
+        "checkout-quote",
+        &command.tenant_id,
+        command.organization_id.as_deref().unwrap_or("global"),
+        &command.owner_user_id,
+        &command.checkout_session_id,
+        &command.request_no,
+    ])
+}
+
+pub fn checkout_owner_order_request_hash(command: &CreateOwnerOrderCommand) -> String {
+    stable_request_hash(&[
+        "checkout-owner-order",
+        &command.tenant_id,
+        command.organization_id.as_deref().unwrap_or("global"),
+        &command.owner_user_id,
+        &command.checkout_session_id,
+        &command.request_no,
+    ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::CheckoutLineInput;
+
+    #[test]
+    fn checkout_session_request_hash_is_stable_for_same_command() {
+        let lines = vec![CheckoutLineInput::new("sku-1", 1).expect("line")];
+        let command = CreateCheckoutSessionCommand::new(
+            "tenant-1",
+            Some("org-1"),
+            "user-1",
+            "CNY",
+            lines,
+            "request-1",
+            "idem-1",
+        )
+        .expect("command");
+
+        let first = checkout_session_request_hash(&command);
+        let second = checkout_session_request_hash(&command);
+        assert_eq!(first, second);
+        assert!(!first.is_empty());
+    }
+}

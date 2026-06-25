@@ -1,0 +1,13 @@
+{
+  "name": "@sdkwork/order-service",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sdkwork/order-sdk-ports": "workspace:*",
+    "@sdkwork/utils": "workspace:*"
+  }
+}

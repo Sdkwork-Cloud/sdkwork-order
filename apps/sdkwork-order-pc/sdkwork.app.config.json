@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 3,
+  "kind": "sdkwork.app",
+  "app": {
+    "key": "sdkwork-order-pc",
+    "name": "SDKWork Order PC",
+    "displayName": "SDKWork Order PC",
+    "description": "Order capability PC surface for buyer and operator workflows.",
+    "vendor": "SDKWork",
+    "appType": "APP_REACT",
+    "versionSource": "package.json",
+    "identifiers": {
+      "desktopAppId": "com.sdkwork.order.pc.desktop",
+      "containerImage": "registry.sdkwork.com/apps/sdkwork-order-pc"
+    }
+  },
+  "backend": {
+    "profileKey": "backend-root-admin",
+    "ownerMode": "tenant",
+    "grantMode": "current",
+    "platform": "WEB",
+    "tenantId": "100001",
+    "organizationId": "0"
+  },
+  "runtime": {
+    "family": "web",
+    "framework": "react",
+    "runtimes": ["WEB", "BROWSER"],
+    "deliveryModes": ["WEB_URL"],
+    "supportedDeploymentProfiles": ["standalone", "cloud"],
+    "defaultDeploymentProfile": "standalone"
+  },
+  "publish": {
+    "config": {
+      "workspaceRoot": "sdkwork-order",
+      "managedBy": "sdkwork-order-workspace"
+    }
+  },
+  "devApp": {
+    "sourceRoot": "apps/sdkwork-order-pc"
+  },
+  "metadata": {
+    "standardOwner": "sdkwork-order",
+    "initializedAt": "2026-06-24T00:00:00.000Z"
+  }
+}

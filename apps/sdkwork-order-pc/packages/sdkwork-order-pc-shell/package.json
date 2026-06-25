@@ -1,0 +1,17 @@
+{
+  "name": "@sdkwork/order-pc-shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "dependencies": {
+    "@sdkwork/order-pc-core": "workspace:*",
+    "react": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0 <20.0.0",
+    "react-dom": ">=18.2.0 <20.0.0"
+  }
+}

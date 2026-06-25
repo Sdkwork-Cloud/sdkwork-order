@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@sdkwork/order-pc-core": ["packages/sdkwork-order-pc-core/src/index.ts"],
+      "@sdkwork/order-pc-shell": ["packages/sdkwork-order-pc-shell/src/index.tsx"],
+      "@sdkwork/order-pc-order": ["packages/sdkwork-order-pc-order/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "packages/**/*.tsx"]
+}

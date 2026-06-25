@@ -1,0 +1,36 @@
+export const APP_ORDER_METHOD_TREE = {
+  orders: {
+    list: true,
+    create: true,
+    retrieve: true,
+    pay: true,
+    cancel: true,
+    events: { list: true },
+    cancellations: { create: true },
+    paymentSuccess: { retrieve: true },
+    statistics: { retrieve: true },
+    status: { retrieve: true },
+  },
+} as const;
+
+export type OrderRequestParams = Record<string, unknown>;
+export type OrderSdkResponse<T> = Promise<
+  T | { code?: number | string; data?: T; message?: string; msg?: string }
+>;
+export type OrderSdkMethod = (...args: any[]) => OrderSdkResponse<any>;
+
+type MethodTree = {
+  readonly [key: string]: true | MethodTree;
+};
+
+export type ClientFromMethodTree<TTree extends MethodTree> = {
+  readonly [TKey in keyof TTree]: TTree[TKey] extends true
+    ? OrderSdkMethod
+    : TTree[TKey] extends MethodTree
+      ? ClientFromMethodTree<TTree[TKey]>
+      : never;
+};
+
+export type OrderAppSdkClient = {
+  commerce: ClientFromMethodTree<{ orders: typeof APP_ORDER_METHOD_TREE.orders }>;
+};
