@@ -9,15 +9,14 @@ publish.workspace = true
 name = "order-server"
 path = "src/main.rs"
 
-[lib]
-path = "src/lib.rs"
-
 [dependencies]
+sdkwork_order_gateway_assembly = { package = "sdkwork-order-gateway-assembly", path = "../sdkwork-order-gateway-assembly" }
 axum = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-sdkwork_router_order_app_api.workspace = true
-sdkwork_router_order_backend_api.workspace = true
+sdkwork-web-bootstrap.workspace = true
+sdkwork_routes_order_app_api.workspace = true
+sdkwork_routes_order_backend_api.workspace = true
 sdkwork_order_service_host.workspace = true

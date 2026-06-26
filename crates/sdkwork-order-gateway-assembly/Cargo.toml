@@ -1,0 +1,17 @@
+[package]
+name = "sdkwork-order-gateway-assembly"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+description = "Generated gateway assembly for sdkwork-order application HTTP plane."
+
+[lib]
+name = "sdkwork_order_gateway_assembly"
+path = "src/lib.rs"
+
+[dependencies]
+axum.workspace = true
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
+sdkwork_order_service_host.workspace = true
+sdkwork_routes_order_app_api = { package = "sdkwork-routes-order-app-api", path = "../sdkwork-routes-order-app-api" }
+sdkwork_routes_order_backend_api = { package = "sdkwork-routes-order-backend-api", path = "../sdkwork-routes-order-backend-api" }

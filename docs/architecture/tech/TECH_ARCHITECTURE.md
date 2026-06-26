@@ -1,8 +1,14 @@
 # Order Technical Architecture
+Specs: ARCHITECTURE_DECISION_SPEC.md, DOCUMENTATION_SPEC.md
 
 Status: active
 Owner: SDKWork maintainers
 Updated: 2026-06-24
+
+## 1. Architecture Overview
+
+Describe the repository/application architecture.
+
 
 ## Capability stack
 
@@ -12,7 +18,7 @@ Updated: 2026-06-24
 | --- | --- |
 | Domain (Rust) | `crates/sdkwork-commerce-order-service/` |
 | SQL | `crates/sdkwork-commerce-order-repository-sqlx/` |
-| HTTP routers | `crates/sdkwork-router-order-*-api/` |
+| HTTP routers | `crates/sdkwork-routes-order-*-api/` |
 | API server | `crates/sdkwork-order-api-server/` |
 | PC client | `apps/sdkwork-order-pc/` |
 | Client facade | `packages/common/order/sdkwork-order-service/` |

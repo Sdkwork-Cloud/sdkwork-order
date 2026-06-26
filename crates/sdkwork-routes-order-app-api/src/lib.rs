@@ -30,3 +30,11 @@ pub use shipment_router::{
     build_app_shipment_router, app_shipment_router_with_postgres_pool,
     app_shipment_router_with_sqlite_pool, CommerceShipmentFuture, CommerceShipmentStore,
 };
+
+use axum::Router;
+use sdkwork_order_service_host::OrderServiceHost;
+use std::sync::Arc;
+
+pub async fn gateway_mount(host: Arc<OrderServiceHost>) -> Router {
+    build_order_app_router_with_framework(host).await
+}
