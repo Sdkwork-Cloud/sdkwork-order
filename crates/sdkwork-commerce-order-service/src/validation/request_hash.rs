@@ -67,8 +67,8 @@ mod tests {
     fn checkout_session_request_hash_is_stable_for_same_command() {
         let lines = vec![CheckoutLineInput::new("sku-1", 1).expect("line")];
         let command = CreateCheckoutSessionCommand::new(
-            "tenant-1",
-            Some("org-1"),
+            "100001",
+            Some("0"),
             "user-1",
             "CNY",
             lines,

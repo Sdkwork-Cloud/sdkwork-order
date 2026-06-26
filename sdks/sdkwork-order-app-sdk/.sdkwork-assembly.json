@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "workspace": "sdkwork-order-app-sdk",
+  "title": "SDKWork Order App API",
+  "apiVersion": "1.0.0",
+  "openapiVersion": "3.1.2",
+  "sdkOwner": "sdkwork-order",
+  "apiAuthority": "sdkwork-order-app-api",
+  "sourceAuthoritySpec": "../../apis/app-api/order/order-app-api.openapi.json",
+  "authoritySpec": "openapi/sdkwork-order-app-api.openapi.json",
+  "generationInputSpec": "openapi/sdkwork-order-app-api.sdkgen.json",
+  "ownerOnlyOperationCount": 27,
+  "sdkDependencies": [],
+  "generator": {
+    "package": "@sdkwork/sdk-generator",
+    "entrypoint": "../../../sdkwork-sdk-generator/bin/sdkgen.js",
+    "version": "1.0.0",
+    "standardProfile": "sdkwork-v3"
+  },
+  "derivedSpecs": {
+    "default": "openapi/sdkwork-order-app-api.sdkgen.json"
+  },
+  "discoverySurface": {
+    "sdkTarget": "app",
+    "apiPrefix": "/app/v3/api",
+    "schemaUrl": "/app/v3/api/openapi.json",
+    "generatedProtocols": [
+      "http-openapi"
+    ],
+    "manualTransports": []
+  },
+  "languages": [
+    {
+      "language": "typescript",
+      "workspace": "sdkwork-order-app-sdk-typescript",
+      "generationState": "source_ready",
+      "releaseState": "not_published",
+      "packagePath": "sdkwork-order-app-sdk-typescript/generated/server-openapi",
+      "manifestPath": "sdkwork-order-app-sdk-typescript/generated/server-openapi/package.json",
+      "name": "@sdkwork/order-app-sdk",
+      "version": "0.1.0",
+      "description": "Generator-owned TypeScript transport SDK for SDKWork Order App API.",
+      "generatedPath": "sdkwork-order-app-sdk-typescript/generated/server-openapi"
+    }
+  ],
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardProfile": "sdkwork-v3",
+    "supportedLanguageSubset": [
+      "typescript"
+    ]
+  }
+}

@@ -1,0 +1,469 @@
+{
+  "schemaVersion": 1,
+  "generator": "@sdkwork/sdk-generator",
+  "sdk": {
+    "name": "sdkwork-order-app-sdk",
+    "version": "0.1.0",
+    "language": "typescript",
+    "sdkType": "app",
+    "protocol": "http",
+    "packageName": "@sdkwork/order-app-sdk"
+  },
+  "generatedFiles": [
+    {
+      "path": "bin/publish-core.mjs",
+      "sha256": "98ad0918a78bfbe22bf8f12fec709b0bed545b9e01edd40f5e4abf31a23378a5"
+    },
+    {
+      "path": "bin/publish.ps1",
+      "sha256": "78c6419400b988409d9393c2ecd85aa02dd6760f73edb3cc84cb28fefc51b41e"
+    },
+    {
+      "path": "bin/publish.sh",
+      "sha256": "899087c23e670b6951a12a13490fd557f761c96d78fabfb7e58a37e367db889f"
+    },
+    {
+      "path": "bin/sdk-gen.bat",
+      "sha256": "2d56891dc8276339ebbffc78ada3cc1bf73e2831453da89d95fcd2277bb4a05b"
+    },
+    {
+      "path": "bin/sdk-gen.sh",
+      "sha256": "c9bab3f87d5327833ca9a392f6b8e6b6d3386a46836cc3c48ef48313b603bd90"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "fb941a0806986a54fc192f98a98f6d9c282b8d350b2b19a3e71dda404e92d545"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "7840cc7d2b36ff364ac16c2fc5ec15b861bfe96854eecf81fb59b00edb8b1447"
+    },
+    {
+      "path": "package.json",
+      "sha256": "fafacb69d370ef94cc41fb5a600bb6be48ab55c592016711a551b923cdaa606c"
+    },
+    {
+      "path": "README.md",
+      "sha256": "58205836b483e068e997435ccffa08e59be173d43942e896117459b7de9830c2"
+    },
+    {
+      "path": "sdkwork-sdk.json",
+      "sha256": "f138e4bd099d0b429a6fd1a6855246ed69f02770d94070c7c6dd32e861e9a77f"
+    },
+    {
+      "path": "src/api/after-sales.ts",
+      "sha256": "a06b7b1ab040919492815abe483caa6dba78a97125535bc88e063bac8a9a7158"
+    },
+    {
+      "path": "src/api/base.ts",
+      "sha256": "02ad25e6bf331ff241ba387c2947ddf1900dd849038e08c2757416a3aa788a04"
+    },
+    {
+      "path": "src/api/checkout.ts",
+      "sha256": "2a298a75f19ef986d24d64f11dbb76c012276d731755ba1a43eb9b22001b8a13"
+    },
+    {
+      "path": "src/api/fulfillments.ts",
+      "sha256": "a9b0fa8f496b36fe03600e82a37faab3724ae5dc3c4492eae7e3014d2481f11c"
+    },
+    {
+      "path": "src/api/index.ts",
+      "sha256": "4486b81f87cae44e98a66e4cd346685118d26f98e442b6744fd902dff82a78ad"
+    },
+    {
+      "path": "src/api/orders.ts",
+      "sha256": "3b4b8c3df3176c2dce1de56fa7934668461ea8be7cdab6f488510ed1f3173f23"
+    },
+    {
+      "path": "src/api/paths.ts",
+      "sha256": "4ffed7b7d576dc11081bf6b43511465d3a5db410bd25c425ef47b69b154981ad"
+    },
+    {
+      "path": "src/api/payments.ts",
+      "sha256": "10f4ac02a3de883228229f274f2fcba1ee6f013b04bd437969b568d4aa5a23e3"
+    },
+    {
+      "path": "src/api/shipments.ts",
+      "sha256": "54932d8988378b0670151ec3ab34bfcddd28f018b59ce0ba0eb7772db175c203"
+    },
+    {
+      "path": "src/auth/index.ts",
+      "sha256": "657fc63738bdcd61d83133120732a477dd127448cf2c51229b05d21f5e1f5c04"
+    },
+    {
+      "path": "src/http/client.ts",
+      "sha256": "7c5521163579261418c56e8126b0389dd78be9e0931e5e6064749c7cc9df0edc"
+    },
+    {
+      "path": "src/http/index.ts",
+      "sha256": "fc204fbe89750b9d25ecaffe41003e6ac243a1a895b65e65856202ab825d2dbe"
+    },
+    {
+      "path": "src/index.ts",
+      "sha256": "1b72e156546dff1aa4a094a8fb926ab543ccd7e320d3aacef790509f4df5f48b"
+    },
+    {
+      "path": "src/sdk.ts",
+      "sha256": "c29b7124d097521643b647bc316023b937dc228ed87de8b99ca30c8b3016ccaa"
+    },
+    {
+      "path": "src/types/after-sales-event-list-response.ts",
+      "sha256": "f2c4e08e78976b11b9bf4132d128d0800b94f34069344865e4c01d84d8e28ad8"
+    },
+    {
+      "path": "src/types/after-sales-event.ts",
+      "sha256": "f8f269dd029f46471eb983f25681e624f301213a8d17ed63ba990e89b8b91a9f"
+    },
+    {
+      "path": "src/types/after-sales-item.ts",
+      "sha256": "947addc3816ca11cb3561bd899d39c35f0ae4a2968d086a83a012d3ef568e44b"
+    },
+    {
+      "path": "src/types/after-sales-request-list-response.ts",
+      "sha256": "41a2d91018fc2cb3d814cd625e25fc9fd43a9cdd8a4b0d605be2dbb96d2dedb8"
+    },
+    {
+      "path": "src/types/after-sales-request-response.ts",
+      "sha256": "7da829f74ead62e44643c217a573df89c4a52fb516ff949be8a5a548607ccdd5"
+    },
+    {
+      "path": "src/types/after-sales-request.ts",
+      "sha256": "7af797896337bca1a3f0c5e2d78f70ea25d0cb505583239d7686cea53e2f2e26"
+    },
+    {
+      "path": "src/types/after-sales-return-shipment-list-response.ts",
+      "sha256": "03c5871accf3887e68e4ccc7b6eb93972a758bd4911439249cd8c016c9d4d47e"
+    },
+    {
+      "path": "src/types/after-sales-return-shipment-response.ts",
+      "sha256": "0aee121089585bcd773d35395a7001abc0b1673beda71a6523dafd9594f4c55f"
+    },
+    {
+      "path": "src/types/after-sales-return-shipment.ts",
+      "sha256": "e65e8ae0d7cdb5a6c07f866c7858f44d961825670f6f8da3c1a866337a41682e"
+    },
+    {
+      "path": "src/types/commerce-api-result.ts",
+      "sha256": "13f45ffed175d5aab0b050c3fb197d858eef5ce1e84b0a5814081a0e9938519a"
+    },
+    {
+      "path": "src/types/commerce-operation-command.ts",
+      "sha256": "f0a4310b8460b20f8387188f56641f8f570af04e57c69169e53b26e17bb00eab"
+    },
+    {
+      "path": "src/types/common.ts",
+      "sha256": "d2506be8c4bdbe8e7059393467e6e71d75ef1d8c018dbf997bb0ab2a77b6c7b6"
+    },
+    {
+      "path": "src/types/create-after-sales-request-item.ts",
+      "sha256": "46ed23ea8c80c794dfd7aee064fe5cd48e506024631d59faa46174b08d8f6424"
+    },
+    {
+      "path": "src/types/create-after-sales-request.ts",
+      "sha256": "091bce580913518633c1a4644f89f3f2e01f12b38dbaa5b6e8dfae8b24756e65"
+    },
+    {
+      "path": "src/types/create-after-sales-return-shipment-request.ts",
+      "sha256": "ba226aa759e7cecd427afd56af660d7e4e2e75f2211098a05275e81e2a6f9f52"
+    },
+    {
+      "path": "src/types/create-shop-service-area-request.ts",
+      "sha256": "c964bbf78557033cc6d58ab3ef847e72cfbdadbf99b0c103a72a72b35f31e62c"
+    },
+    {
+      "path": "src/types/current-shop-response.ts",
+      "sha256": "2d10e362a31687810f99cb1fe28300e15f6763e67ee637ebee6d793049654193"
+    },
+    {
+      "path": "src/types/field-error.ts",
+      "sha256": "44b8c95731a9dd8f7b30bb07a415b9541460964861f9ee806c31a4291953bf60"
+    },
+    {
+      "path": "src/types/index.ts",
+      "sha256": "c1b93ceb31b8c6d1089630482ab8378a75d7ec03caacabc4b7061b950bb5be22"
+    },
+    {
+      "path": "src/types/problem-detail.ts",
+      "sha256": "7801e79cab9a1ccace62b2a0ba2119f835b41e4e22f858b10490ffd638b7f3a6"
+    },
+    {
+      "path": "src/types/shop-application-list-response.ts",
+      "sha256": "95429cd8347b8aef68fb9bd5f1a02099ca9895fadc7328bf42efeca3ebd4f4a4"
+    },
+    {
+      "path": "src/types/shop-application-response.ts",
+      "sha256": "fca448da4fcf349acde9b3aaebe97392286fdbc1f09350d42fb44bcf0f0c57af"
+    },
+    {
+      "path": "src/types/shop-application.ts",
+      "sha256": "b6c4739ff94cfa151df31cff0112470c1cdbf606b801a90c2e1396820ba67891"
+    },
+    {
+      "path": "src/types/shop-brand-authorization-list-response.ts",
+      "sha256": "ee513044128adcf06778359bfa8c23e9578a9b77873bfdedcac5c221ee03efde"
+    },
+    {
+      "path": "src/types/shop-brand-authorization-response.ts",
+      "sha256": "25f74101eac361c13268e2616a3812858fae571a93a5b450c38c45eff27c5c18"
+    },
+    {
+      "path": "src/types/shop-brand-authorization.ts",
+      "sha256": "609c2a93b9288a1a0604b66315a822bb6c12eb177ef06b90ecf82ae894219ac7"
+    },
+    {
+      "path": "src/types/shop-business-hour-response.ts",
+      "sha256": "b70c51a1463d195448be68da0740766dd04ef934124c2e637710e7051b39cdaf"
+    },
+    {
+      "path": "src/types/shop-business-hour.ts",
+      "sha256": "be8f197be81ff45af8ad275d509a4a391d4b2bcf7c087f5684947c08733b5fb6"
+    },
+    {
+      "path": "src/types/shop-category-binding-list-response.ts",
+      "sha256": "7a35f47288e07e3b258505ea9b8d68c413ed71adb15338915ee191f17994faae"
+    },
+    {
+      "path": "src/types/shop-category-binding-response.ts",
+      "sha256": "e2abd1c8756ae81d29dfda90922e2625cacbf0f7a72fef900c777c985dd5c324"
+    },
+    {
+      "path": "src/types/shop-category-binding.ts",
+      "sha256": "0a37e4d134b8301d3261e2f5d0c0c2196180ff50156b9b6a00e7f8bdf7670f1b"
+    },
+    {
+      "path": "src/types/shop-channel-list-response.ts",
+      "sha256": "e9670f91463272d3b208fbd3341a89ddbdd22865ec0a43afdc3d77a6f370cdd1"
+    },
+    {
+      "path": "src/types/shop-channel-response.ts",
+      "sha256": "d74ed094b4a1835eb5228c8598438772bdff8023385791884c77a57cc41a27b4"
+    },
+    {
+      "path": "src/types/shop-channel.ts",
+      "sha256": "75075abf7a36950a9ff826902f65214ea55a0b3370abbdbe210e48423be1064a"
+    },
+    {
+      "path": "src/types/shop-customer-service-list-response.ts",
+      "sha256": "1f0471db812e560740d96322710b761cfba946d513862a5aef19c5ac23841f7a"
+    },
+    {
+      "path": "src/types/shop-customer-service-response.ts",
+      "sha256": "f7de7ce6bc9f4b154df3e3174bf06399abf394efed2748fbc82b3c302076ab7a"
+    },
+    {
+      "path": "src/types/shop-customer-service.ts",
+      "sha256": "3d0b29f02475ed18b461a0d0d9ad4099bb1d18c2b1ffc367842292a4806d9e92"
+    },
+    {
+      "path": "src/types/shop-dashboard-response.ts",
+      "sha256": "37d98164d6de0dba7ff8fddd2fcdd922dad989593dd6ebfe880f85e93ff63648"
+    },
+    {
+      "path": "src/types/shop-deposit-account-response.ts",
+      "sha256": "740450ebda07e401d7072a4b888821066736db63d84910285544416c11914a7d"
+    },
+    {
+      "path": "src/types/shop-deposit-account.ts",
+      "sha256": "ecf4bde4fea22f78d648ae7e6fbbc3768ecd8607746f4cac00542a37c0406047"
+    },
+    {
+      "path": "src/types/shop-detail-response.ts",
+      "sha256": "6ee7407a789344a4b8559b401068963172a8fecbccda1efd2866432a71b25393"
+    },
+    {
+      "path": "src/types/shop-detail.ts",
+      "sha256": "18986df04b6c1a1ee2082b7528223f88fd83efa7c1b1adb5282811f1fc8a5cbd"
+    },
+    {
+      "path": "src/types/shop-fulfillment-profile-response.ts",
+      "sha256": "a7ff6901f3c0fd9bd44c754bc439dac1c17601ed49de1fc69d4d3a860b43cfab"
+    },
+    {
+      "path": "src/types/shop-fulfillment-profile.ts",
+      "sha256": "489470b695a121e2d7c0ef75a69fb84febdc2cd075114fd53178cad9644ee5d1"
+    },
+    {
+      "path": "src/types/shop-list-response.ts",
+      "sha256": "30b817ed548c21a5685ef16fb74fa571168b1eb529dab529cd2cd6881fcaf54b"
+    },
+    {
+      "path": "src/types/shop-metric-snapshot.ts",
+      "sha256": "3287df9ab4b3f02b696ddeca454a40ec45d57643576f08dc0150d87d94057b01"
+    },
+    {
+      "path": "src/types/shop-policy-list-response.ts",
+      "sha256": "2185e2d69bda2df3e82b8f66c395aba66a9e459270aab79e6c91ffe2e5c0e337"
+    },
+    {
+      "path": "src/types/shop-policy-response.ts",
+      "sha256": "8495850b15e208790648dccf287daab0e3672f40d052663749ae7712537cbca0"
+    },
+    {
+      "path": "src/types/shop-policy.ts",
+      "sha256": "42fe3a04455635ebe4a5ee9500f0de96575e3614301ca6f431013c9a73b23620"
+    },
+    {
+      "path": "src/types/shop-qualification-list-response.ts",
+      "sha256": "41f0fb67fe077121549ae68453f5a4da2badfcece01d07674b2a448578f1f56d"
+    },
+    {
+      "path": "src/types/shop-qualification-response.ts",
+      "sha256": "c76ad00d8f7cf6b975bd0a830ab7f6a2aad6681ac6e2891a453c0416c3b30b9c"
+    },
+    {
+      "path": "src/types/shop-qualification.ts",
+      "sha256": "a489e936f55e6795eb689cb22cf84c15d8c2f31e294301fdb2154b1a396705b1"
+    },
+    {
+      "path": "src/types/shop-readiness-item.ts",
+      "sha256": "dc675c8498cdc41c500a5d8ea0a4a820bab0a6af7daaff18f0c3276024d13707"
+    },
+    {
+      "path": "src/types/shop-readiness-response.ts",
+      "sha256": "80c5ac9e2260dac83e9a3b9602b8fedf1a2f80d76acfa42ad59569e1de7eae0c"
+    },
+    {
+      "path": "src/types/shop-readiness.ts",
+      "sha256": "e34578164207c3b220ea50f14da70649ebbb7ca275b6f69b781220de87ca0b1d"
+    },
+    {
+      "path": "src/types/shop-return-address-list-response.ts",
+      "sha256": "0cc794fba0d4b19e9d0863c97c6de11ea3b98e8de3fea136a713d846af0dac4b"
+    },
+    {
+      "path": "src/types/shop-return-address-response.ts",
+      "sha256": "1a8a6cb89018054c39311acea6c23abfda66547e39b6c86b448308676e3c375f"
+    },
+    {
+      "path": "src/types/shop-return-address.ts",
+      "sha256": "0a181c74f5d4a4311312f487a5fc8bf7dd553f13eacba19409774383b485bc81"
+    },
+    {
+      "path": "src/types/shop-risk-signal-list-response.ts",
+      "sha256": "e423f67937dec0c5df8794d6e38a74fe52b31c4003b9380954cc2d62e84b72e7"
+    },
+    {
+      "path": "src/types/shop-risk-signal.ts",
+      "sha256": "20743d50d64081bf776d1e6b2b07505c741e40196ca6f3793cbf0000b7d8c412"
+    },
+    {
+      "path": "src/types/shop-service-area-list-response.ts",
+      "sha256": "b6c04a95c565dd61b908047f5f15bc054c3b5be2aabd4185fc015db6c935d1d4"
+    },
+    {
+      "path": "src/types/shop-service-area-response.ts",
+      "sha256": "0c5440fdc5c26758d7c3c75676d70310a57811cfe70a68086e0828018b3e31ba"
+    },
+    {
+      "path": "src/types/shop-service-area.ts",
+      "sha256": "018c39e3161560819df350e59738ea66ce2c3576b56575c647a363b87a53ffe0"
+    },
+    {
+      "path": "src/types/shop-settlement-profile-response.ts",
+      "sha256": "695d23e03d7181287b3a125039580c4ee490b730f03b0090ebe5ff8212583d4a"
+    },
+    {
+      "path": "src/types/shop-settlement-profile.ts",
+      "sha256": "abe84a0516d1705e7307b6d3e33affdc357e3b5b11644e35480e4b21c8a95334"
+    },
+    {
+      "path": "src/types/shop-shipping-template-list-response.ts",
+      "sha256": "ba5994324d664746cbdd80b2de9399274cd7bac2197b0b11ed659d0008b3455e"
+    },
+    {
+      "path": "src/types/shop-shipping-template-response.ts",
+      "sha256": "02aff73cfbf24a9059130f6d785dc06f54bd35dde117b2cbc989d78ff97c57d5"
+    },
+    {
+      "path": "src/types/shop-shipping-template.ts",
+      "sha256": "2d97471a6220cb1bd91e7d20cb6b134aa35c41eefa9709dded996c57b46c8a04"
+    },
+    {
+      "path": "src/types/shop-status-event-list-response.ts",
+      "sha256": "46b583a809cdb43320132832a8b04c75081844337049bf14de3e948162f2c98d"
+    },
+    {
+      "path": "src/types/shop-status-event.ts",
+      "sha256": "9865237f5152ace3dae9457a957da58874e890e0be11149ef8650049d021f1a6"
+    },
+    {
+      "path": "src/types/shop-summary.ts",
+      "sha256": "be94499b9ff3ecfb073b1b1734b1eaf7530267c28af64f8f8142c3816e7a6886"
+    },
+    {
+      "path": "src/types/shop-verification-list-response.ts",
+      "sha256": "060800b252983b702ca10842563ceea8499780574c22cbb715f5dbb37cc6af83"
+    },
+    {
+      "path": "src/types/shop-verification.ts",
+      "sha256": "1d5ad526e4bd3ab5d12f68b6276b27962f87da0123d94b50002eac0125f76d19"
+    },
+    {
+      "path": "src/types/submit-shop-application-request.ts",
+      "sha256": "f8c346976036cb22f355a88a988ebf4b791ceda69d585ca9c7721b19abd41e88"
+    },
+    {
+      "path": "src/types/update-after-sales-request.ts",
+      "sha256": "bdaa156d7bfe3bb4fe049929e7af36d13278dbecf1b7cdb37f86860fc7d25758"
+    },
+    {
+      "path": "src/types/update-shop-business-hour-request.ts",
+      "sha256": "52043079aa7df8ba3d22f8da050e6091c74d4db78defebee40c450bf874c40c9"
+    },
+    {
+      "path": "src/types/update-shop-channel-request.ts",
+      "sha256": "4d201dddce7e2a13522cc9aac228bcaf575db2de4786c642fa611c0225d4ac8e"
+    },
+    {
+      "path": "src/types/update-shop-fulfillment-profile-request.ts",
+      "sha256": "87130b823bac7dfdbe0a609d2aed0bec49026328674c40a0f9e3e0bf0790aef1"
+    },
+    {
+      "path": "src/types/update-shop-policy-request.ts",
+      "sha256": "18b357be13d2cac4b12ffd1740b8208a7c475750b2f41bff3d96add27b146f30"
+    },
+    {
+      "path": "src/types/update-shop-service-area-request.ts",
+      "sha256": "0a867e412ee7c0796b687914164ce9bb3a6dbd20764979b1372c2dc857a58b19"
+    },
+    {
+      "path": "src/types/update-shop-settlement-profile-request.ts",
+      "sha256": "963b0d51202839d0c85e6f7637c5c073c57e54d8050cc6e1fa6874ee1c920f29"
+    },
+    {
+      "path": "src/types/upsert-shop-brand-authorization-request.ts",
+      "sha256": "71814511c79bf277944bbab427ac846ed4655e5bd1d54f068f2f5f4c70c2f215"
+    },
+    {
+      "path": "src/types/upsert-shop-category-binding-request.ts",
+      "sha256": "48b7ff80aa66d6dedd5d097aa285216e424cacda80dfbde369479e030ea74bbb"
+    },
+    {
+      "path": "src/types/upsert-shop-customer-service-request.ts",
+      "sha256": "760cf578aecfc608a36adb543fa34b7048d4ca2753b3c24b492fe0d8cdccabe1"
+    },
+    {
+      "path": "src/types/upsert-shop-qualification-request.ts",
+      "sha256": "ba17802d1f884280bfef992e72021f65caae10be119e1682cd442a39b1cda9c5"
+    },
+    {
+      "path": "src/types/upsert-shop-return-address-request.ts",
+      "sha256": "4ff17ff4d11d22cd98e8f1713cb4f3c26481539fd726c9f450523ff7d49b62b7"
+    },
+    {
+      "path": "src/types/upsert-shop-shipping-template-request.ts",
+      "sha256": "31406ec79f57dcd38663795b29e55187b75464c1e50bc7b82e8e62dbdfa4de51"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "7c8a6c2b00fb208ec28e1e6045194487d1b3e563d6c44cef4783fd4fe0e8ffad"
+    }
+  ],
+  "scaffoldFiles": [
+    "custom/build-runtime.mjs",
+    "custom/README.md"
+  ],
+  "customRoots": [
+    "custom/"
+  ]
+}
