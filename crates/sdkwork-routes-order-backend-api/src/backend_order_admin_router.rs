@@ -18,7 +18,19 @@ use sdkwork_iam_context_service::IamAppContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
-use crate::subject::app_runtime_subject_from_extension;
+use crate::subject::{app_runtime_subject_from_extension, app_runtime_subject_from_iam};
+
+/// Permission codes enforced on the backend order admin API surface.
+///
+/// The codes are domain-scoped (`commerce.orders.*`) so they can be granted
+/// through standard SDKWork IAM permission catalogs without colliding with
+/// other commerce capabilities (payment, catalog, etc.).
+mod permissions {
+    /// Read access to orders, events, and cancellations.
+    pub const READ: &str = "commerce.orders.read";
+    /// Write access: cancel, close, or otherwise mutate order state.
+    pub const MANAGE: &str = "commerce.orders.manage";
+}
 
 #[derive(Clone)]
 enum BackendOrderAdminStore {
@@ -238,9 +250,9 @@ async fn list_orders(
     Extension(runtime_context): Extension<IamAppContext>,
     Query(params): Query<OrderListParams>,
 ) -> Response {
-    let subject = match app_runtime_subject_from_extension(Some(Extension(runtime_context))) {
+    let subject = match require_backend_subject(runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized(message),
+        Err(response) => return response,
     };
     let query = match OrderManagementListQuery::new(
         &subject.tenant_id,
@@ -270,9 +282,9 @@ async fn retrieve_order(
     Extension(runtime_context): Extension<IamAppContext>,
     Path(order_id): Path<String>,
 ) -> Response {
-    let subject = match app_runtime_subject_from_extension(Some(Extension(runtime_context))) {
+    let subject = match require_backend_subject(runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized(message),
+        Err(response) => return response,
     };
     let query = match OrderManagementDetailQuery::new(
         &subject.tenant_id,
@@ -296,9 +308,9 @@ async fn cancel_order(
     Path(order_id): Path<String>,
     Json(body): Json<CancelOrderBody>,
 ) -> Response {
-    let subject = match app_runtime_subject_from_extension(Some(Extension(runtime_context))) {
+    let subject = match require_backend_subject(runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized(message),
+        Err(response) => return response,
     };
     let command = match CancelManagementOrderCommand::new(
         &subject.tenant_id,
@@ -323,9 +335,9 @@ async fn close_order(
     Path(order_id): Path<String>,
     Json(body): Json<CloseOrderBody>,
 ) -> Response {
-    let subject = match app_runtime_subject_from_extension(Some(Extension(runtime_context))) {
+    let subject = match require_backend_subject(runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized(message),
+        Err(response) => return response,
     };
     let command = match CloseManagementOrderCommand::new(
         &subject.tenant_id,
@@ -350,9 +362,9 @@ async fn list_order_events(
     Path(order_id): Path<String>,
     Query(params): Query<OrderEventListParams>,
 ) -> Response {
-    let subject = match app_runtime_subject_from_extension(Some(Extension(runtime_context))) {
+    let subject = match require_backend_subject(runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized(message),
+        Err(response) => return response,
     };
     let query = match OrderManagementEventListQuery::new(
         &subject.tenant_id,
@@ -376,9 +388,9 @@ async fn list_cancellations(
     Extension(runtime_context): Extension<IamAppContext>,
     Query(params): Query<CancellationListParams>,
 ) -> Response {
-    let subject = match app_runtime_subject_from_extension(Some(Extension(runtime_context))) {
+    let subject = match require_backend_subject(runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized(message),
+        Err(response) => return response,
     };
     let query = match OrderCancellationListQuery::new(
         &subject.tenant_id,
@@ -402,6 +414,43 @@ async fn list_cancellations(
     }
 }
 
+/// Authorizes the caller against the backend order admin API surface.
+///
+/// The caller must:
+/// 1. Be a member of an organization (`can_access_backend_api()`), since the
+///    backend API is gated to organization- scoped sessions, not personal app
+///    sessions.
+/// 2. Hold the required permission code in their `permission_scope`.
+///
+/// Returns the resolved [`AppRuntimeSubject`] on success, or an HTTP error
+/// response ready to be returned from the handler.
+fn require_backend_subject(
+    context: IamAppContext,
+    required_permission: &str,
+) -> Result<crate::subject::AppRuntimeSubject, Response> {
+    if !context.can_access_backend_api() {
+        return Err(forbidden(
+            "backend api access requires an organization-scoped session",
+        ));
+    }
+    if !context.has_permission(required_permission) {
+        tracing::warn!(
+            target = "order.acl",
+            user_id = %context.user_id,
+            tenant_id = %context.tenant_id,
+            required_permission,
+            "backend order admin permission denied"
+        );
+        return Err(forbidden(&format!(
+            "missing required permission: {required_permission}"
+        )));
+    }
+    match app_runtime_subject_from_iam(&context) {
+        Ok(subject) => Ok(subject),
+        Err(message) => Err(unauthorized(message)),
+    }
+}
+
 fn ok_json<T: Serialize>(data: T) -> Response {
     (
         StatusCode::OK,
@@ -419,6 +468,18 @@ fn unauthorized(message: String) -> Response {
         StatusCode::UNAUTHORIZED,
         Json(BackendOrderApiResult::<()> {
             code: "4010".to_owned(),
+            msg: message.into(),
+            data: None,
+        }),
+    )
+        .into_response()
+}
+
+fn forbidden(message: impl Into<String>) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(BackendOrderApiResult::<()> {
+            code: "4030".to_owned(),
             msg: message.into(),
             data: None,
         }),

@@ -19,6 +19,8 @@ export interface SdkworkOrderIntlValue {
   formatDetailSummary: (orderId: string | number) => string;
   formatFilter: (filter: SdkworkOrderFilter) => string;
   formatItemMeta: (quantity: number | null | undefined, totalAmountCny: number | null | undefined) => string;
+  formatPaginationPageLabel: (page: number, totalPages: number) => string;
+  formatPaginationSummary: (shown: number, total: number) => string;
   formatPaymentMethod: (value: string | null | undefined) => string;
   formatStatus: (status: string | null | undefined, fallbackLabel?: string | null | undefined) => string;
   formatTimelineLabel: (label: string | null | undefined) => string;
@@ -127,6 +129,18 @@ function createSdkworkOrderIntlValue(
       return interpolateTemplate(copy.items.metaValue, {
         amount: formatSdkworkCurrencyCny(totalAmountCny, resolvedLocale),
         quantity: String(quantity ?? 0),
+      });
+    },
+    formatPaginationPageLabel(page, totalPages) {
+      return interpolateTemplate(copy.pagination.pageLabel, {
+        page: String(page),
+        totalPages: String(totalPages),
+      });
+    },
+    formatPaginationSummary(shown, total) {
+      return interpolateTemplate(copy.pagination.summary, {
+        shown: String(shown),
+        total: String(total),
       });
     },
     formatPaymentMethod(value) {

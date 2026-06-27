@@ -6,7 +6,7 @@
     "displayName": "SDKWork Commerce Order",
     "version": "0.1.0",
     "type": "rust-crate",
-    "root": "sdkwork-commerce/crates/sdkwork-commerce-order-service",
+    "root": "crates/sdkwork-commerce-order-service",
     "domain": "commerce",
     "declaredDomain": null,
     "capability": "order",

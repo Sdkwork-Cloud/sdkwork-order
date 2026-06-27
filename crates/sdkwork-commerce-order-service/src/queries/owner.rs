@@ -12,6 +12,47 @@ pub struct OrderOwnerListQuery {
     pub page_size: i64,
 }
 
+/// Paginated result of [`OrderOwnerListQuery`].
+///
+/// `total` is the unconditional count of rows matching the filter (independent
+/// of the current page) so the API surface can render `hasMore` and total
+/// page metadata. The repository computes both in a single SQL round-trip
+/// using a `COUNT(*) OVER()` window function to avoid the N+1 / double-query
+/// pattern used by older pagination shims.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrderOwnerListPage {
+    pub items: Vec<OrderOwnerSummary>,
+    pub page: i64,
+    pub page_size: i64,
+    pub total: i64,
+}
+
+impl OrderOwnerListPage {
+    /// `true` when another page of results exists beyond the current one.
+    pub fn has_more(&self) -> bool {
+        self.page.saturating_mul(self.page_size) < self.total
+    }
+
+    /// 1-based total page count derived from `total` and `page_size`.
+    pub fn total_pages(&self) -> i64 {
+        if self.page_size <= 0 {
+            return 0;
+        }
+        (self.total + self.page_size - 1) / self.page_size
+    }
+
+    /// Build an empty page for the given query — used when the underlying
+    /// read model is missing or filtered to nothing.
+    pub fn empty_for(query: &OrderOwnerListQuery) -> Self {
+        Self {
+            items: Vec::new(),
+            page: query.page,
+            page_size: query.page_size,
+            total: 0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderOwnerDetailQuery {
     pub tenant_id: String,

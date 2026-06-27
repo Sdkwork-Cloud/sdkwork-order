@@ -4,10 +4,19 @@ import {
   type CreateSdkworkOrderControllerOptions,
   type SdkworkOrderMessagesOverrides,
 } from "../src";
+import type { SdkworkOrderPagination } from "../src/order-service";
+
+const emptyPagination: SdkworkOrderPagination = {
+  hasMore: false,
+  page: 1,
+  pageSize: 20,
+  total: 0,
+  totalPages: 0,
+};
 
 describe("sdkwork-order-pc-order controller", () => {
   it("bootstraps, filters orders, opens details, and refreshes after cancellation", async () => {
-    const firstDashboard = {
+    const allDashboard = {
       orders: [
         {
           createdAt: "2026-04-03T09:00:00.000Z",
@@ -28,6 +37,7 @@ describe("sdkwork-order-pc-order controller", () => {
           totalAmountCny: 699,
         },
       ],
+      pagination: { ...emptyPagination, total: 2, totalPages: 1 },
       statistics: {
         completed: 8,
         pendingPayment: 1,
@@ -37,15 +47,16 @@ describe("sdkwork-order-pc-order controller", () => {
         totalOrders: 9,
       },
     };
-    const secondDashboard = {
-      ...firstDashboard,
-      orders: [
-        {
-          ...firstDashboard.orders[1],
-        },
-      ],
+    const pendingDashboard = {
+      orders: [allDashboard.orders[0]],
+      pagination: { ...emptyPagination, total: 1, totalPages: 1 },
+      statistics: allDashboard.statistics,
+    };
+    const cancelledDashboard = {
+      orders: [],
+      pagination: { ...emptyPagination, total: 0, totalPages: 0 },
       statistics: {
-        ...firstDashboard.statistics,
+        ...allDashboard.statistics,
         pendingPayment: 0,
       },
     };
@@ -66,10 +77,15 @@ describe("sdkwork-order-pc-order controller", () => {
       }),
       getDashboard: vi
         .fn()
-        .mockResolvedValueOnce(firstDashboard)
-        .mockResolvedValueOnce(secondDashboard),
+        // bootstrap (filter=all)
+        .mockResolvedValueOnce(allDashboard)
+        // setFilter("pending-payment") reload
+        .mockResolvedValueOnce(pendingDashboard)
+        // cancelOrder reload (still filtering pending-payment)
+        .mockResolvedValueOnce(cancelledDashboard),
       getEmptyDashboard: vi.fn().mockReturnValue({
         orders: [],
+        pagination: emptyPagination,
         statistics: {
           completed: 0,
           pendingPayment: 0,
@@ -90,7 +106,7 @@ describe("sdkwork-order-pc-order controller", () => {
     await controller.bootstrap();
     expect(controller.getState().visibleOrders).toHaveLength(2);
 
-    controller.setFilter("pending-payment");
+    await controller.setFilter("pending-payment");
     expect(controller.getState().visibleOrders).toHaveLength(1);
 
     await controller.openDetail("ORDER-3");
@@ -119,6 +135,7 @@ describe("sdkwork-order-pc-order controller", () => {
         cancelOrder: vi.fn().mockRejectedValue("bad"),
         getDashboard: vi.fn().mockResolvedValue({
           orders: [],
+          pagination: emptyPagination,
           statistics: {
             completed: 0,
             pendingPayment: 0,
@@ -130,6 +147,7 @@ describe("sdkwork-order-pc-order controller", () => {
         }),
         getEmptyDashboard: vi.fn().mockReturnValue({
           orders: [],
+          pagination: emptyPagination,
           statistics: {
             completed: 0,
             pendingPayment: 0,
@@ -144,11 +162,18 @@ describe("sdkwork-order-pc-order controller", () => {
       },
     } satisfies CreateSdkworkOrderControllerOptions);
 
-    await expect(
-      controller.cancelOrder({
-        orderId: "ORDER-3",
-      }),
-    ).rejects.toBe("bad");
+    // Controller owns the error surface: a rejected service call surfaces as
+    // a partial result with `success: false` instead of an unhandled
+    // rejection. UI reads `state.lastError` for the message.
+    const result = await controller.cancelOrder({
+      orderId: "ORDER-3",
+    });
+    expect(result).toMatchObject({
+      cancelled: true,
+      orderId: "ORDER-3",
+      success: false,
+    });
+    expect(result.message).toContain("Cancel fallback from overrides");
     expect(controller.getState().lastError).toBe("Cancel fallback from overrides");
   });
 });

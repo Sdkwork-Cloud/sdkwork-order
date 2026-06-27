@@ -11,6 +11,7 @@ import {
   type SdkworkOrderCancelInput,
   type SdkworkOrderCancelResult,
   type SdkworkOrderDashboardData,
+  type SdkworkOrderDashboardQuery,
   type SdkworkOrderDetail,
   type SdkworkOrderPaymentInput,
   type SdkworkOrderPaymentResult,
@@ -23,6 +24,7 @@ export type SdkworkOrderFilter = "all" | SdkworkOrderStatus;
 
 export interface SdkworkOrderControllerState {
   activeFilter: SdkworkOrderFilter;
+  currentPage: number;
   dashboard: SdkworkOrderDashboardData;
   detail?: SdkworkOrderDetail;
   isBootstrapped: boolean;
@@ -31,6 +33,7 @@ export interface SdkworkOrderControllerState {
   isLoading: boolean;
   isMutating: boolean;
   lastError?: string;
+  pageSize: number;
   selectedOrderId?: string;
   visibleOrders: SdkworkOrderSummary[];
 }
@@ -44,7 +47,8 @@ export interface SdkworkOrderController {
   payOrder(input: SdkworkOrderPaymentInput): Promise<SdkworkOrderPaymentResult>;
   refresh(): Promise<SdkworkOrderControllerState>;
   service: SdkworkOrderService;
-  setFilter(filter: SdkworkOrderFilter): void;
+  setFilter(filter: SdkworkOrderFilter): Promise<SdkworkOrderControllerState>;
+  setPage(page: number): Promise<SdkworkOrderControllerState>;
   subscribe(listener: () => void): () => void;
 }
 
@@ -93,12 +97,14 @@ export function createSdkworkOrderController(
   const listeners = new Set<() => void>();
   let state: SdkworkOrderControllerState = {
     activeFilter: "all",
+    currentPage: 1,
     dashboard: fallbackDashboard,
     isBootstrapped: false,
     isDetailLoading: false,
     isDetailOpen: false,
     isLoading: false,
     isMutating: false,
+    pageSize: 20,
     visibleOrders: [],
     ...options.initialState,
   };
@@ -122,32 +128,42 @@ export function createSdkworkOrderController(
     emit();
   }
 
+  function dashboardQuery(): SdkworkOrderDashboardQuery {
+    const filter = state.activeFilter;
+    return {
+      page: state.currentPage,
+      pageSize: state.pageSize,
+      status: filter === "all" ? "all" : filter,
+    };
+  }
+
   async function loadDashboard(): Promise<SdkworkOrderDashboardData> {
-    return service.getDashboard();
+    return service.getDashboard(dashboardQuery());
+  }
+
+  async function reload(): Promise<SdkworkOrderControllerState> {
+    setState({ isLoading: true, lastError: undefined });
+    try {
+      const dashboard = await loadDashboard();
+      setState({
+        dashboard,
+        isBootstrapped: true,
+        isLoading: false,
+      });
+      return state;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : copy.bootstrapFailed;
+      setState({ isLoading: false, lastError: message });
+      return state;
+    }
   }
 
   return {
     async bootstrap() {
-      setState({
-        isLoading: true,
-        lastError: undefined,
-      });
-
-      try {
-        const dashboard = await loadDashboard();
-        setState({
-          dashboard,
-          isBootstrapped: true,
-          isLoading: false,
-        });
-        return state;
-      } catch (error) {
-        setState({
-          isLoading: false,
-          lastError: error instanceof Error ? error.message : copy.bootstrapFailed,
-        });
-        throw error;
-      }
+      // Controller owns the error surface — UI reads `state.lastError`.
+      // Returning the state instead of re-throwing prevents unhandled
+      // promise rejections when callers use `void controller.bootstrap()`.
+      return reload();
     },
 
     async cancelOrder(input) {
@@ -166,11 +182,17 @@ export function createSdkworkOrderController(
         });
         return result;
       } catch (error) {
+        const message = error instanceof Error ? error.message : copy.cancelFailed;
         setState({
           isMutating: false,
-          lastError: error instanceof Error ? error.message : copy.cancelFailed,
+          lastError: message,
         });
-        throw error;
+        return {
+          cancelled: true,
+          orderId: input.orderId,
+          success: false,
+          message,
+        } satisfies SdkworkOrderCancelResult;
       }
     },
 
@@ -204,11 +226,13 @@ export function createSdkworkOrderController(
         });
         return state;
       } catch (error) {
+        const message = error instanceof Error ? error.message : copy.detailFailed;
         setState({
           isDetailLoading: false,
-          lastError: error instanceof Error ? error.message : copy.detailFailed,
+          isDetailOpen: false,
+          lastError: message,
         });
-        throw error;
+        return state;
       }
     },
 
@@ -228,30 +252,49 @@ export function createSdkworkOrderController(
         });
         return result;
       } catch (error) {
+        const message = error instanceof Error ? error.message : copy.payFailed;
         setState({
           isMutating: false,
-          lastError: error instanceof Error ? error.message : copy.payFailed,
+          lastError: message,
         });
-        throw error;
+        return {
+          amountCny: null,
+          orderId: input.orderId,
+          paymentParams: {},
+          success: false,
+          message,
+        } satisfies SdkworkOrderPaymentResult;
       }
     },
 
     async refresh() {
-      const dashboard = await loadDashboard();
-      setState({
-        dashboard,
-        isBootstrapped: true,
-        isLoading: false,
-      });
-      return state;
+      return reload();
     },
 
     service,
 
-    setFilter(filter) {
+    async setFilter(filter) {
+      if (filter === state.activeFilter) {
+        return state;
+      }
+      // Switching the filter changes the underlying row set, so reset to the
+      // first page to keep the visible page aligned with the new filter scope.
+      // The dashboard is reloaded immediately so the server returns the
+      // filtered subset with correct pagination metadata.
       setState({
         activeFilter: filter,
+        currentPage: 1,
       });
+      return reload();
+    },
+
+    async setPage(page) {
+      const nextPage = Math.max(1, Math.floor(page));
+      if (nextPage === state.currentPage) {
+        return state;
+      }
+      setState({ currentPage: nextPage });
+      return reload();
     },
 
     subscribe(listener) {

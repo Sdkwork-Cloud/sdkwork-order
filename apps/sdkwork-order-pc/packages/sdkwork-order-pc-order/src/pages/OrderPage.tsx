@@ -24,6 +24,7 @@ import {
   useSdkworkOrderIntl,
 } from "../order-intl";
 import { SdkworkOrderDetailDrawer } from "../components/order-detail-drawer";
+import { SdkworkOrderPagination } from "../components/order-pagination";
 import { SdkworkOrderStatGrid } from "../components/order-stat-grid";
 
 export interface SdkworkOrderPageProps {
@@ -246,6 +247,8 @@ function SdkworkOrderPageContent({
                 </article>
               ))}
             </div>
+
+            <SdkworkOrderPagination controller={controller} />
           </section>
         </div>
       </div>

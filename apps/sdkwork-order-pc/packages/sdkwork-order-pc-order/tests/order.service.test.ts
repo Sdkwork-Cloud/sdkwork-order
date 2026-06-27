@@ -128,6 +128,11 @@ describe("sdkwork-order-pc-order service", () => {
                 totalAmount: "199",
               },
             ],
+            hasMore: false,
+            page: 1,
+            pageSize: 20,
+            total: 2,
+            totalPages: 1,
           },
         }),
         pay: vi.fn().mockResolvedValue({
@@ -163,6 +168,13 @@ describe("sdkwork-order-pc-order service", () => {
       id: "ORDER-3",
       status: "pending-payment",
       subject: "Pro Monthly",
+    });
+    expect(dashboard.pagination).toMatchObject({
+      hasMore: false,
+      page: 1,
+      pageSize: 20,
+      total: 2,
+      totalPages: 1,
     });
     expect(detail).toMatchObject({
       id: "ORDER-2",

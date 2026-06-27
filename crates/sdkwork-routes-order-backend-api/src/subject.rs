@@ -14,6 +14,12 @@ pub(crate) fn app_runtime_subject_from_extension(
     let Some(Extension(context)) = context else {
         return Err("authenticated runtime context is required".to_owned());
     };
+    app_runtime_subject_from_iam(&context)
+}
+
+pub(crate) fn app_runtime_subject_from_iam(
+    context: &IamAppContext,
+) -> Result<AppRuntimeSubject, String> {
     let tenant_id = required_context_text(&context.tenant_id, "tenant_id")?;
     let user_id = required_context_text(&context.user_id, "user_id")?;
     let organization_id = context

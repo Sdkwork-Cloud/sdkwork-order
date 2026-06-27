@@ -8,7 +8,10 @@
   },
   "dependencies": {
     "@sdkwork/order-pc-core": "workspace:*",
-    "react": "catalog:"
+    "@sdkwork/order-pc-order": "workspace:*",
+    "@sdkwork/ui-pc-react": "workspace:*",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "peerDependencies": {
     "react": ">=18.2.0 <20.0.0",

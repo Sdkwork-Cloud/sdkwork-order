@@ -27,6 +27,13 @@ function createOrderDashboard() {
         totalAmountCny: 199,
       },
     ],
+    pagination: {
+      hasMore: false,
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+    },
     statistics: {
       completed: 8,
       pendingPayment: 1,
@@ -46,6 +53,13 @@ describe("sdkwork-order-pc-order intl", () => {
         getDashboard: vi.fn().mockResolvedValue(createOrderDashboard()),
         getEmptyDashboard: vi.fn().mockReturnValue({
           orders: [],
+          pagination: {
+            hasMore: false,
+            page: 1,
+            pageSize: 20,
+            total: 0,
+            totalPages: 0,
+          },
           statistics: {
             completed: 0,
             pendingPayment: 0,
@@ -113,6 +127,13 @@ describe("sdkwork-order-pc-order intl", () => {
         getDashboard: vi.fn().mockResolvedValue(createOrderDashboard()),
         getEmptyDashboard: vi.fn().mockReturnValue({
           orders: [],
+          pagination: {
+            hasMore: false,
+            page: 1,
+            pageSize: 20,
+            total: 0,
+            totalPages: 0,
+          },
           statistics: {
             completed: 0,
             pendingPayment: 0,

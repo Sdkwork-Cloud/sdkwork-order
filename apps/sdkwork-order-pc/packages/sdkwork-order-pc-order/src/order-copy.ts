@@ -63,6 +63,12 @@ export interface SdkworkOrderMessages {
     loading: string;
     title: string;
   };
+  pagination: {
+    next: string;
+    pageLabel: string;
+    prev: string;
+    summary: string;
+  };
   paymentMethod: {
     ALIPAY: string;
     BANKCARD: string;
@@ -206,6 +212,12 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
     loading: "Loading order center...",
     title: "Order center",
   },
+  pagination: {
+    next: "Next",
+    pageLabel: "Page {page} of {totalPages}",
+    prev: "Previous",
+    summary: "Showing {shown} of {total} orders",
+  },
   paymentMethod: {
     ALIPAY: "Alipay",
     BANKCARD: "Bank card",
@@ -313,6 +325,12 @@ const ZH_CN_MESSAGES: SdkworkOrderMessages = {
     eyebrow: "\u5546\u4e1a\u5316\u8ba2\u5355",
     loading: "\u6b63\u5728\u52a0\u8f7d\u8ba2\u5355\u4e2d\u5fc3...",
     title: "\u8ba2\u5355\u4e2d\u5fc3",
+  },
+  pagination: {
+    next: "\u4e0b\u4e00\u9875",
+    pageLabel: "\u7b2c {page} / {totalPages} \u9875",
+    prev: "\u4e0a\u4e00\u9875",
+    summary: "\u5171 {total} \u6761\u8ba2\u5355\uff0c\u5f53\u524d\u5c55\u793a {shown} \u6761",
   },
   paymentMethod: {
     ALIPAY: "\u652f\u4ed8\u5b9d",

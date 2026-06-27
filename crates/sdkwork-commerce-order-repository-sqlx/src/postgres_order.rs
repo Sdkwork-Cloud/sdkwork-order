@@ -1,8 +1,8 @@
 use sdkwork_commerce_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_commerce_order_service::{
     CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,
-    OrderOwnerDetailQuery, OrderOwnerItem, OrderOwnerListQuery, OrderOwnerStatistics,
-    OrderOwnerSummary,
+    OrderOwnerDetailQuery, OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery,
+    OrderOwnerStatistics, OrderOwnerSummary,
 };
 use sdkwork_commerce_payment_service::{PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -51,7 +51,8 @@ SELECT
     COALESCE(
         NULLIF(pa.payment_method, ''),
         NULLIF(pi.payment_method, '')
-    ) AS payment_method
+    ) AS payment_method,
+    COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
@@ -64,8 +65,8 @@ LEFT JOIN commerce_payment_attempt pa
    AND pa.owner_user_id = o.owner_user_id
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($1 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
-  AND o.owner_user_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+  AND o.owner_user_id = CAST($3 AS TEXT)
   AND ($4 IS NULL OR o.status = $4)
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT $5 OFFSET $6
@@ -129,9 +130,9 @@ LEFT JOIN commerce_payment_attempt pa
    AND pa.owner_user_id = o.owner_user_id
    AND pa.order_id = o.id
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($1 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
-  AND o.owner_user_id = CAST($1 AS TEXT)
-  AND o.id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+  AND o.owner_user_id = CAST($3 AS TEXT)
+  AND o.id = CAST($4 AS TEXT)
 LIMIT 1
 "#;
 
@@ -144,7 +145,7 @@ SELECT
     total_amount
 FROM commerce_order_item
 WHERE tenant_id = CAST($1 AS TEXT)
-  AND order_id = CAST($1 AS TEXT)
+  AND order_id = CAST($2 AS TEXT)
 ORDER BY created_at ASC, id ASC
 "#;
 
@@ -168,15 +169,15 @@ SELECT
                         LIMIT 1
                     ),
                     '0'
-                ) AS REAL
+                ) AS NUMERIC
             )
         ),
         0
     ) AS total_amount
 FROM commerce_order o
 WHERE o.tenant_id = CAST($1 AS TEXT)
-  AND ((o.organization_id = CAST($1 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
-  AND o.owner_user_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+  AND o.owner_user_id = CAST($3 AS TEXT)
 "#;
 
 const LIST_PAYMENT_METHODS: &str = r#"
@@ -188,9 +189,8 @@ SELECT
     sort_order
 FROM commerce_payment_method
 WHERE (
-        (tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($1 AS TEXT))
+        (tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($2 AS TEXT))
         OR (tenant_id = CAST($1 AS TEXT) AND organization_id IS NULL)
-        OR (tenant_id = '100001' AND (organization_id = '0' OR organization_id IS NULL))
       )
   AND status = 'active'
 ORDER BY COALESCE(sort_order, 0) ASC, id ASC
@@ -213,12 +213,11 @@ impl PostgresCommerceOrderStore {
     pub async fn list_owner_orders(
         &self,
         query: OrderOwnerListQuery,
-    ) -> Result<Vec<OrderOwnerSummary>, CommerceServiceError> {
+    ) -> Result<OrderOwnerListPage, CommerceServiceError> {
         let rows = sqlx::query(LIST_OWNER_ORDERS)
             .bind(&query.tenant_id)
             .bind(query.organization_id.as_deref())
             .bind(&query.owner_user_id)
-            .bind(query.status.as_deref())
             .bind(query.status.as_deref())
             .bind(query.limit())
             .bind(query.offset())
@@ -227,7 +226,24 @@ impl PostgresCommerceOrderStore {
             .or_else(empty_rows_when_read_model_is_missing)
             .map_err(|error| store_error("failed to list owner orders", error))?;
 
-        rows.iter().map(map_order_summary_row).collect()
+        // COUNT(*) OVER() emits the same total on every row; read it from the
+        // first row, or default to 0 when the page is empty.
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
+            .iter()
+            .map(map_order_summary_row)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(OrderOwnerListPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
     pub async fn retrieve_owner_order(
@@ -277,11 +293,14 @@ impl PostgresCommerceOrderStore {
                 pending_shipment: row.try_get::<i64, _>("pending_shipment").unwrap_or(0),
                 pending_receipt: row.try_get::<i64, _>("pending_receipt").unwrap_or(0),
                 completed: row.try_get::<i64, _>("completed").unwrap_or(0),
-                total_amount: CommerceMoney::new(&format!(
-                    "{:.2}",
-                    row.try_get::<f64, _>("total_amount").unwrap_or(0.0)
-                ))
-                .map_err(CommerceServiceError::storage)?,
+                total_amount: {
+                    // NUMERIC is read as text and re-validated through CommerceMoney
+                    // to avoid f64 precision drift.
+                    let raw = row
+                        .try_get::<String, _>("total_amount")
+                        .unwrap_or_else(|_| "0".to_owned());
+                    CommerceMoney::new(&raw).map_err(CommerceServiceError::storage)?
+                },
             }),
             Err(error) if read_model_table_is_missing(&error) => Ok(empty_order_statistics()),
             Err(error) => Err(store_error(

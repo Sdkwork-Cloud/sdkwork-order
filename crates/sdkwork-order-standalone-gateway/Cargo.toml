@@ -1,12 +1,12 @@
 [package]
-name = "sdkwork-order-api-server"
+name = "sdkwork-order-standalone-gateway"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "order-server"
+name = "sdkwork-order-standalone-gateway"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,6 +17,6 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 sdkwork-web-bootstrap.workspace = true
-sdkwork_routes_order_app_api.workspace = true
-sdkwork_routes_order_backend_api.workspace = true
 sdkwork_order_service_host.workspace = true
+sdkwork_database_sqlx.workspace = true
+sqlx = { workspace = true }

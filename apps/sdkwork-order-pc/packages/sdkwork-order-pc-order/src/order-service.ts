@@ -89,9 +89,32 @@ export interface SdkworkOrderDetail {
   transactionId?: string;
 }
 
+export interface SdkworkOrderPagination {
+  /** 1-based current page number. */
+  page: number;
+  /** Page size applied for the current request (clamped to 1..100 by backend). */
+  pageSize: number;
+  /** Unconditional total rows matching the active filter, independent of page. */
+  total: number;
+  /** `true` when another page of results exists beyond the current one. */
+  hasMore: boolean;
+  /** Total page count derived from `total` and `pageSize` (omitted when unknown). */
+  totalPages?: number;
+}
+
 export interface SdkworkOrderDashboardData {
   orders: SdkworkOrderSummary[];
+  pagination: SdkworkOrderPagination;
   statistics: SdkworkOrderStatistics;
+}
+
+export interface SdkworkOrderDashboardQuery {
+  /** 1-based page index. Defaults to `1`. */
+  page?: number;
+  /** Page size, clamped to `1..100` by the backend. Defaults to `20`. */
+  pageSize?: number;
+  /** Optional status filter forwarded to the backend `status` query param. */
+  status?: SdkworkOrderStatus | "all";
 }
 
 export interface SdkworkOrderPaymentInput {
@@ -107,6 +130,10 @@ export interface SdkworkOrderPaymentResult {
   paymentId?: string;
   paymentMethod?: string;
   paymentParams: Record<string, unknown>;
+  /** Set when the payment flow could not be initiated. UI reads `state.lastError` for the message. */
+  success?: boolean;
+  /** Error message surfaced when `success === false`. */
+  message?: string;
 }
 
 export interface SdkworkOrderCancelInput {
@@ -118,6 +145,10 @@ export interface SdkworkOrderCancelInput {
 export interface SdkworkOrderCancelResult {
   cancelled: true;
   orderId: string;
+  /** Set when the cancellation could not be completed. UI reads `state.lastError` for the message. */
+  success?: boolean;
+  /** Error message surfaced when `success === false`. */
+  message?: string;
 }
 
 export interface CreateSdkworkOrderServiceOptions {
@@ -128,7 +159,7 @@ export interface CreateSdkworkOrderServiceOptions {
 
 export interface SdkworkOrderService {
   cancelOrder(input: SdkworkOrderCancelInput): Promise<SdkworkOrderCancelResult>;
-  getDashboard(): Promise<SdkworkOrderDashboardData>;
+  getDashboard(query?: SdkworkOrderDashboardQuery): Promise<SdkworkOrderDashboardData>;
   getEmptyDashboard(): SdkworkOrderDashboardData;
   getOrderDetail(orderId: string): Promise<SdkworkOrderDetail>;
   payOrder(input: SdkworkOrderPaymentInput): Promise<SdkworkOrderPaymentResult>;
@@ -151,6 +182,15 @@ interface RemoteOrder {
   statusName?: string;
   subject?: string;
   totalAmount?: number | string;
+}
+
+interface RemoteOrderPage {
+  content?: RemoteOrder[];
+  page?: number | string;
+  pageSize?: number | string;
+  total?: number | string;
+  hasMore?: boolean;
+  totalPages?: number | string;
 }
 
 interface RemoteOrderItem {
@@ -271,6 +311,13 @@ function formatStatusLabel(
 function createEmptyDashboard(): SdkworkOrderDashboardData {
   return {
     orders: [],
+    pagination: {
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      hasMore: false,
+      totalPages: 0,
+    },
     statistics: {
       completed: 0,
       pendingPayment: 0,
@@ -280,6 +327,36 @@ function createEmptyDashboard(): SdkworkOrderDashboardData {
       totalOrders: 0,
     },
   };
+}
+
+function resolvePagination(
+  page: RemoteOrderPage | null | undefined,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): SdkworkOrderPagination {
+  const total = toSdkworkOrderNumber(page?.total);
+  const pageSize = toSdkworkOrderNumber(page?.pageSize, fallbackPageSize) || fallbackPageSize;
+  const pageNumber = toSdkworkOrderNumber(page?.page, fallbackPage) || fallbackPage;
+  const totalPages = page?.totalPages === undefined
+    ? (pageSize > 0 ? Math.ceil(total / pageSize) : 0)
+    : toSdkworkOrderNumber(page?.totalPages);
+  return {
+    page: pageNumber,
+    pageSize,
+    total,
+    hasMore: Boolean(page?.hasMore ?? pageNumber * pageSize < total),
+    totalPages,
+  };
+}
+
+function normalizeDashboardQuery(
+  query?: SdkworkOrderDashboardQuery,
+): { page: number; pageSize: number; status: string | undefined } {
+  const page = Math.max(1, Math.floor(toSdkworkOrderNumber(query?.page, 1) || 1));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(toSdkworkOrderNumber(query?.pageSize, 20) || 20)));
+  const rawStatus = query?.status;
+  const status = rawStatus && rawStatus !== "all" ? rawStatus : undefined;
+  return { page, pageSize, status };
 }
 
 function mapOrderSummary(
@@ -441,21 +518,24 @@ export function createSdkworkOrderService(
       };
     },
 
-    async getDashboard() {
+    async getDashboard(query) {
       if (!hasSdkworkOrderSession()) {
         return createEmptyDashboard();
       }
 
+      const { page, pageSize, status } = normalizeDashboardQuery(query);
+
       const [orderPagePayload, statisticsPayload] = await Promise.all([
         getOrderAppService().orders.list({
-            page: 1,
-            pageSize: 20,
+            page,
+            pageSize,
             sortDirection: "desc",
             sortField: "createdAt",
+            ...(status ? { status } : {}),
         }),
         getOrderAppService().orders.statistics.retrieve(),
       ]);
-      const orderPage = unwrapSdkworkOrderResponse<{ content?: RemoteOrder[] }>(
+      const orderPage = unwrapSdkworkOrderResponse<RemoteOrderPage | null>(
         orderPagePayload,
         copy.requestFailed,
       );
@@ -464,10 +544,13 @@ export function createSdkworkOrderService(
         copy.requestFailed,
       );
 
+      const orders = (orderPage?.content ?? [])
+        .map((order) => mapOrderSummary(order, messages, copy))
+        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
       return {
-        orders: (orderPage.content ?? [])
-          .map((order) => mapOrderSummary(order, messages, copy))
-          .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+        orders,
+        pagination: resolvePagination(orderPage, page, pageSize),
         statistics: mapStatistics(statistics),
       };
     },

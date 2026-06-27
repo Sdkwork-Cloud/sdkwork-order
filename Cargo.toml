@@ -8,7 +8,7 @@ members = [
   "crates/sdkwork-routes-order-backend-api",
   "crates/sdkwork-order-database-host",
   "crates/sdkwork-order-service-host",
-  "crates/sdkwork-order-api-server",
+  "crates/sdkwork-order-standalone-gateway",
 ]
 
 [workspace.package]

@@ -10,8 +10,9 @@ use axum::{Json, Router};
 use sdkwork_commerce_contract_service::CommerceServiceError;
 use sdkwork_commerce_order_service::{
     checkout_owner_order_request_hash, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
-    CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerListQuery,
-    OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderOutcome,
+    CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerListPage,
+    OrderOwnerListQuery, OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand,
+    PayOwnerOrderOutcome,
 };
 use sdkwork_commerce_order_repository_sqlx::{
     PostgresCommerceOrderStore, SqliteCommerceOrderStore,
@@ -33,7 +34,7 @@ pub trait CommerceOrderStore: Send + Sync {
     fn list_owner_orders<'a>(
         &'a self,
         query: OrderOwnerListQuery,
-    ) -> CommerceOrderFuture<'a, Vec<OrderOwnerSummary>>;
+    ) -> CommerceOrderFuture<'a, OrderOwnerListPage>;
 
     fn retrieve_owner_order<'a>(
         &'a self,
@@ -97,6 +98,14 @@ struct AppOrderApiResult<T: Serialize> {
 #[serde(rename_all = "camelCase")]
 struct OrderPageResponse {
     content: Vec<OrderSummaryResponse>,
+    page: i64,
+    #[serde(rename = "pageSize")]
+    page_size: i64,
+    total: i64,
+    #[serde(rename = "hasMore")]
+    has_more: bool,
+    #[serde(rename = "totalPages", skip_serializing_if = "Option::is_none")]
+    total_pages: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -304,10 +313,19 @@ async fn list_orders(
     };
 
     match state.store.list_owner_orders(query).await {
-        Ok(items) => Json(AppOrderApiResult::success(OrderPageResponse {
-            content: items.into_iter().map(map_order_summary).collect(),
-        }))
-        .into_response(),
+        Ok(page) => {
+            let has_more = page.has_more();
+            let total_pages = page.total_pages();
+            Json(AppOrderApiResult::success(OrderPageResponse {
+                content: page.items.into_iter().map(map_order_summary).collect(),
+                page: page.page,
+                page_size: page.page_size,
+                total: page.total,
+                has_more,
+                total_pages: Some(total_pages),
+            }))
+            .into_response()
+        }
         Err(error) => order_system_response("order read model is unavailable", error),
     }
 }
@@ -720,7 +738,7 @@ impl CommerceOrderStore for SqliteCommerceOrderStore {
     fn list_owner_orders<'a>(
         &'a self,
         query: OrderOwnerListQuery,
-    ) -> CommerceOrderFuture<'a, Vec<OrderOwnerSummary>> {
+    ) -> CommerceOrderFuture<'a, OrderOwnerListPage> {
         Box::pin(async move { self.list_owner_orders(query).await })
     }
 
@@ -766,7 +784,7 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
     fn list_owner_orders<'a>(
         &'a self,
         query: OrderOwnerListQuery,
-    ) -> CommerceOrderFuture<'a, Vec<OrderOwnerSummary>> {
+    ) -> CommerceOrderFuture<'a, OrderOwnerListPage> {
         Box::pin(async move { self.list_owner_orders(query).await })
     }
 

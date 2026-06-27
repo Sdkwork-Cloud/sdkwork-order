@@ -8,13 +8,13 @@ Specs: REQUIREMENTS_SPEC.md, DOCUMENTATION_SPEC.md
 
 ## Document Map
 
-- Platform split alignment (commerce T0): `../sdkwork-commerce/docs/architecture/tech/TECH-2026-06-24-commerce-capability-repo-split-alignment.md`
+- Commerce repository dissolution: `../sdkwork-specs/MIGRATION_SPEC.md` §8
 
 ## 1. Background And Problem
 
 Order, checkout, fulfillment, shipment, and after-sales lifecycles must scale independently from payment and catalog capabilities.
 
-This repository is a **T1 commerce capability building block**. `sdkwork-commerce` remains the T0 composition layer (gateway, IAM wrappers, composed SDK). This repository owns domain logic, persistence, and HTTP route builders for the **order** capability.
+This repository is a **T1 commerce capability building block**. The `sdkwork-commerce` monolith has been dissolved; this repository is self-contained with its own domain logic, persistence, HTTP route builders, API server, and IAM middleware for the **order** capability.
 
 ## 2. Target Users
 
@@ -49,12 +49,12 @@ Migration status: **complete**.
 ## 5. User Scenarios
 
 - A buyer creates a checkout session, places an order, and tracks fulfillment status.
-- Commerce T0 wraps order routers with request identity; handlers remain capability-owned.
+- The T1 `sdkwork-order-standalone-gateway` applies IAM identity middleware to order routers; handlers remain capability-owned.
 
 ## 6. Success Metrics
 
-- Order integration tests pass in commerce api-server via thin wrappers.
-- `sdkwork-commerce-order-repository-sqlx` is the sole order SQL owner.
+- Order integration tests pass in the T1 standalone-gateway.
+- `sdkwork-commerce-order-repository-sqlx` is the sole order SQL owner (domain=commerce, capability=order per `NAMING_SPEC.md`).
 
 ## 7. Phases
 
@@ -64,7 +64,7 @@ Migration status: **complete**.
 
 ## 8. Linked Requirements
 
-- Commerce capability split alignment: `../sdkwork-commerce/docs/architecture/tech/TECH-2026-06-24-commerce-capability-repo-split-alignment.md`
+- Commerce repository dissolution: `../sdkwork-specs/MIGRATION_SPEC.md` §8
 - Component contract: `specs/component.spec.json` (when present)
 - Machine contracts: local `specs/`, future `apis/`, and generated `sdks/`
 

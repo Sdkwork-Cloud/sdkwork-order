@@ -19,7 +19,7 @@ Describe the repository/application architecture.
 | Domain (Rust) | `crates/sdkwork-commerce-order-service/` |
 | SQL | `crates/sdkwork-commerce-order-repository-sqlx/` |
 | HTTP routers | `crates/sdkwork-routes-order-*-api/` |
-| API server | `crates/sdkwork-order-api-server/` |
+| API server | `crates/sdkwork-order-standalone-gateway/` |
 | PC client | `apps/sdkwork-order-pc/` |
 | Client facade | `packages/common/order/sdkwork-order-service/` |
 
@@ -43,5 +43,4 @@ pnpm verify
 
 ## Related docs
 
-- [Commerce PC distribution](../../../sdkwork-commerce/docs/architecture/tech/TECH-2026-06-24-commerce-pc-capability-distribution.md)
-- [Commerce repository dissolution](../../../sdkwork-commerce/docs/architecture/tech/TECH-2026-06-24-commerce-repository-dissolution.md)
+- Commerce repository dissolution: `../../sdkwork-specs/MIGRATION_SPEC.md` §8

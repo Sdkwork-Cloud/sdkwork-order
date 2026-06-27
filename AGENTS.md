@@ -14,9 +14,9 @@ Read `../sdkwork-specs/SOUL.md` before executing tasks in this root.
 
 This repo owns the full order capability stack: Rust services, database, APIs, SDKs, and **PC client surface** at `apps/sdkwork-order-pc/` (see `sdkwork-shop/apps/sdkwork-shop-pc/` as template).
 
-PC packages migrate from `sdkwork-commerce/apps/sdkwork-commerce-pc/packages/sdkwork-commerce-pc-order*` — see `../sdkwork-commerce/docs/architecture/tech/TECH-2026-06-24-commerce-pc-capability-distribution.md`.
+PC packages migrate from the dissolved `sdkwork-commerce` monolith — see `../sdkwork-specs/MIGRATION_SPEC.md` §8 for the commerce repository dissolution plan.
 
-Do not depend on `sdkwork-commerce` monolith crates after dissolution.
+Do not depend on `sdkwork-commerce` monolith crates; the repository has been dissolved.
 
 ## Verification
 
