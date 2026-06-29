@@ -1,0 +1,26 @@
+schema_version: 1
+kind: sdkwork.database.schema
+module_id: order
+contract_version: 1.0.0
+owner_team: sdkwork-order
+compliance_level: L2
+engines:
+  - postgres
+  - sqlite
+table_prefix: commerce_
+tables:
+  - name: commerce_order
+    write_owner: sdkwork-commerce-platform
+    reference_only: true
+  - name: commerce_order_item
+    write_owner: sdkwork-commerce-platform
+    reference_only: true
+  - name: commerce_order_amount_breakdown
+    write_owner: sdkwork-commerce-platform
+    reference_only: true
+  - name: commerce_order_event
+    write_owner: sdkwork-commerce-platform
+    reference_only: true
+  - name: commerce_order_cancellation
+    write_owner: sdkwork-commerce-platform
+    reference_only: true

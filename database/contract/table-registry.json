@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.database.table-registry",
+  "tables": [
+    {
+      "name": "commerce_order",
+      "owner": "sdkwork-commerce-platform",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    },
+    {
+      "name": "commerce_order_item",
+      "owner": "sdkwork-commerce-platform",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    },
+    {
+      "name": "commerce_order_amount_breakdown",
+      "owner": "sdkwork-commerce-platform",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    },
+    {
+      "name": "commerce_order_event",
+      "owner": "sdkwork-commerce-platform",
+      "profile": "event_log",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    },
+    {
+      "name": "commerce_order_cancellation",
+      "owner": "sdkwork-commerce-platform",
+      "profile": "event_log",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    }
+  ]
+}
