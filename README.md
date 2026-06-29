@@ -3,9 +3,9 @@
 SDKWork commerce **order** capability building-block repository (domain `commerce`).
 
 - Standards: `../sdkwork-specs/README.md`
-- Composition consumer: `../sdkwork-clawrouter/vendor/sdkwork-commerce` (archived transitional platform snapshot)
-- Domain service: `crates/sdkwork-commerce-order-service/`
-- Repository SQL: `crates/sdkwork-commerce-order-repository-sqlx/`
+- Composition consumer: `../sdkwork-clawrouter/vendor/sdkwork-commerce (deleted)` (archived transitional platform snapshot)
+- Domain service: `crates/sdkwork-order-service/`
+- Repository SQL: `crates/sdkwork-commerce (deleted)-order-repository-sqlx/`
 - HTTP API server: `crates/sdkwork-order-standalone-gateway/`
 
 ## Quick start

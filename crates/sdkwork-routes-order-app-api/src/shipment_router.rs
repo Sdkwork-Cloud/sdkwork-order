@@ -7,12 +7,12 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use sdkwork_commerce_contract_service::CommerceServiceError;
-use sdkwork_commerce_order_service::{
+use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_order_service::{
     ShipmentDetailQuery, ShipmentPackageListQuery, ShipmentPackageView,
     ShipmentTrackingEventListQuery, ShipmentTrackingEventView, ShipmentView,
 };
-use sdkwork_commerce_order_repository_sqlx::{
+use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, SqliteCommerceOrderStore,
 };
 use sdkwork_iam_context_service::IamAppContext;

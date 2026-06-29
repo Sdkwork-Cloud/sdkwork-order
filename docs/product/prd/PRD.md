@@ -14,7 +14,7 @@ Specs: REQUIREMENTS_SPEC.md, DOCUMENTATION_SPEC.md
 
 Order, checkout, fulfillment, shipment, and after-sales lifecycles must scale independently from payment and catalog capabilities.
 
-This repository is a **T1 commerce capability building block**. The `sdkwork-commerce` monolith has been dissolved; this repository is self-contained with its own domain logic, persistence, HTTP route builders, API server, and IAM middleware for the **order** capability.
+This repository is a **T1 commerce capability building block**. The `sdkwork-commerce (deleted)` monolith has been dissolved; this repository is self-contained with its own domain logic, persistence, HTTP route builders, API server, and IAM middleware for the **order** capability.
 
 ## 2. Target Users
 
@@ -54,7 +54,7 @@ Migration status: **complete**.
 ## 6. Success Metrics
 
 - Order integration tests pass in the T1 standalone-gateway.
-- `sdkwork-commerce-order-repository-sqlx` is the sole order SQL owner (domain=commerce, capability=order per `NAMING_SPEC.md`).
+- `sdkwork-commerce (deleted)-order-repository-sqlx` is the sole order SQL owner (domain=commerce, capability=order per `NAMING_SPEC.md`).
 
 ## 7. Phases
 

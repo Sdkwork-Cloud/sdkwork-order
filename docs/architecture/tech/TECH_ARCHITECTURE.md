@@ -16,8 +16,8 @@ Describe the repository/application architecture.
 
 | Layer | Path |
 | --- | --- |
-| Domain (Rust) | `crates/sdkwork-commerce-order-service/` |
-| SQL | `crates/sdkwork-commerce-order-repository-sqlx/` |
+| Domain (Rust) | `crates/sdkwork-order-service/` |
+| SQL | `crates/sdkwork-commerce (deleted)-order-repository-sqlx/` |
 | HTTP routers | `crates/sdkwork-routes-order-*-api/` |
 | API server | `crates/sdkwork-order-standalone-gateway/` |
 | PC client | `apps/sdkwork-order-pc/` |
@@ -29,7 +29,7 @@ Describe the repository/application architecture.
 apps/sdkwork-order-pc/
   packages/sdkwork-order-pc-core/
   packages/sdkwork-order-pc-shell/
-  packages/sdkwork-order-pc-order/    ← migrated from sdkwork-commerce-pc
+  packages/sdkwork-order-pc-order/    ← migrated from sdkwork-commerce (deleted)-pc
 ```
 
 Composition apps (`sdkwork-mall`, etc.) consume `@sdkwork/order-pc-order` via workspace paths — not a central commerce PC repo.

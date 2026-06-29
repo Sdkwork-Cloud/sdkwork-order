@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Drain DB connections after handlers finish.
     tokio::time::timeout(Duration::from_secs(30), host.database_pool().close())
         .await
-        .map_err(|_| std::io::Error::other("database pool close timed out after 30s"))??;
+        .map_err(|_| std::io::Error::other("database pool close timed out after 30s"))?;
     tracing::info!(target = "order.runtime", "order api server stopped");
     Ok(())
 }
