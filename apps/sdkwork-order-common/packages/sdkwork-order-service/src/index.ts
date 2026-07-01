@@ -5,15 +5,22 @@ import {
   type OrderSdkMethod,
 } from "@sdkwork/order-sdk-ports";
 import { formatCurrency as formatSdkworkCurrency } from "@sdkwork/utils";
+import {
+  createOrderAppSdkClientFromTransport,
+  createOrderAppTransportClient,
+  type BootstrapSdkworkOrderAppServiceInput,
+} from "./transport.ts";
 
 type ServiceTemplate = { readonly [key: string]: true | ServiceTemplate };
 
 type OrderServiceMethod = (...args: Parameters<OrderSdkMethod>) => Promise<unknown>;
 
 export type SdkworkOrderOrdersService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["orders"]>;
+export type SdkworkOrderRechargesService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["recharges"]>;
 
 export type SdkworkOrderAppService = {
   orders: SdkworkOrderOrdersService;
+  recharges: SdkworkOrderRechargesService;
 };
 
 export type SdkworkOrderAppServiceProvider = () => SdkworkOrderAppService;
@@ -109,7 +116,34 @@ export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppService
       input.appClient.commerce.orders,
       ["commerce", "orders"],
     ),
+    recharges: buildServiceTree<SdkworkOrderRechargesService>(
+      APP_ORDER_METHOD_TREE.recharges,
+      input.appClient.commerce.recharges,
+      ["commerce", "recharges"],
+    ),
   };
+}
+
+export function unwrapSdkworkOrderResource<T>(
+  value: unknown,
+  fallbackMessage = "Request failed.",
+): T {
+  const data = unwrapSdkworkOrderResponse<{ item?: T } | T>(value, fallbackMessage);
+  if (data && typeof data === "object" && "item" in (data as Record<string, unknown>)) {
+    return (data as { item?: T }).item as T;
+  }
+  return data as T;
+}
+
+export function unwrapSdkworkOrderPage<T>(
+  value: unknown,
+  fallbackMessage = "Request failed.",
+): T[] {
+  const data = unwrapSdkworkOrderResponse<{ items?: T[] } | T[]>(value, fallbackMessage);
+  if (Array.isArray(data)) {
+    return data;
+  }
+  return Array.isArray(data?.items) ? data.items : [];
 }
 
 export function unwrapSdkworkOrderResponse<T>(value: unknown, fallbackMessage = "Request failed."): T {
@@ -232,3 +266,21 @@ function isSuccessCode(code: number | string | undefined): boolean {
   const normalized = String(code).trim();
   return normalized === "0" || normalized === "200" || normalized === "2000" || normalized === "SUCCESS";
 }
+
+export function bootstrapSdkworkOrderAppService(
+  input: BootstrapSdkworkOrderAppServiceInput,
+): SdkworkOrderAppService {
+  const transport = createOrderAppTransportClient(input);
+  const service = createSdkworkOrderAppService({
+    appClient: createOrderAppSdkClientFromTransport(transport),
+  });
+  configureSdkworkOrderAppServiceProvider(() => service);
+  return service;
+}
+
+export {
+  createOrderAppSdkClientFromTransport,
+  createOrderAppTransportClient,
+  resolveOrderAppApiOrigin,
+  type BootstrapSdkworkOrderAppServiceInput,
+} from "./transport.ts";

@@ -1,8 +1,11 @@
 pub mod after_sales_router;
+pub mod api_response;
 pub mod checkout_router;
 pub mod command_headers;
 pub mod fulfillment_router;
 pub mod order_router;
+pub mod problem_details;
+pub mod recharge_router;
 pub mod routes;
 pub mod shipment_router;
 pub mod subject;
@@ -25,6 +28,11 @@ pub use fulfillment_router::{
 pub use order_router::{
     build_app_order_router, app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool,
     CommerceOrderFuture, CommerceOrderStore, OwnerOrderPaymentStore,
+};
+pub use recharge_router::{
+    build_app_recharge_checkout_router, app_recharge_checkout_router_with_postgres_pool,
+    app_recharge_checkout_router_with_sqlite_pool, CommerceRechargeCheckoutFuture,
+    CommerceRechargeCheckoutStore,
 };
 pub use shipment_router::{
     build_app_shipment_router, app_shipment_router_with_postgres_pool,

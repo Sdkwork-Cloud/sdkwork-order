@@ -4,6 +4,7 @@ members = [
     "crates/sdkwork-order-gateway-assembly",
   "crates/sdkwork-order-service",
   "crates/sdkwork-order-repository-sqlx",
+  "crates/sdkwork-order-integration-account",
   "crates/sdkwork-routes-order-app-api",
   "crates/sdkwork-routes-order-backend-api",
   "crates/sdkwork-order-database-host",
@@ -55,3 +56,8 @@ sdkwork_routes_order_app_api = { path = "crates/sdkwork-routes-order-app-api", p
 sdkwork_routes_order_backend_api = { path = "crates/sdkwork-routes-order-backend-api", package = "sdkwork-routes-order-backend-api" }
 sdkwork_order_database_host = { path = "crates/sdkwork-order-database-host", package = "sdkwork-order-database-host" }
 sdkwork_order_service_host = { path = "crates/sdkwork-order-service-host", package = "sdkwork-order-service-host" }
+sdkwork_order_integration_account = { path = "crates/sdkwork-order-integration-account", package = "sdkwork-order-integration-account" }
+sdkwork_account_service = { path = "../sdkwork-account/crates/sdkwork-account-service", package = "sdkwork-account-service" }
+sdkwork_account_repository_sqlx = { path = "../sdkwork-account/crates/sdkwork-account-repository-sqlx", package = "sdkwork-account-repository-sqlx" }
+sdkwork-utils-rust = { path = "../sdkwork-utils/packages/sdkwork-utils-rust" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

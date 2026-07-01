@@ -82,6 +82,10 @@ importers:
         version: 4.1.9(@types/node@25.9.4)(jsdom@29.1.1)(vite@8.1.0(@types/node@25.9.4)(jiti@2.7.0))
 
   ../sdkwork-appbase/packages/common/foundation/sdkwork-runtime-bootstrap:
+    dependencies:
+      '@sdkwork/utils':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
     devDependencies:
       typescript:
         specifier: ^6.0.2
@@ -92,6 +96,9 @@ importers:
       '@sdkwork/runtime-bootstrap':
         specifier: workspace:*
         version: link:../../../common/foundation/sdkwork-runtime-bootstrap
+      '@sdkwork/utils':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
       react:
         specifier: '>=18.2.0 <20.0.0'
         version: 19.2.4
@@ -108,6 +115,9 @@ importers:
 
   ../sdkwork-appbase/packages/pc-react/foundation/sdkwork-i18n-pc-react:
     dependencies:
+      '@sdkwork/utils':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
       i18next:
         specifier: ^26.1.0
         version: 26.3.2(typescript@6.0.3)
@@ -290,6 +300,25 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  apps/sdkwork-order-common/packages/sdkwork-order-contracts: {}
+
+  apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports: {}
+
+  apps/sdkwork-order-common/packages/sdkwork-order-service:
+    dependencies:
+      '@sdkwork/order-app-sdk':
+        specifier: workspace:*
+        version: link:../../../../sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript/generated/server-openapi
+      '@sdkwork/order-sdk-ports':
+        specifier: workspace:*
+        version: link:../sdkwork-order-sdk-ports
+      '@sdkwork/sdk-common':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-sdk-commons/sdkwork-sdk-common-typescript
+      '@sdkwork/utils':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
+
   apps/sdkwork-order-pc:
     dependencies:
       '@sdkwork/order-pc-core':
@@ -300,7 +329,7 @@ importers:
         version: link:packages/sdkwork-order-pc-shell
       '@sdkwork/order-service':
         specifier: workspace:*
-        version: link:../../packages/common/order/sdkwork-order-service
+        version: link:../sdkwork-order-common/packages/sdkwork-order-service
       react:
         specifier: 'catalog:'
         version: 19.2.4
@@ -337,7 +366,7 @@ importers:
         version: link:../../../../../sdkwork-appbase/packages/pc-react/foundation/sdkwork-appbase-pc-react
       '@sdkwork/order-service':
         specifier: workspace:*
-        version: link:../../../../packages/common/order/sdkwork-order-service
+        version: link:../../../sdkwork-order-common/packages/sdkwork-order-service
     devDependencies:
       '@sdkwork/ui-pc-react':
         specifier: workspace:*
@@ -363,25 +392,34 @@ importers:
       '@sdkwork/order-pc-core':
         specifier: workspace:*
         version: link:../sdkwork-order-pc-core
+      '@sdkwork/order-pc-order':
+        specifier: workspace:*
+        version: link:../sdkwork-order-pc-order
+      '@sdkwork/ui-pc-react':
+        specifier: workspace:*
+        version: link:../../../../../sdkwork-ui/sdkwork-ui-pc-react
       react:
         specifier: 'catalog:'
         version: 19.2.4
       react-dom:
-        specifier: '>=18.2.0 <20.0.0'
+        specifier: 'catalog:'
         version: 19.2.4(react@19.2.4)
 
-  packages/common/order/sdkwork-order-contracts: {}
-
-  packages/common/order/sdkwork-order-sdk-ports: {}
-
-  packages/common/order/sdkwork-order-service:
+  sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript/generated/server-openapi:
     dependencies:
-      '@sdkwork/order-sdk-ports':
-        specifier: workspace:*
-        version: link:../sdkwork-order-sdk-ports
-      '@sdkwork/utils':
-        specifier: workspace:*
-        version: link:../../../../../sdkwork-utils/packages/sdkwork-utils-typescript
+      '@sdkwork/sdk-common':
+        specifier: ^1.0.2
+        version: 1.0.3
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      rollup:
+        specifier: ^4.0.0
+        version: 4.62.2
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
 packages:
 
@@ -1722,6 +1760,10 @@ packages:
   '@rushstack/ts-command-line@5.3.10':
     resolution: {integrity: sha512-fwI076HYknC0IrMXdY6UmjDv+PH7NHhNJX3/pY2UblSE5XrXgndXZPiOe/6ZtuFpn6DvVDVNhtkIzQ+Qu/MhVQ==}
 
+  '@sdkwork/sdk-common@1.0.3':
+    resolution: {integrity: sha512-EGCm742ya1VL9hZ+9SVVArUxieFxIwQ3MMpt8Tv6Vc++U5ug4qG2TBUQ/hKAeJIwhL5Tvbhs6Tzy31P8fBO/cQ==}
+    engines: {node: '>=18.0.0'}
+
   '@shikijs/core@2.5.0':
     resolution: {integrity: sha512-uu/8RExTKtavlpH7XqnVYBrfBkUc20ngXiX9NSrBhOVZYv/7XQRKUyhtkeflY5QsxC0GbJThCerruZfsUaSldg==}
 
@@ -1919,6 +1961,9 @@ packages:
 
   '@types/mdurl@2.0.0':
     resolution: {integrity: sha512-RGdgjQUZba5p6QEFAVx2OGb8rQDL/cPRG7GiedRzMcJ1tYnUANBncjbSB1NRGwbvjcPeikRABz2nshyPk1bhWg==}
+
+  '@types/node@20.19.43':
+    resolution: {integrity: sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA==}
 
   '@types/node@22.20.0':
     resolution: {integrity: sha512-QWlFW2wf3nTjC13/DqRnBpR4ZO36VJH/JVBkA/vcnmbTBNQIlnObqyqZE1tUR7+Ni23Lda8R1BxMfbXRpCUx5g==}
@@ -4652,6 +4697,8 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
+  '@sdkwork/sdk-common@1.0.3': {}
+
   '@shikijs/core@2.5.0':
     dependencies:
       '@shikijs/engine-javascript': 2.5.0
@@ -4840,6 +4887,10 @@ snapshots:
       '@types/unist': 3.0.3
 
   '@types/mdurl@2.0.0': {}
+
+  '@types/node@20.19.43':
+    dependencies:
+      undici-types: 6.21.0
 
   '@types/node@22.20.0':
     dependencies:

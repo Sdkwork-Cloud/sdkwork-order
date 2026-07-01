@@ -12,3 +12,6 @@ path = "src/lib.rs"
 sdkwork_database_sqlx.workspace = true
 sdkwork_database_spi.workspace = true
 sdkwork_order_database_host.workspace = true
+sdkwork_order_integration_account.workspace = true
+sdkwork_order_service.workspace = true
+dotenvy = { workspace = true }

@@ -8,6 +8,7 @@ use crate::{
     app_checkout_router_with_postgres_pool, app_checkout_router_with_sqlite_pool,
     app_fulfillment_router_with_postgres_pool, app_fulfillment_router_with_sqlite_pool,
     app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool,
+    app_recharge_checkout_router_with_postgres_pool, app_recharge_checkout_router_with_sqlite_pool,
     app_shipment_router_with_postgres_pool, app_shipment_router_with_sqlite_pool,
 };
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
@@ -19,6 +20,7 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
             Router::new()
                 .merge(app_order_router_with_postgres_pool(pool.clone()))
                 .merge(app_checkout_router_with_postgres_pool(pool.clone()))
+                .merge(app_recharge_checkout_router_with_postgres_pool(pool.clone()))
                 .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
                 .merge(app_shipment_router_with_postgres_pool(pool.clone()))
                 .merge(app_after_sales_router_with_postgres_pool(pool))
@@ -28,6 +30,7 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
             Router::new()
                 .merge(app_order_router_with_sqlite_pool(pool.clone()))
                 .merge(app_checkout_router_with_sqlite_pool(pool.clone()))
+                .merge(app_recharge_checkout_router_with_sqlite_pool(pool.clone()))
                 .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
                 .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
                 .merge(app_after_sales_router_with_sqlite_pool(pool))

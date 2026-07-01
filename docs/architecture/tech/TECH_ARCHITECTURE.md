@@ -21,7 +21,7 @@ Describe the repository/application architecture.
 | HTTP routers | `crates/sdkwork-routes-order-*-api/` |
 | API server | `crates/sdkwork-order-standalone-gateway/` |
 | PC client | `apps/sdkwork-order-pc/` |
-| Client facade | `packages/common/order/sdkwork-order-service/` |
+| Client facade | `apps/sdkwork-order-common/packages/sdkwork-order-service/` |
 
 ## PC surface
 

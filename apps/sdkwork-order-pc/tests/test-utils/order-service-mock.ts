@@ -15,6 +15,7 @@ export function createOrderAppServiceMock(
 ): SdkworkOrderAppService {
   const base: SdkworkOrderAppService = {
     orders: createMissingOrdersTree(),
+    recharges: createMissingRechargesTree(),
   };
   return mergeOrderAppService(base, overrides);
 }
@@ -46,7 +47,22 @@ function createMissingOrdersTree(): SdkworkOrderAppService["orders"] {
   return tree as SdkworkOrderAppService["orders"];
 }
 
-function addMissingMethod(root: Record<string, unknown>, method: string): void {
+function createMissingRechargesTree(): SdkworkOrderAppService["recharges"] {
+  const tree: Record<string, unknown> = {};
+  for (const method of [
+    "packages.list",
+    "settings.retrieve",
+    "orders.list",
+    "orders.create",
+    "orders.retrieve",
+    "orders.cancel",
+  ]) {
+    addMissingMethod(tree, method, "recharges");
+  }
+  return tree as SdkworkOrderAppService["recharges"];
+}
+
+function addMissingMethod(root: Record<string, unknown>, method: string, prefix = "orders"): void {
   let node = root;
   const segments = method.split(".");
   for (const segment of segments.slice(0, -1)) {
@@ -56,7 +72,7 @@ function addMissingMethod(root: Record<string, unknown>, method: string): void {
     node = node[segment] as Record<string, unknown>;
   }
   node[segments.at(-1)!] = async () => {
-    throw new Error(`Missing order service test method: orders.${method}`);
+    throw new Error(`Missing order service test method: ${prefix}.${method}`);
   };
 }
 

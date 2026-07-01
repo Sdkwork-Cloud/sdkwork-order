@@ -68,8 +68,9 @@ WHERE o.tenant_id = CAST(?1 AS TEXT)
   AND ((o.organization_id = CAST(?2 AS TEXT)) OR (o.organization_id IS NULL AND ?2 IS NULL))
   AND o.owner_user_id = CAST(?3 AS TEXT)
   AND (?4 IS NULL OR o.status = ?4)
+  AND (?5 IS NULL OR o.subject = ?5)
 ORDER BY o.created_at DESC, o.id DESC
-LIMIT ?5 OFFSET ?6
+LIMIT ?6 OFFSET ?7
 "#;
 
 const RETRIEVE_OWNER_ORDER: &str = r#"
@@ -219,6 +220,7 @@ impl SqliteCommerceOrderStore {
             .bind(query.organization_id.as_deref())
             .bind(&query.owner_user_id)
             .bind(query.status.as_deref())
+            .bind(query.subject.as_deref())
             .bind(query.limit())
             .bind(query.offset())
             .fetch_all(&self.pool)

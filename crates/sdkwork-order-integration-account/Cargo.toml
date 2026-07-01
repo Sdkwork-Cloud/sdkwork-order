@@ -1,0 +1,26 @@
+[package]
+name = "sdkwork-order-integration-account"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Order → Account ledger integration adapters for points recharge fulfillment."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sdkwork_contract_service.workspace = true
+sdkwork_order_service.workspace = true
+sdkwork_account_service.workspace = true
+sdkwork_account_repository_sqlx.workspace = true
+sdkwork_database_config.workspace = true
+sdkwork_database_sqlx.workspace = true
+sdkwork-utils-rust.workspace = true
+dotenvy = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }

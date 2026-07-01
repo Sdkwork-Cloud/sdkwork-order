@@ -1,3 +1,10 @@
+mod points_recharge_fulfillment;
+
+pub use points_recharge_fulfillment::{
+    default_fulfill_points_recharge_command, fulfill_points_recharge_order,
+    ledger_business_type_for_points_recharge, mark_points_recharge_payment_succeeded,
+};
+
 use sdkwork_contract_service::CommerceServiceContract;
 
 pub fn order_service_contract() -> CommerceServiceContract {
@@ -12,6 +19,7 @@ pub fn order_service_contract() -> CommerceServiceContract {
             "afterSales.returnShipments.create",
             "afterSales.reviews.create",
             "orders.cancellations.create",
+            "orders.pointsRecharge.fulfillments.create",
             "shipments.packages.create",
             "shipments.packages.update",
         ],
@@ -39,6 +47,8 @@ pub fn order_service_contract() -> CommerceServiceContract {
         vec![
             crate::ports::ORDER_REPOSITORY_PORT,
             crate::ports::IDEMPOTENCY_REPOSITORY_PORT,
+            crate::ports::POINTS_RECHARGE_FULFILLMENT_STORE,
+            crate::ports::ACCOUNT_POINTS_CREDIT_PORT,
         ],
         true,
     )

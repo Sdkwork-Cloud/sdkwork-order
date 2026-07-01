@@ -11,3 +11,6 @@ path = "src/lib.rs"
 
 [dependencies]
 sdkwork_contract_service.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

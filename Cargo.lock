@@ -1582,6 +1582,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sdkwork-account-repository-sqlx"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "sdkwork-account-service",
+ "sdkwork-contract-service",
+ "sdkwork-database-id",
+ "sdkwork-utils-rust",
+ "serde",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
+name = "sdkwork-account-service"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-contract-service",
+]
+
+[[package]]
 name = "sdkwork-contract-service"
 version = "0.1.0"
 
@@ -1757,6 +1778,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-order-integration-account"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "dotenvy",
+ "reqwest",
+ "sdkwork-account-repository-sqlx",
+ "sdkwork-account-service",
+ "sdkwork-contract-service",
+ "sdkwork-database-config",
+ "sdkwork-database-sqlx",
+ "sdkwork-order-service",
+ "sdkwork-utils-rust",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tracing",
+]
+
+[[package]]
 name = "sdkwork-order-repository-sqlx"
 version = "0.1.0"
 dependencies = [
@@ -1775,15 +1816,19 @@ name = "sdkwork-order-service"
 version = "0.1.0"
 dependencies = [
  "sdkwork-contract-service",
+ "tokio",
 ]
 
 [[package]]
 name = "sdkwork-order-service-host"
 version = "0.1.0"
 dependencies = [
+ "dotenvy",
  "sdkwork-database-spi",
  "sdkwork-database-sqlx",
  "sdkwork-order-database-host",
+ "sdkwork-order-integration-account",
+ "sdkwork-order-service",
 ]
 
 [[package]]
@@ -1837,12 +1882,14 @@ dependencies = [
  "sdkwork-order-service",
  "sdkwork-order-service-host",
  "sdkwork-payment-repository-sqlx",
+ "sdkwork-utils-rust",
  "sdkwork-web-axum",
  "sdkwork-web-bootstrap",
  "sdkwork-web-core",
  "serde",
  "serde_json",
  "sqlx",
+ "tokio",
 ]
 
 [[package]]
@@ -1857,6 +1904,7 @@ dependencies = [
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-order-service-host",
+ "sdkwork-utils-rust",
  "sdkwork-web-axum",
  "sdkwork-web-bootstrap",
  "sdkwork-web-core",
@@ -1936,6 +1984,7 @@ dependencies = [
  "http",
  "percent-encoding",
  "rsa",
+ "sdkwork-utils-rust",
  "sdkwork-web-contract",
  "serde",
  "serde_json",

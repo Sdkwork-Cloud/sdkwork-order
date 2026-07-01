@@ -11,6 +11,16 @@ export const APP_ORDER_METHOD_TREE = {
     statistics: { retrieve: true },
     status: { retrieve: true },
   },
+  recharges: {
+    packages: { list: true },
+    settings: { retrieve: true },
+    orders: {
+      create: true,
+      retrieve: true,
+      list: true,
+      cancel: true,
+    },
+  },
 } as const;
 
 export type OrderRequestParams = Record<string, unknown>;
@@ -32,5 +42,5 @@ export type ClientFromMethodTree<TTree extends MethodTree> = {
 };
 
 export type OrderAppSdkClient = {
-  commerce: ClientFromMethodTree<{ orders: typeof APP_ORDER_METHOD_TREE.orders }>;
+  commerce: ClientFromMethodTree<typeof APP_ORDER_METHOD_TREE>;
 };

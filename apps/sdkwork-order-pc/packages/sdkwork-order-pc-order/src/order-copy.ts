@@ -5,6 +5,7 @@ export type SdkworkOrderMessagesOverrides = DeepPartial<SdkworkOrderMessages>;
 export interface SdkworkOrderMessages {
   actions: {
     close: string;
+    refresh: string;
     viewDetails: string;
   };
   common: {
@@ -154,6 +155,7 @@ function mergeDeep<T>(base: T, overrides?: DeepPartial<T>): T {
 const EN_US_MESSAGES: SdkworkOrderMessages = {
   actions: {
     close: "Close",
+    refresh: "Refresh",
     viewDetails: "View details",
   },
   common: {
@@ -206,17 +208,17 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
     transactionId: "Transaction",
   },
   page: {
-    description: "Review billing history, retry payment flows, and inspect individual order lifecycles from one reusable Sdkwork-grade workspace.",
+    description: "Review billing history, payment status, and spending summaries — all in one place.",
     errorTitle: "Order center error",
     eyebrow: "Commercial orders",
     loading: "Loading order center...",
-    title: "Order center",
+    title: "Bills & Reports",
   },
   pagination: {
     next: "Next",
     pageLabel: "Page {page} of {totalPages}",
     prev: "Previous",
-    summary: "Showing {shown} of {total} orders",
+    summary: "Showing {shown} of {total} bills",
   },
   paymentMethod: {
     ALIPAY: "Alipay",
@@ -236,9 +238,9 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
   },
   stats: {
     completed: "Completed",
-    pendingPayment: "Pending payment",
-    totalAmount: "Total amount",
-    totalOrders: "Total orders",
+    pendingPayment: "Pending",
+    totalAmount: "Total Spend",
+    totalOrders: "Total Bills",
   },
   status: {
     cancelled: "Cancelled",
@@ -259,15 +261,16 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
     title: "Timeline",
   },
   views: {
-    empty: "No orders matched the current filter.",
-    eyebrow: "Orders",
-    title: "Billing history",
+    empty: "No bills matched the current filter.",
+    eyebrow: "Details",
+    title: "Billing Details",
   },
 };
 
 const ZH_CN_MESSAGES: SdkworkOrderMessages = {
   actions: {
     close: "\u5173\u95ed",
+    refresh: "\u5237\u65b0",
     viewDetails: "\u67e5\u770b\u8be6\u60c5",
   },
   common: {
@@ -320,17 +323,17 @@ const ZH_CN_MESSAGES: SdkworkOrderMessages = {
     transactionId: "\u4ea4\u6613\u6d41\u6c34",
   },
   page: {
-    description: "\u5728\u4e00\u4e2a\u53ef\u590d\u7528\u7684 Sdkwork \u98ce\u683c\u5de5\u4f5c\u533a\u4e2d\uff0c\u96c6\u4e2d\u67e5\u770b\u8d26\u5355\u5386\u53f2\u3001\u652f\u4ed8\u91cd\u8bd5\u4e0e\u8ba2\u5355\u751f\u547d\u5468\u671f\u3002",
+    description: "\u96c6\u4e2d\u67e5\u770b\u8d26\u5355\u5386\u53f2\u3001\u652f\u4ed8\u72b6\u6001\u4e0e\u6d88\u8d39\u6c47\u603b\uff0c\u638c\u63e1\u6bcf\u4e00\u7b14\u8d26\u5355\u7684\u5b8c\u6574\u751f\u547d\u5468\u671f\u3002",
     errorTitle: "\u8ba2\u5355\u4e2d\u5fc3\u5f02\u5e38",
     eyebrow: "\u5546\u4e1a\u5316\u8ba2\u5355",
     loading: "\u6b63\u5728\u52a0\u8f7d\u8ba2\u5355\u4e2d\u5fc3...",
-    title: "\u8ba2\u5355\u4e2d\u5fc3",
+    title: "\u8d26\u5355\u4e0e\u62a5\u8868",
   },
   pagination: {
     next: "\u4e0b\u4e00\u9875",
     pageLabel: "\u7b2c {page} / {totalPages} \u9875",
     prev: "\u4e0a\u4e00\u9875",
-    summary: "\u5171 {total} \u6761\u8ba2\u5355\uff0c\u5f53\u524d\u5c55\u793a {shown} \u6761",
+    summary: "\u5171 {total} \u6761\u8d26\u5355\uff0c\u5f53\u524d\u5c55\u793a {shown} \u6761",
   },
   paymentMethod: {
     ALIPAY: "\u652f\u4ed8\u5b9d",
@@ -351,8 +354,8 @@ const ZH_CN_MESSAGES: SdkworkOrderMessages = {
   stats: {
     completed: "\u5df2\u5b8c\u6210",
     pendingPayment: "\u5f85\u652f\u4ed8",
-    totalAmount: "\u8ba2\u5355\u603b\u989d",
-    totalOrders: "\u8ba2\u5355\u603b\u91cf",
+    totalAmount: "\u6d88\u8d39\u603b\u989d",
+    totalOrders: "\u8d26\u5355\u603b\u6570",
   },
   status: {
     cancelled: "\u5df2\u53d6\u6d88",
@@ -373,9 +376,9 @@ const ZH_CN_MESSAGES: SdkworkOrderMessages = {
     title: "\u65f6\u95f4\u7ebf",
   },
   views: {
-    empty: "\u5f53\u524d\u7b5b\u9009\u6761\u4ef6\u4e0b\u6ca1\u6709\u5339\u914d\u7684\u8ba2\u5355\u3002",
-    eyebrow: "\u8ba2\u5355",
-    title: "\u8d26\u5355\u5386\u53f2",
+    empty: "\u5f53\u524d\u7b5b\u9009\u6761\u4ef6\u4e0b\u6ca1\u6709\u5339\u914d\u7684\u8d26\u5355\u8bb0\u5f55\u3002",
+    eyebrow: "\u660e\u7ec6",
+    title: "\u8d26\u5355\u660e\u7ec6",
   },
 };
 

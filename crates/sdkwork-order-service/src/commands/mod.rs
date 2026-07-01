@@ -1,5 +1,13 @@
+mod fulfillment;
+mod recharge;
+
 use crate::OrderItemDraft;
 use sdkwork_contract_service::CommerceMoney;
+
+pub use fulfillment::{
+    FulfillPointsRechargeOrderCommand, MarkPointsRechargePaymentSucceededCommand,
+};
+pub use recharge::CreatePointsRechargeOrderCommand;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateOrderCommand {

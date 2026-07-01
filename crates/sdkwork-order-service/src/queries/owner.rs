@@ -8,6 +8,7 @@ pub struct OrderOwnerListQuery {
     pub organization_id: Option<String>,
     pub owner_user_id: String,
     pub status: Option<String>,
+    pub subject: Option<String>,
     pub page: i64,
     pub page_size: i64,
 }
@@ -112,6 +113,7 @@ impl OrderOwnerListQuery {
         status: Option<&str>,
         page: Option<i64>,
         page_size: Option<i64>,
+        subject: Option<&str>,
     ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
@@ -121,6 +123,7 @@ impl OrderOwnerListQuery {
             organization_id: optional_text(organization_id),
             owner_user_id: owner_user_id.trim().to_string(),
             status: optional_text(status),
+            subject: optional_text(subject),
             page: page.unwrap_or(1).max(1),
             page_size: page_size.unwrap_or(20).clamp(1, 100),
         })
@@ -170,6 +173,7 @@ pub struct PayOwnerOrderCommand {
     pub organization_id: Option<String>,
     pub owner_user_id: String,
     pub payment_method: String,
+    pub payment_attempt_callback_payload: Option<String>,
     pub tenant_id: String,
 }
 
@@ -257,6 +261,24 @@ impl PayOwnerOrderCommand {
         order_id: &str,
         payment_method: &str,
     ) -> Result<Self, CommerceServiceError> {
+        Self::with_payment_attempt_callback_payload(
+            tenant_id,
+            organization_id,
+            owner_user_id,
+            order_id,
+            payment_method,
+            None,
+        )
+    }
+
+    pub fn with_payment_attempt_callback_payload(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        order_id: &str,
+        payment_method: &str,
+        payment_attempt_callback_payload: Option<String>,
+    ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
         crate::validation::require_non_empty("order_id", order_id)?;
@@ -267,6 +289,9 @@ impl PayOwnerOrderCommand {
             organization_id: optional_text(organization_id),
             owner_user_id: owner_user_id.trim().to_string(),
             payment_method: payment_method.trim().to_ascii_lowercase(),
+            payment_attempt_callback_payload: payment_attempt_callback_payload
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty()),
             tenant_id: tenant_id.trim().to_string(),
         })
     }

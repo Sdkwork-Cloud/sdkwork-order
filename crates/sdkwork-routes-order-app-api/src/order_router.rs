@@ -3,8 +3,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::http::HeaderMap;
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
@@ -21,9 +21,14 @@ use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
+use crate::api_response::{
+    conflict, map_service_error, not_found, not_implemented, success_command, success_item,
+    success_items, unauthorized, validation,
+};
 use crate::command_headers::{ensure_request_hash_matches, required_app_write_command_headers};
 use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
 
@@ -83,15 +88,6 @@ struct OrderListQueryParams {
     #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
     status: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AppOrderApiResult<T: Serialize> {
-    code: String,
-    msg: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<T>,
 }
 
 #[derive(Debug, Serialize)]
@@ -227,24 +223,6 @@ struct OrderStatisticsResponse {
     total_amount: String,
 }
 
-impl<T: Serialize> AppOrderApiResult<T> {
-    fn success(data: T) -> Self {
-        Self {
-            code: "0".to_owned(),
-            msg: "success".to_owned(),
-            data: Some(data),
-        }
-    }
-
-    fn error(code: &str, msg: impl Into<String>) -> Self {
-        Self {
-            code: code.to_owned(),
-            msg: msg.into(),
-            data: None,
-        }
-    }
-}
-
 pub fn app_order_router_with_sqlite_pool(pool: SqlitePool) -> Router {
     build_app_order_router(
         Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
@@ -294,11 +272,13 @@ pub fn build_app_order_router(
 async fn list_orders(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Query(params): Query<OrderListQueryParams>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let query = match OrderOwnerListQuery::new(
         &subject.tenant_id,
@@ -307,36 +287,38 @@ async fn list_orders(
         params.status.as_deref(),
         params.page,
         params.page_size,
+        None,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.store.list_owner_orders(query).await {
         Ok(page) => {
             let has_more = page.has_more();
             let total_pages = page.total_pages();
-            Json(AppOrderApiResult::success(OrderPageResponse {
+            success_item(ctx, OrderPageResponse {
                 content: page.items.into_iter().map(map_order_summary).collect(),
                 page: page.page,
                 page_size: page.page_size,
                 total: page.total,
                 has_more,
                 total_pages: Some(total_pages),
-            }))
-            .into_response()
+            })
         }
-        Err(error) => order_system_response("order read model is unavailable", error),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn fetch_order_statistics(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
 
     match state
@@ -348,21 +330,21 @@ async fn fetch_order_statistics(
         )
         .await
     {
-        Ok(statistics) => {
-            Json(AppOrderApiResult::success(map_statistics(statistics))).into_response()
-        }
-        Err(error) => order_system_response("order statistics read model is unavailable", error),
+        Ok(statistics) => success_item(ctx, map_statistics(statistics)),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn fetch_order(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let query = match OrderOwnerDetailQuery::new(
         &subject.tenant_id,
@@ -371,26 +353,26 @@ async fn fetch_order(
         &order_id,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.store.retrieve_owner_order(query).await {
-        Ok(Some(detail)) => {
-            Json(AppOrderApiResult::success(map_order_detail(detail))).into_response()
-        }
-        Ok(None) => not_found_response("order was not found"),
-        Err(error) => order_system_response("order read model is unavailable", error),
+        Ok(Some(detail)) => success_item(ctx, map_order_detail(detail)),
+        Ok(None) => not_found(ctx, "order was not found"),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn fetch_order_status(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let query = match OrderOwnerDetailQuery::new(
         &subject.tenant_id,
@@ -399,31 +381,32 @@ async fn fetch_order_status(
         &order_id,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.store.retrieve_owner_order(query).await {
         Ok(Some(detail)) => {
             let summary = map_order_summary(detail.summary);
-            Json(AppOrderApiResult::success(OrderStatusResponse {
+            success_item(ctx, OrderStatusResponse {
                 status: summary.status,
                 status_name: summary.status_name,
-            }))
-            .into_response()
+            })
         }
-        Ok(None) => not_found_response("order was not found"),
-        Err(error) => order_system_response("order read model is unavailable", error),
+        Ok(None) => not_found(ctx, "order was not found"),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn fetch_order_payment_success(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let query = match OrderOwnerDetailQuery::new(
         &subject.tenant_id,
@@ -432,7 +415,7 @@ async fn fetch_order_payment_success(
         &order_id,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.store.retrieve_owner_order(query).await {
@@ -443,41 +426,44 @@ async fn fetch_order_payment_success(
                     summary.status.to_ascii_lowercase().as_str(),
                     "paid" | "completed" | "fulfilled"
                 );
-            Json(AppOrderApiResult::success(OrderPaymentSuccessResponse {
+            success_item(ctx, OrderPaymentSuccessResponse {
                 paid,
                 status: summary.status,
                 status_name: summary.status_name,
-            }))
-            .into_response()
+            })
         }
-        Ok(None) => not_found_response("order was not found"),
-        Err(error) => order_system_response("order read model is unavailable", error),
+        Ok(None) => not_found(ctx, "order was not found"),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn fetch_order_events(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
 ) -> Response {
     let _ = (state, order_id);
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let _ = subject;
-    Json(AppOrderApiResult::success(Vec::<serde_json::Value>::new())).into_response()
+    success_items(ctx, Vec::<serde_json::Value>::new(), 1, 1)
 }
 
 async fn cancel_order(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
     body: Option<Json<CancelOrderRequest>>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let cancel_reason = body.as_ref().and_then(|body| body.cancel_reason.clone());
     let _ = body.as_ref().and_then(|body| body.cancel_type.clone());
@@ -489,35 +475,29 @@ async fn cancel_order(
         cancel_reason.as_deref(),
     ) {
         Ok(command) => command,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.store.cancel_owner_order(command.clone()).await {
         Ok(()) => match state.payments.cancel_owner_order_payments(command).await {
-            Ok(()) => (
-                StatusCode::OK,
-                Json(AppOrderApiResult::<()> {
-                    code: "0".to_owned(),
-                    msg: "success".to_owned(),
-                    data: None,
-                }),
-            )
-                .into_response(),
-            Err(error) => order_system_response("order payment cancel command failed", error),
+            Ok(()) => success_command(ctx, ()),
+            Err(error) => map_service_error(ctx, error),
         },
-        Err(error) => order_system_response("order cancel command failed", error),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn pay_order(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
     body: Option<Json<PayOrderRequest>>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let payment_method = body
         .as_ref()
@@ -532,24 +512,26 @@ async fn pay_order(
         &payment_method,
     ) {
         Ok(command) => command,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.payments.pay_owner_order(command).await {
-        Ok(outcome) => Json(AppOrderApiResult::success(map_pay_outcome(outcome))).into_response(),
-        Err(error) => order_system_response("order pay command failed", error),
+        Ok(outcome) => success_item(ctx, map_pay_outcome(outcome)),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn create_order(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
     headers: HeaderMap,
     body: Json<CreateOrderRequest>,
 ) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
-        Err(message) => return unauthorized_response(message),
+        Err(message) => return unauthorized(ctx, message),
     };
     let write_headers = match required_app_write_command_headers(&headers, |idempotency_key| {
         fallback_order_request_no(&subject, &body.checkout_session_id, idempotency_key)
@@ -566,7 +548,7 @@ async fn create_order(
         &write_headers.idempotency_key,
     ) {
         Ok(command) => command,
-        Err(error) => return validation_response(error.message()),
+        Err(error) => return map_service_error(ctx, error),
     };
     if let Err(response) = ensure_request_hash_matches(
         &checkout_owner_order_request_hash(&command),
@@ -576,20 +558,16 @@ async fn create_order(
     }
 
     match state.store.create_owner_order(command).await {
-        Ok(outcome) => Json(AppOrderApiResult::success(map_create_order(outcome))).into_response(),
-        Err(error) => order_system_response("order create command failed", error),
+        Ok(outcome) => success_item(ctx, map_create_order(outcome)),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
-async fn unavailable_command() -> Response {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(AppOrderApiResult::<()>::error(
-            "5010",
-            "commerce order command store is not configured",
-        )),
-    )
-        .into_response()
+async fn unavailable_command(
+    request_context: Option<Extension<WebRequestContext>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    not_implemented(ctx, "commerce order command store is not configured")
 }
 
 fn map_create_order(value: CreateOwnerOrderOutcome) -> CreateOrderResponse {
@@ -678,49 +656,6 @@ fn format_order_status_name(status: &str) -> String {
         "fulfilled" => "Fulfilled".to_owned(),
         other => other.to_owned(),
     }
-}
-
-fn order_system_response(context: &str, error: CommerceServiceError) -> Response {
-    let _ = context;
-    match error.code() {
-        "validation" => validation_response(error.message()),
-        "unauthenticated" | "unauthorized" => unauthorized_response(error.message().to_owned()),
-        "not-found" => not_found_response(error.message()),
-        "conflict" => (
-            StatusCode::CONFLICT,
-            Json(AppOrderApiResult::<()>::error("4090", error.message())),
-        )
-            .into_response(),
-        _ => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(AppOrderApiResult::<()>::error("5000", error.message())),
-        )
-            .into_response(),
-    }
-}
-
-fn unauthorized_response(message: String) -> Response {
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(AppOrderApiResult::<()>::error("4010", message)),
-    )
-        .into_response()
-}
-
-fn validation_response(message: impl Into<String>) -> Response {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(AppOrderApiResult::<()>::error("4001", message)),
-    )
-        .into_response()
-}
-
-fn not_found_response(message: impl Into<String>) -> Response {
-    (
-        StatusCode::NOT_FOUND,
-        Json(AppOrderApiResult::<()>::error("4040", message)),
-    )
-        .into_response()
 }
 
 fn fallback_order_request_no(

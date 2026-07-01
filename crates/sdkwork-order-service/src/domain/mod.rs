@@ -1,3 +1,14 @@
+mod fulfillment;
+mod recharge;
+
+pub use fulfillment::{
+    FulfillPointsRechargeOrderOutcome, PointsRechargeFulfillmentContext,
+};
+pub use recharge::{
+    CheckoutStatusSnapshot, CreatePointsRechargeOrderOutcome, RechargeGrantPreview,
+    RechargePackageItem, RechargeSettingsSnapshot,
+};
+
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -3,7 +3,10 @@ mod checkout;
 mod fulfillment;
 mod management;
 mod owner;
+mod recharge;
 mod shipment;
+
+pub use recharge::{CheckoutStatusQuery, RechargePackageListQuery, RechargeSettingsQuery};
 
 pub use after_sales::{
     AfterSalesEventListQuery, AfterSalesEventView, AfterSalesRequestDetailQuery,

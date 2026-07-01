@@ -1,7 +1,9 @@
 packages:
-  - "packages/common/order/*"
+  - "apps/sdkwork-order-common"
+  - "apps/sdkwork-order-common/packages/*"
   - "apps/sdkwork-order-pc"
   - "apps/sdkwork-order-pc/packages/*"
+  - "sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript/generated/server-openapi"
   - "../sdkwork-appbase/packages/common/foundation/sdkwork-runtime-bootstrap"
   - "../sdkwork-appbase/packages/pc-react/foundation/sdkwork-appbase-pc-react"
   - "../sdkwork-appbase/packages/pc-react/foundation/sdkwork-i18n-pc-react"

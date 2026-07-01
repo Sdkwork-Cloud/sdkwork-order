@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.commerce.recharge.spec",
+  "capability": "order",
+  "domain": "commerce",
+  "role": "unified-order-center",
+  "ownedTables": [
+    "commerce_order",
+    "commerce_order_item",
+    "commerce_order_amount_breakdown",
+    "commerce_order_event",
+    "commerce_order_cancellation",
+    "commerce_recharge_package"
+  ],
+  "orderSubjects": {
+    "points_recharge": {
+      "fulfillment": "account-backend-adjustment",
+      "paymentRequired": true
+    },
+    "product": {
+      "fulfillment": "shipment",
+      "paymentRequired": true
+    },
+    "virtual_goods": {
+      "fulfillment": "account-or-entitlement",
+      "paymentRequired": true
+    }
+  },
+  "ownedApiPrefixes": {
+    "app": [
+      "/app/v3/api/orders",
+      "/app/v3/api/recharges",
+      "/app/v3/api/checkout"
+    ],
+    "backend": [
+      "/backend/v3/api/orders"
+    ]
+  },
+  "appOperationIds": {
+    "recharges": [
+      "recharges.packages.list",
+      "recharges.settings.retrieve",
+      "recharges.orders.create",
+      "recharges.orders.retrieve",
+      "recharges.orders.list",
+      "recharges.orders.cancel"
+    ],
+    "orders": [
+      "orders.list",
+      "orders.retrieve",
+      "orders.create",
+      "orders.pay",
+      "orders.cancel"
+    ]
+  },
+  "upstreamDependencies": [
+    {
+      "capability": "payment",
+      "purpose": "Payment intent and refund execution for existing orderId"
+    }
+  ],
+  "downstreamConsumers": [
+    {
+      "capability": "account",
+      "purpose": "Ledger adjustments on virtual fulfillment"
+    },
+    {
+      "capability": "account-pc-wallet",
+      "purpose": "Recharge UI via order-app-sdk"
+    }
+  ],
+  "forbidden": [
+    "payment provider HTTP in order routes",
+    "direct writes to commerce_account ledger",
+    "recharge order creation in payment repository (target state)"
+  ],
+  "sdkPortsExtension": {
+    "file": "apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports/src/index.ts",
+    "addTree": {
+      "recharges": {
+        "packages": { "list": true },
+        "settings": { "retrieve": true },
+        "orders": {
+          "create": true,
+          "retrieve": true,
+          "list": true,
+          "cancel": true
+        }
+      }
+    }
+  },
+  "migrationFromPayment": {
+    "status": "complete",
+    "deprecationPolicy": "Payment /recharges/* proxy remains for one release; local recharge handlers removed"
+  },
+  "implementationPhases": [
+    {
+      "id": "O1",
+      "title": "Recharge boundary specs frozen",
+      "status": "complete"
+    },
+    {
+      "id": "O2",
+      "title": "Extend order-sdk-ports + OpenAPI recharges paths",
+      "status": "complete"
+    },
+    {
+      "id": "O3",
+      "title": "Migrate recharge repository from payment to order",
+      "status": "complete"
+    },
+    {
+      "id": "O4",
+      "title": "orders.pay saga + account adjustment integration test",
+      "status": "complete",
+      "blockedBy": ["O3"]
+    },
+    {
+      "id": "O5",
+      "title": "Remove payment insert_order in recharge",
+      "status": "complete",
+      "blockedBy": ["O4"]
+    },
+    {
+      "id": "O6",
+      "title": "Gateway closure: account credit adapter + backend fulfillment saga + payment confirmation",
+      "status": "complete",
+      "blockedBy": ["O5"],
+      "deliverables": [
+        "sdkwork-order-integration-account (http|store AccountPointsCreditPort)",
+        "POST /backend/v3/api/orders/{orderId}/points-recharge/fulfillments",
+        "POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations",
+        "Order backend IAM web-framework wrap"
+      ]
+    },
+    {
+      "id": "O7",
+      "title": "Recharge app-api SdkWorkApiResponse v3 envelope",
+      "status": "complete",
+      "blockedBy": ["O6"]
+    }
+  ],
+  "backendOperationIds": {
+    "orders": [
+      "orders.pointsRecharge.fulfillments.create"
+    ]
+  }
+}

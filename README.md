@@ -1,4 +1,5 @@
 # sdkwork-order
+repository-kind: application
 
 SDKWork commerce **order** capability building-block repository (domain `commerce`).
 

@@ -9,7 +9,7 @@
   "sourceAuthoritySpec": "../../apis/app-api/order/order-app-api.openapi.json",
   "authoritySpec": "openapi/sdkwork-order-app-api.openapi.json",
   "generationInputSpec": "openapi/sdkwork-order-app-api.sdkgen.json",
-  "ownerOnlyOperationCount": 27,
+  "ownerOnlyOperationCount": 33,
   "sdkDependencies": [],
   "generator": {
     "package": "@sdkwork/sdk-generator",
