@@ -15,7 +15,6 @@ export type { OrderEvent } from './order-event';
 export type { OrderCancellation } from './order-cancellation';
 export type { CancelOrderRequest } from './cancel-order-request';
 export type { CloseOrderRequest } from './close-order-request';
-export type { CreatePointsRechargeFulfillmentRequest } from './create-points-recharge-fulfillment-request';
 export type { OrdersAdminListResponse } from './orders-admin-list-response';
 export type { OrdersAdminCancellationsListResponse } from './orders-admin-cancellations-list-response';
 export type { OrdersAdminRetrieveResponse } from './orders-admin-retrieve-response';

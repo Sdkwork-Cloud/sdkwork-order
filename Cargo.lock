@@ -1823,6 +1823,7 @@ dependencies = [
  "sdkwork-contract-service",
  "sdkwork-utils-rust",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -60,7 +60,6 @@ const client = new SdkworkOrderBackendClient({
 ## API Modules
 
 - `client.orders` - orders API
-- `client.fulfillments` - fulfillments API
 
 ## Usage Examples
 
@@ -74,20 +73,6 @@ const params = {
   page_size: 3,
 };
 const result = await client.orders.admin.cancellations.list(params);
-```
-
-### fulfillments
-
-```typescript
-// Deprecated: confirm payment and fulfill points recharge (use payment_confirmations)
-const orderId = '1';
-const body = {
-  requestNo: 'requestNo',
-  idempotencyKey: 'idempotencyKey',
-  paidAt: 'paidAt',
-  ownerUserId: 'ownerUserId',
-};
-const result = await client.fulfillments.orders.pointsRecharge.fulfillments.create(orderId, body);
 ```
 
 ## Error Handling

@@ -8,8 +8,8 @@ use sdkwork_order_service::{
     points_recharge_fulfillment_transaction_no, points_recharge_payment_success_idempotency_key,
     AccountPointsCreditPort, FulfillPointsRechargeOrderCommand,
     FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
-    POINTS_RECHARGE_LEDGER_BUSINESS_TYPE, PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
-    PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore,
+    OrderSubjectKind, POINTS_RECHARGE_LEDGER_BUSINESS_TYPE, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore,
 };
 
 #[test]
@@ -261,4 +261,18 @@ impl AccountPointsCreditPort for MockAccountPointsCreditPort {
             })
         })
     }
+}
+
+#[test]
+fn order_subject_kind_parses_checkout_subjects_case_insensitively() {
+    assert_eq!(
+        OrderSubjectKind::parse(Some("points_recharge")),
+        OrderSubjectKind::PointsRecharge
+    );
+    assert_eq!(
+        OrderSubjectKind::parse(Some("PRODUCT")),
+        OrderSubjectKind::Product
+    );
+    assert!(OrderSubjectKind::PointsRecharge.is_fulfillment_implemented());
+    assert!(!OrderSubjectKind::Product.is_fulfillment_implemented());
 }

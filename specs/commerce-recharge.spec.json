@@ -229,12 +229,21 @@
         "payment webhook 410 Gone shim on sdkwork-payment",
         "specs/commerce-payment-webhook.spec.json"
       ]
+    },
+    {
+      "id": "O14",
+      "title": "Remove legacy points_recharge fulfillments backend route (pre-launch cleanup)",
+      "status": "complete",
+      "blockedBy": ["O13"],
+      "deliverables": [
+        "removed POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
+        "OrderSubjectKind dispatch in settle_owner_order_after_payment_success"
+      ]
     }
   ],
   "backendOperationIds": {
     "orders": [
-      "orders.paymentConfirmations.create",
-      "orders.pointsRecharge.fulfillments.create"
+      "orders.paymentConfirmations.create"
     ]
   }
 }

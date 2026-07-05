@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [dependencies]
 sdkwork_contract_service.workspace = true
 sdkwork-utils-rust.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }
