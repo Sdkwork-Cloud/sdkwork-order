@@ -1,8 +1,22 @@
 import { backendApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CancelOrderRequest, CloseOrderRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
+import type { CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
 
+
+export class OrdersPaymentConfirmationsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Manually confirm payment and run order settlement saga */
+  async create(orderId: string, body: ConfirmOrderPaymentRequest): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), body, undefined, undefined, 'application/json');
+  }
+}
 
 export interface OrdersAdminEventsListParams {
   page?: string;
@@ -101,10 +115,12 @@ export class OrdersAdminApi {
 export class OrdersApi {
   private client: HttpClient;
   public readonly admin: OrdersAdminApi;
+  public readonly paymentConfirmations: OrdersPaymentConfirmationsApi;
 
   constructor(client: HttpClient) {
     this.client = client;
     this.admin = new OrdersAdminApi(client);
+    this.paymentConfirmations = new OrdersPaymentConfirmationsApi(client);
   }
 
 }

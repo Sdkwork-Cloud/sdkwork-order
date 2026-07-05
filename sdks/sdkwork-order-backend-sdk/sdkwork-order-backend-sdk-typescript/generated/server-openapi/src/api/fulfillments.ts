@@ -12,7 +12,7 @@ export class FulfillmentsOrdersPointsRechargeFulfillmentsApi {
   }
 
 
-/** Mark payment succeeded (optional) and fulfill a points recharge order */
+/** Deprecated: confirm payment and fulfill points recharge (use payment_confirmations) */
   async create(orderId: string, body: CreatePointsRechargeFulfillmentRequest): Promise<SdkWorkCommandData> {
     return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/points_recharge/fulfillments`), body, undefined, undefined, 'application/json');
   }

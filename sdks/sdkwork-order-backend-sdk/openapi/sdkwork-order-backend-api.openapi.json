@@ -3,7 +3,7 @@
   "info": {
     "title": "SDKWork Order Backend API",
     "version": "1.0.0",
-    "description": "Backend/admin contract for SDKWork commerce order governance, lifecycle operations, and points-recharge fulfillment.",
+    "description": "Backend/admin contract for SDKWork commerce order governance, lifecycle operations, and points recharge fulfillment.",
     "x-sdkwork-api-authority": "sdkwork-order-backend-api",
     "x-sdkwork-sdk-family": "sdkwork-order-backend-sdk",
     "x-sdkwork-owner": "sdkwork-order"
@@ -373,7 +373,9 @@
     "/backend/v3/api/orders/{orderId}/points_recharge/fulfillments": {
       "post": {
         "operationId": "orders.pointsRecharge.fulfillments.create",
-        "summary": "Mark payment succeeded (optional) and fulfill a points recharge order",
+        "summary": "Deprecated: confirm payment and fulfill points recharge (use payment_confirmations)",
+        "deprecated": true,
+        "description": "Deprecated alias. Prefer POST /backend/v3/api/orders/{orderId}/payment_confirmations. Ignores legacy paidAt and idempotencyKey body fields.",
         "tags": ["fulfillments"],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -398,6 +400,49 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/payment_confirmations": {
+      "post": {
+        "operationId": "orders.paymentConfirmations.create",
+        "summary": "Manually confirm payment and run order settlement saga",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConfirmOrderPaymentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment confirmation accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SdkWorkItemResponse" }
               }
             }
           },
@@ -474,6 +519,32 @@
             }
           }
         ]
+      },
+      "SdkWorkItemResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": ["item"],
+                "properties": {
+                  "item": { "type": "object", "additionalProperties": true }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ConfirmOrderPaymentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requestNo"],
+        "properties": {
+          "requestNo": { "type": "string" }
+        }
       },
       "PageInfo": {
         "type": "object",

@@ -20,9 +20,6 @@
     "paymentBackend": [
       "POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations"
     ],
-    "orderBackendLegacy": [
-      "POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments"
-    ],
     "replacement": "order-app-api webhook + order-backend-api payment_confirmations"
   },
   "orchestrationSteps": [

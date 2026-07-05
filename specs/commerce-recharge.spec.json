@@ -152,8 +152,7 @@
       "blockedBy": ["O5"],
       "deliverables": [
         "sdkwork-order-integration-account (http|store AccountPointsCreditPort)",
-        "POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
-        "POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations",
+        "POST /backend/v3/api/orders/{orderId}/payment_confirmations",
         "Order backend IAM web-framework wrap"
       ]
     },

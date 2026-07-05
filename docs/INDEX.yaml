@@ -16,6 +16,8 @@ entries:
     topic: integrator
   - path: specs/commerce-payment-webhook.spec.json
     topic: payment-webhook-orchestration
+  - path: docs/guides/operations/PRODUCTION.md
+    topic: production-operations
 domains:
   - commerce
   - checkout

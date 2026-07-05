@@ -8,8 +8,6 @@ use crate::{
     openapi_contract::mount_backend_openapi,
     payment_confirmation_router_with_postgres_pool,
     payment_confirmation_router_with_sqlite_pool,
-    points_recharge_fulfillment_router_with_postgres_pool,
-    points_recharge_fulfillment_router_with_sqlite_pool,
 };
 
 pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
@@ -17,20 +15,12 @@ pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
     let router = match host.database_pool() {
         DatabasePool::Postgres(pool, _) => Router::new()
             .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
-            .merge(points_recharge_fulfillment_router_with_postgres_pool(
-                pool.clone(),
-                credit_port.clone(),
-            ))
             .merge(payment_confirmation_router_with_postgres_pool(
                 pool.clone(),
                 credit_port,
             )),
         DatabasePool::Sqlite(pool, _) => Router::new()
             .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(points_recharge_fulfillment_router_with_sqlite_pool(
-                pool.clone(),
-                credit_port.clone(),
-            ))
             .merge(payment_confirmation_router_with_sqlite_pool(pool.clone(), credit_port)),
     };
     mount_backend_openapi(router)

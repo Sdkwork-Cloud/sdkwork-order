@@ -9,7 +9,6 @@ use sdkwork_order_service::{
 use sdkwork_routes_order_backend_api::{
     backend_order_admin_router_with_sqlite_pool, openapi_contract::mount_backend_openapi,
     payment_confirmation_router_with_sqlite_pool,
-    points_recharge_fulfillment_router_with_sqlite_pool,
 };
 use serde_json::Value;
 use std::sync::Arc;
@@ -36,10 +35,6 @@ fn build_test_backend_router(pool: sqlx::SqlitePool) -> Router {
     mount_backend_openapi(
         Router::new()
             .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(points_recharge_fulfillment_router_with_sqlite_pool(
-                pool.clone(),
-                credit.clone(),
-            ))
             .merge(payment_confirmation_router_with_sqlite_pool(pool, credit)),
     )
 }

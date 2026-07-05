@@ -2,6 +2,8 @@ export * from './common';
 export type { SdkWorkApiResponse } from './sdk-work-api-response';
 export type { SdkWorkCommandData } from './sdk-work-command-data';
 export type { SdkWorkCommandResponse } from './sdk-work-command-response';
+export type { SdkWorkItemResponse } from './sdk-work-item-response';
+export type { ConfirmOrderPaymentRequest } from './confirm-order-payment-request';
 export type { PageInfo } from './page-info';
 export type { SdkWorkPlatformErrorCode } from './sdk-work-platform-error-code';
 export type { ProblemDetail } from './problem-detail';

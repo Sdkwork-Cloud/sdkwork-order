@@ -98,7 +98,7 @@ pnpm test:postgres:required # CI: fails when postgres URL is missing
 
 Configure PSP notify URL: `{ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}`.
 
-`POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments` is a **deprecated alias**; prefer `payment_confirmations`. Duplicate webhook deliveries return `replayed: true` without re-running settlement — use `payment_confirmations` for operator recovery.
+Duplicate webhook deliveries return `replayed: true` without re-running settlement — use `payment_confirmations` for operator recovery.
 
 See `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md` and `specs/commerce-payment-webhook.spec.json`.
 

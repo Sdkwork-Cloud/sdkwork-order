@@ -79,7 +79,7 @@ const result = await client.orders.admin.cancellations.list(params);
 ### fulfillments
 
 ```typescript
-// Mark payment succeeded (optional) and fulfill a points recharge order
+// Deprecated: confirm payment and fulfill points recharge (use payment_confirmations)
 const orderId = '1';
 const body = {
   requestNo: 'requestNo',

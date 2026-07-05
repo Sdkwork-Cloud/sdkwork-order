@@ -46,6 +46,8 @@ Full topology: `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md`.
 
 PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**. Legacy payment webhook path returns 410 Gone.
 
+Operator settlement replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
+
 Cashier URL is returned in `orders.pay` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://im.sdkwork.com/cashier`).
 
 **PC:** `sdkwork-order-pc` buyer surface at `/app/order`; operator admin at `/admin/orders` (`@sdkwork/order-backend-sdk`, permissions `commerce.orders.read` / `commerce.orders.manage`).  

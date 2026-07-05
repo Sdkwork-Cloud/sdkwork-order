@@ -2,7 +2,7 @@ mod order_payment_settlement;
 mod points_recharge_fulfillment;
 
 pub use order_payment_settlement::{
-    settle_owner_order_after_payment_success, OwnerOrderSettlementOutcome,
+    settle_owner_order_after_payment_success, OrderSubjectKind, OwnerOrderSettlementOutcome,
 };
 pub use points_recharge_fulfillment::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
@@ -23,7 +23,6 @@ pub fn order_service_contract() -> CommerceServiceContract {
             "afterSales.returnShipments.create",
             "afterSales.reviews.create",
             "orders.cancellations.create",
-            "orders.pointsRecharge.fulfillments.create",
             "shipments.packages.create",
             "shipments.packages.update",
         ],
