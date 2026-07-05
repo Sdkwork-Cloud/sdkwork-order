@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS commerce_payment_intent (
     status TEXT NOT NULL,
     amount TEXT,
     currency_code TEXT,
+    payment_method TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS commerce_payment_attempt (
     status TEXT NOT NULL,
     amount TEXT,
     currency_code TEXT,
+    payment_method TEXT,
     paid_at TEXT,
     callback_payload TEXT,
     created_at TEXT NOT NULL,
@@ -182,5 +184,19 @@ CREATE TABLE IF NOT EXISTS commerce_order_cancellation (
     status TEXT NOT NULL,
     reason_code TEXT NOT NULL,
     reason_message TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT,
+    order_id TEXT NOT NULL,
+    order_item_id TEXT,
+    allocation_type TEXT NOT NULL,
+    original_amount TEXT,
+    discount_amount TEXT,
+    payable_amount TEXT,
+    currency_code TEXT,
     created_at TEXT NOT NULL
 );

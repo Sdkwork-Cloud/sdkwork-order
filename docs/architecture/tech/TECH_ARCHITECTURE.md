@@ -102,4 +102,6 @@ Points-recharge fulfillment is triggered by `sdkwork-payment` calling `POST /bac
 
 ## 10. Observability
 
-The standalone gateway initializes `tracing_subscriber` and emits structured logs with stable targets (`order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`). App and backend routers declare `HttpRouteManifest` entries for operationId resolution, contract 501 fallbacks, and rate-limit tier wiring through `sdkwork-web-framework`. API handlers propagate `traceId` through `SdkWorkApiResponse` and `ProblemDetail`. Readiness probes database connectivity via `SELECT 1` in addition to platform health routes from `sdkwork-web-bootstrap`.
+The standalone gateway mounts `/healthz`, `/livez`, `/readyz`, and `/metrics` via `sdkwork-web-bootstrap::service_router`. Contract fallback (501 for manifest-declared but unmounted routes, 404 otherwise) merges app-api and backend-api `HttpRouteManifest` entries through `sdkwork-order-gateway-assembly::order_contract_fallback_config`.
+
+Structured tracing uses targets `order.bootstrap`, `order.runtime`, `order.readiness`, and `order.security`. API handlers propagate `traceId` through `SdkWorkApiResponse` and `ProblemDetail`. Readiness probes database connectivity via `SELECT 1`.

@@ -26,13 +26,13 @@ const DEFAULT_BASE_CURRENCY_CODE: &str = "CNY";
 const DEFAULT_BASE_POINTS_PER_CNY: &str = "10";
 const DEFAULT_USD_TO_CNY_RATE: &str = "7";
 const RECHARGE_RULE_NO: &str = "CASH_TO_POINTS";
-const LEGACY_APPBASE_PLATFORM_ORGANIZATION_ID: &str = "0";
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
-fn legacy_appbase_organization_id(organization_id: Option<&str>) -> String {
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
     organization_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or(LEGACY_APPBASE_PLATFORM_ORGANIZATION_ID)
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
         .to_owned()
 }
 const LIST_RECHARGE_PACKAGES_PAGINATED: &str = r#"
@@ -515,10 +515,10 @@ impl SqliteCommerceRechargeStore {
         let settings = self
             .load_recharge_settings_model(
                 &query.tenant_id,
-                Some(legacy_appbase_organization_id(query.organization_id.as_deref()).as_str()),
+                Some(normalize_organization_scope(query.organization_id.as_deref()).as_str()),
             )
             .await?;
-        let organization_id = legacy_appbase_organization_id(query.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(query.organization_id.as_deref());
         let rows = sqlx::query(&catalog_sql(LIST_RECHARGE_PACKAGES_PAGINATED))
             .bind(&query.tenant_id)
             .bind(&organization_id)
@@ -638,7 +638,7 @@ impl SqliteCommerceRechargeStore {
         &self,
         query: CheckoutStatusQuery,
     ) -> Result<Option<CheckoutStatusSnapshot>, CommerceServiceError> {
-        let organization_id = legacy_appbase_organization_id(query.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(query.organization_id.as_deref());
         let row = sqlx::query(LOAD_CHECKOUT_STATUS)
             .bind(&query.tenant_id)
             .bind(&organization_id)
@@ -655,7 +655,7 @@ impl SqliteCommerceRechargeStore {
         &self,
         command: &FulfillPointsRechargeOrderCommand,
     ) -> Result<Option<PointsRechargeFulfillmentContext>, CommerceServiceError> {
-        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
         let row = sqlx::query(LOAD_POINTS_RECHARGE_FULFILLMENT_CONTEXT)
             .bind(&command.tenant_id)
             .bind(&organization_id)
@@ -674,7 +674,7 @@ impl SqliteCommerceRechargeStore {
         organization_id: Option<&str>,
         order_id: &str,
     ) -> Result<Option<String>, CommerceServiceError> {
-        let organization_id = legacy_appbase_organization_id(organization_id);
+        let organization_id = normalize_organization_scope(organization_id);
         sqlx::query_scalar::<_, String>(
             r#"
             SELECT owner_user_id
@@ -709,7 +709,7 @@ impl SqliteCommerceRechargeStore {
         }
 
         let now = current_query_timestamp();
-        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
         let mut tx = self
             .pool
             .begin_with("BEGIN IMMEDIATE")
@@ -781,7 +781,7 @@ impl SqliteCommerceRechargeStore {
         context: &PointsRechargeFulfillmentContext,
     ) -> Result<(), CommerceServiceError> {
         let now = current_query_timestamp();
-        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
         sqlx::query(
             r#"
             UPDATE commerce_order
@@ -812,7 +812,7 @@ impl SqliteCommerceRechargeStore {
         &self,
         command: MarkPointsRechargePaymentSucceededCommand,
     ) -> Result<(), CommerceServiceError> {
-        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
         let mut tx = self
             .pool
             .begin_with("BEGIN IMMEDIATE")
@@ -914,7 +914,7 @@ async fn load_recharge_settings_from_pool(
             .fetch_optional(pool)
             .await
     } else {
-        let organization_id = legacy_appbase_organization_id(organization_id);
+        let organization_id = normalize_organization_scope(organization_id);
         let scoped_row = sqlx::query(LOAD_RECHARGE_SETTINGS_SCOPED)
             .bind(tenant_id)
             .bind(&organization_id)
@@ -947,7 +947,7 @@ async fn load_recharge_settings_for_transaction(
             .fetch_optional(&mut **tx)
             .await
     } else {
-        let organization_id = legacy_appbase_organization_id(organization_id);
+        let organization_id = normalize_organization_scope(organization_id);
         let scoped_row = sqlx::query(LOAD_RECHARGE_SETTINGS_SCOPED)
             .bind(tenant_id)
             .bind(&organization_id)
@@ -1069,7 +1069,7 @@ async fn load_recharge_method(
     command: &CreatePointsRechargeOrderCommand,
 ) -> Result<RechargeMethod, CommerceServiceError> {
     let requested_method = normalize_method_key(&command.method);
-    let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = sqlx::query(&catalog_sql(LOAD_RECHARGE_METHOD))
         .bind(&command.tenant_id)
         .bind(&organization_id)
@@ -1092,7 +1092,7 @@ async fn load_recharge_pack(
     tx: &mut Transaction<'_, Sqlite>,
     command: &CreatePointsRechargeOrderCommand,
 ) -> Result<Option<RechargePack>, CommerceServiceError> {
-    let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     if let Some(package_id) = command.package_id.as_deref() {
         let row = if command.tenant_id.trim().is_empty() {
             sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC))
@@ -1222,7 +1222,7 @@ async fn load_recharge_product_sku(
     }
 
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
-    let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
         sqlx::query(&catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC))
             .bind(&command.currency_code)
@@ -1270,7 +1270,7 @@ async fn load_reusable_recharge_checkout_status(
     credited_points: i64,
 ) -> Result<Option<CheckoutStatusSnapshot>, CommerceServiceError> {
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
-    let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = sqlx::query(LOAD_REUSABLE_RECHARGE_CHECKOUT)
         .bind(&command.tenant_id)
         .bind(&organization_id)
@@ -1293,7 +1293,7 @@ async fn insert_order(
     tx: &mut Transaction<'_, Sqlite>,
     command: &CreatePointsRechargeOrderCommand,
 ) -> Result<(), CommerceServiceError> {
-    let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     sqlx::query(
         r#"
         INSERT INTO commerce_order

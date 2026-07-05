@@ -65,7 +65,8 @@ Primary API prefixes:
 - Phase 1 (complete): SQL + app routers owned in sdkwork-order.
 - Phase 2 (complete): Payment side-effects owned by payment repository; order validates via one-way dependency.
 - Phase 3 (complete): Backend admin API, backend SDK, OpenAPI discovery, cancel/close audit, strict SQL list pagination, v3 SDK envelope on PC order center.
-- Phase 4 (in progress): Operator UI (`/admin/orders` via `@sdkwork/order-backend-sdk`), `HttpRouteManifest`, CI verify workflow with Postgres parity, production operations guide. Remaining before GA: metrics dashboards in cluster, Redis-backed rate limiting at platform edge, expanded Postgres parity coverage.
+- Phase 4 (complete): Operator UI (`/admin/orders`), `HttpRouteManifest`, gateway contract fallback, CI verify with Postgres parity, production operations guide, OpenAPI static contract tests.
+- Post-GA platform work (outside this repo): cluster Prometheus dashboards, Redis-backed rate limiting at the ingress/gateway mesh layer.
 
 ## 8. Linked Requirements
 
@@ -74,4 +75,4 @@ Primary API prefixes:
 
 ## 9. Open Questions
 
-- Production observability contract (metrics/tracing dashboards) and multi-instance deployment guide remain to be finalized before GA.
+None blocking pre-launch. Platform ingress rate-limit store (Redis) and Grafana dashboards are owned by deployment topology, documented in `docs/guides/operations/PRODUCTION.md`.

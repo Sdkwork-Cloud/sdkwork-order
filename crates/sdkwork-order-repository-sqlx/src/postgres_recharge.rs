@@ -22,13 +22,13 @@ const DEFAULT_BASE_CURRENCY_CODE: &str = "CNY";
 const DEFAULT_BASE_POINTS_PER_CNY: &str = "10";
 const DEFAULT_USD_TO_CNY_RATE: &str = "7";
 const RECHARGE_RULE_NO: &str = "CASH_TO_POINTS";
-const LEGACY_APPBASE_PLATFORM_ORGANIZATION_ID: &str = "0";
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
-fn legacy_appbase_organization_id(organization_id: Option<&str>) -> String {
+fn normalize_organization_scope(organization_id: Option<&str>) -> String {
     organization_id
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or(LEGACY_APPBASE_PLATFORM_ORGANIZATION_ID)
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
         .to_owned()
 }
 
@@ -515,10 +515,10 @@ impl PostgresCommerceRechargeStore {
         let settings = self
             .load_recharge_settings_model(
                 &query.tenant_id,
-                Some(legacy_appbase_organization_id(query.organization_id.as_deref()).as_str()),
+                Some(normalize_organization_scope(query.organization_id.as_deref()).as_str()),
             )
             .await?;
-        let organization_id = legacy_appbase_organization_id(query.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(query.organization_id.as_deref());
         let rows = sqlx::query(&catalog_sql(LIST_RECHARGE_PACKAGES_PAGINATED))
             .bind(&query.tenant_id)
             .bind(&organization_id)
@@ -653,7 +653,7 @@ impl PostgresCommerceRechargeStore {
         &self,
         command: &FulfillPointsRechargeOrderCommand,
     ) -> Result<Option<PointsRechargeFulfillmentContext>, CommerceServiceError> {
-        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
         let row = sqlx::query(LOAD_POINTS_RECHARGE_FULFILLMENT_CONTEXT)
             .bind(&command.tenant_id)
             .bind(&organization_id)
@@ -672,7 +672,7 @@ impl PostgresCommerceRechargeStore {
         organization_id: Option<&str>,
         order_id: &str,
     ) -> Result<Option<String>, CommerceServiceError> {
-        let organization_id = legacy_appbase_organization_id(organization_id);
+        let organization_id = normalize_organization_scope(organization_id);
         sqlx::query_scalar::<_, String>(
             r#"
             SELECT owner_user_id
@@ -730,7 +730,7 @@ impl PostgresCommerceRechargeStore {
         )
         .bind(&now)
         .bind(&command.tenant_id)
-        .bind(legacy_appbase_organization_id(command.organization_id.as_deref()))
+        .bind(normalize_organization_scope(command.organization_id.as_deref()))
         .bind(&command.owner_user_id)
         .bind(&command.order_id)
         .execute(&mut *tx)
@@ -775,7 +775,7 @@ impl PostgresCommerceRechargeStore {
         context: &PointsRechargeFulfillmentContext,
     ) -> Result<(), CommerceServiceError> {
         let now = current_query_timestamp();
-        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
         sqlx::query(
             r#"
             UPDATE commerce_order
@@ -1278,7 +1278,7 @@ async fn insert_order(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreatePointsRechargeOrderCommand,
 ) -> Result<(), CommerceServiceError> {
-    let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     sqlx::query(
         r#"
         INSERT INTO commerce_order

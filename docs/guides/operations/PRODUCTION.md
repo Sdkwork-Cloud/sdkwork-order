@@ -31,6 +31,7 @@ Run multiple instances behind a load balancer. All instances share the same Post
 - **Readiness:** `GET /readyz` (includes database `SELECT 1`)
 - **Metrics:** `GET /metrics` (Prometheus text; scrape in-cluster only, do not expose on public ingress)
 - **Tracing:** structured logs with targets `order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`
+- **Contract fallback:** manifest-declared routes without handlers return HTTP 501; unknown paths return HTTP 404 (merged app + backend manifests)
 
 ## High Availability
 

@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sdkwork_order_gateway_assembly::assemble_application_router;
+use sdkwork_order_gateway_assembly::{assemble_application_router, order_contract_fallback_config};
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_web_bootstrap::{
     service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig,
@@ -38,7 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let app = service_router(
         business,
-        ServiceRouterConfig::default().with_readiness_check(readiness.clone()),
+        ServiceRouterConfig::default()
+            .with_readiness_check(readiness.clone())
+            .with_contract_fallback(order_contract_fallback_config()),
     );
 
     let addr = std::env::var("ORDER_API_BIND")

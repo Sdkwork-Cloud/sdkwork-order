@@ -9,7 +9,7 @@
     "build": "pnpm --dir apps/sdkwork-order-pc build",
     "start": "cargo run -p sdkwork-order-standalone-gateway --bin order-server",
     "test": "pnpm test:node && pnpm test:vitest && cargo test --workspace",
-    "test:node": "node --test --test-reporter=spec tests/static/placeholder.test.mjs",
+    "test:node": "node --test --test-reporter=spec tests/static/openapi-contract.test.mjs",
     "test:vitest": "vitest run --config vitest.config.ts --configLoader native --pool vmThreads",
     "test:postgres": "node scripts/test/postgres-parity.mjs",
     "test:postgres:required": "node scripts/test/postgres-parity.mjs --require-database",

@@ -21,6 +21,9 @@ mod test_sqlite_pool;
 #[cfg(test)]
 mod order_lifecycle_audit_tests;
 
+#[cfg(test)]
+mod order_management_parity_tests;
+
 #[cfg(any(test, feature = "test-support"))]
 pub use test_sqlite_pool::{
     order_points_recharge_e2e_postgres_pool_from_env, order_points_recharge_e2e_sqlite_memory_pool,

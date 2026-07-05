@@ -1774,6 +1774,7 @@ dependencies = [
  "sdkwork-order-service-host",
  "sdkwork-routes-order-app-api",
  "sdkwork-routes-order-backend-api",
+ "sdkwork-web-bootstrap",
  "tokio",
 ]
 
