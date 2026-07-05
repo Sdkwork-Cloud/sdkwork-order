@@ -23,7 +23,28 @@ Run multiple instances behind a load balancer. All instances share the same Post
 | `ORDER_CORS_ALLOW_ORIGINS` | Production | Comma-separated browser origins; unset denies CORS |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | No | Platform recharge catalog tenant (default `100001`) |
 | `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` | Production | Account wallet credit for points-recharge fulfillment |
+| `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Production | Public base URL for PSP notify: `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
 | `RUST_LOG` | No | e.g. `info,order.bootstrap=info,order.runtime=info` |
+
+## Payment Webhooks
+
+PSP notify URLs **must** target the **order gateway**, not `sdkwork-payment`:
+
+```text
+POST {ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}
+```
+
+The legacy payment path `POST /app/v3/api/payments/webhooks/{providerCode}` returns **410 Gone**.
+
+Operator manual settlement replay:
+
+```text
+POST /backend/v3/api/orders/{orderId}/payment_confirmations
+```
+
+Requires IAM permission `commerce.orders.fulfill`.
+
+Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the payment ingest layer (`replayed: true`) and do **not** re-run settlement. If payment succeeded but order settlement did not complete, replay via `payment_confirmations`.
 
 ## Health And Observability
 

@@ -42,7 +42,9 @@ Full topology: `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md`.
 | Flow | Order operations | Payment |
 | --- | --- | --- |
 | Product checkout | `checkout.sessions.create` → `checkout.orders.create` → `orders.pay` | `@sdkwork/payment-app-sdk`; open `paymentParams.cashierUrl` |
-| Points recharge | `recharges.orders.create` → `orders.pay` | Same; fulfillment via payment backend confirmation |
+| Points recharge | `recharges.orders.create` → `orders.pay` | Same; settlement via order webhook + in-process saga |
+
+PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**. Legacy payment webhook path returns 410 Gone.
 
 Cashier URL is returned in `orders.pay` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://im.sdkwork.com/cashier`).
 

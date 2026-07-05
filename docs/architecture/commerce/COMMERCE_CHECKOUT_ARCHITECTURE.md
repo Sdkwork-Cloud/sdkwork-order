@@ -2,17 +2,17 @@
 
 Status: active  
 Owner: SDKWork maintainers  
-Updated: 2026-07-05  
-Machine contract: `specs/commerce-checkout-topology.spec.json`
+Updated: 2026-07-06  
+Machine contracts: `specs/commerce-checkout-topology.spec.json`, `specs/commerce-payment-webhook.spec.json`
 
 ## 1. Capability Boundaries
 
 | Capability | Repository | Role |
 | --- | --- | --- |
-| **Order** | `sdkwork-order` | Unified order center: create/list/pay/cancel orders, checkout sessions, recharge packages, fulfillment sagas |
-| **Payment** | `sdkwork-payment` | Payment executor: intents, attempts, provider channels, refunds, webhook ingestion, owner-order confirmation |
+| **Order** | `sdkwork-order` | Unified order center: checkout, pay orchestration, **PSP webhook ingestion**, payment settlement, fulfillment sagas |
+| **Payment** | `sdkwork-payment` | Payment executor: intents, attempts, provider channels, refunds; **webhook event persistence via port only** |
 
-**Dependency direction:** `sdkwork-order` depends on `sdkwork-payment` (in-process `OwnerOrderPaymentStore` for standalone gateway; HTTP when gateways are split). Payment never creates `commerce_order` rows.
+**Dependency direction:** `sdkwork-order` → `sdkwork-payment` (in-process stores and `sdkwork-payment-providers`). **Payment MUST NOT depend on Order** (no HTTP callbacks, no order service imports in route crates).
 
 ## 2. End-to-End Flows
 
@@ -22,34 +22,20 @@ Machine contract: `specs/commerce-checkout-topology.spec.json`
 sequenceDiagram
     participant Client
     participant Order as order-app-api
-    participant Payment as payment (in-process)
+    participant Payment as payment (in-process port)
     participant Cashier as Cashier UI
     participant Fulfill as fulfillment/shipment
 
     Client->>Order: checkout.sessions.create
-    Client->>Order: checkout.orders.create
+    Client->>Order: checkout.sessions.orders.create
     Client->>Order: orders.pay
     Order->>Payment: pay_owner_order
     Payment-->>Client: paymentParams.cashierUrl
     Client->>Cashier: open cashierUrl
-    Cashier->>Payment: complete payment attempt
-    Payment->>Order: confirm + fulfill (subject-dependent)
+    Cashier->>Order: PSP webhook POST .../orders/payments/webhooks/{provider}
+    Order->>Payment: ingest webhook (port)
+    Order->>Order: settle + fulfill (subject=product)
     Order->>Fulfill: shipment / virtual entitlement
-```
-
-### 2.3 Provider webhook (production)
-
-```mermaid
-sequenceDiagram
-    participant PSP as Payment provider
-    participant Payment as payment-app-api webhook
-    participant Order as order-backend fulfillment
-
-    PSP->>Payment: POST /payments/webhooks/{provider}
-    Payment->>Payment: verify + normalize + ingest
-    Payment->>Payment: update attempt status
-    Payment->>Order: settle_owner_order (points_recharge)
-    Order->>Order: ledger credit
 ```
 
 ### 2.2 Points recharge
@@ -58,21 +44,37 @@ sequenceDiagram
 sequenceDiagram
     participant Client
     participant Order as order-app-api
-    participant Payment as payment-backend
+    participant Payment as payment port
     participant Account as account-backend
 
     Client->>Order: recharges.orders.create
     Client->>Order: orders.pay
-    Order->>Payment: pay_owner_order (intent + attempt)
-    Payment-->>Client: paymentParams.cashierUrl (scene=recharge)
-    Note over Payment: Provider webhook / manual confirm
-    Payment->>Order: POST .../points_recharge/fulfillments
+    Order->>Payment: pay_owner_order
+    Payment-->>Client: paymentParams.cashierUrl
+    Note over Order: PSP webhook on order gateway
+    Order->>Payment: ingest webhook
+    Order->>Order: settle_owner_order_after_payment_success
     Order->>Account: ledger credit (Bearer service token)
 ```
 
-Canonical backend fulfillment path (snake_case):
+### 2.3 Provider webhook (production)
 
-`POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments`
+```mermaid
+sequenceDiagram
+    participant PSP as Payment provider
+    participant Order as order-app-api webhook
+    participant Payment as payment repository port
+
+    PSP->>Order: POST /app/v3/api/orders/payments/webhooks/{provider}
+    Order->>Order: verify + normalize (payment-providers)
+    Order->>Payment: ingest_provider_webhook
+    Payment-->>Order: attempt context + succeeded
+    Order->>Order: in-process settlement saga
+```
+
+Legacy payment gateway path `POST /app/v3/api/payments/webhooks/{provider}` returns **410 Gone** with migration guidance.
+
+Manual operator replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations`.
 
 ## 3. Cashier URL Contract
 
@@ -108,53 +110,36 @@ All application packages **must** consume composed SDKs (`@sdkwork/order-app-sdk
 | Cashier | `sdkwork-payment-pc` or host shell route; navigate to `paymentParams.cashierUrl` after `orders.pay` |
 | Service wiring | `apps/sdkwork-order-common/packages/sdkwork-order-service` facade over SDK ports |
 
-### 4.2 H5 (Capacitor / WeChat H5)
-
-| Concern | Implementation |
-| --- | --- |
-| Order center | Host app package imports `@sdkwork/order-app-sdk`; routes mirror PC order list/detail |
-| Checkout | Same `checkout.*` / `recharges.*` operations; session from `sdkwork.app.config.json` |
-| Cashier | Shared H5 cashier page at cashier base URL; query params from `paymentParams` |
-| Auth | IAM session (`AuthToken` / `Access-Token`) per OpenAPI |
-
-### 4.3 Flutter
-
-| Concern | Implementation |
-| --- | --- |
-| Order center | Dart consumer over order open-api (generated or thin composed facade) |
-| Checkout | Port TypeScript SDK operation IDs; same request/response envelope |
-| Cashier | `WebView` loading `cashierUrl`, or native bridge to payment SDK when available |
-| Config | `dart-define` / manifest per `sdkwork-dev-config` skill |
-
-### 4.4 Backend / service-to-service
+### 4.2 Backend / service-to-service
 
 | Call | Auth |
 | --- | --- |
-| Payment → order fulfillment | `SDKWORK_PAYMENT_ORDER_SERVICE_AUTH_TOKEN` (Bearer) |
 | Order → account credit | `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` (Bearer) |
 
-Env origins: `SDKWORK_ORDER_BACKEND_API_ORIGIN`, payment gateway base URL from app config.
+PSP notify URLs MUST target the **order gateway**, not payment:
+
+`{ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}`
 
 ## 5. API Surface Map
 
 | Operation group | App prefix | Primary SDK |
 | --- | --- | --- |
 | Orders | `/app/v3/api/orders` | `@sdkwork/order-app-sdk` → `orders.*` |
+| Payment webhooks | `/app/v3/api/orders/payments/webhooks` | order gateway (PSP-facing) |
 | Recharges | `/app/v3/api/recharges` | `@sdkwork/order-app-sdk` → `recharges.*` |
 | Checkout | `/app/v3/api/checkout` | `@sdkwork/order-app-sdk` → `checkout.*` |
-| Payments | `/app/v3/api/payments` | `@sdkwork/payment-app-sdk` |
+| Payments (execute) | in-process port from order | `@sdkwork/payment-app-sdk` for cashier reads |
 | Admin orders | `/backend/v3/api/orders` | `@sdkwork/order-backend-sdk` |
-| Payment confirm | `/backend/v3/api/payments` | `@sdkwork/payment-backend-sdk` |
 
 ## 6. Idempotency and Pagination
 
-- Pay and fulfillment commands require `requestNo` + `idempotencyKey` headers per OpenAPI.
+- Pay, webhook settlement, and fulfillment commands require `requestNo` + `idempotencyKey` headers per OpenAPI where applicable.
 - List endpoints use `SdkWorkListQuery` (`page`, `page_size`; default 20, max 200).
 - Success envelope: `SdkWorkApiResponse` with `code: 0`, `data`, `traceId`.
 
 ## 7. Related Specs
 
+- Payment webhook: `specs/commerce-payment-webhook.spec.json`
 - Recharge boundary: `specs/commerce-recharge.spec.json`
 - Payment boundary: `../sdkwork-payment/specs/commerce-boundary.spec.json`
-- Recharge narrative: `specs/RECHARGE_ORDER_SPEC.md`
 - Integrator guide: `docs/guides/integrator/README.md`

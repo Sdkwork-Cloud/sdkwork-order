@@ -8,6 +8,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_routes_order_backend_api::{
     backend_order_admin_router_with_sqlite_pool, openapi_contract::mount_backend_openapi,
+    payment_confirmation_router_with_sqlite_pool,
     points_recharge_fulfillment_router_with_sqlite_pool,
 };
 use serde_json::Value;
@@ -31,13 +32,15 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
 }
 
 fn build_test_backend_router(pool: sqlx::SqlitePool) -> Router {
+    let credit = Arc::new(NoopAccountPointsCreditPort);
     mount_backend_openapi(
         Router::new()
             .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
             .merge(points_recharge_fulfillment_router_with_sqlite_pool(
-                pool,
-                Arc::new(NoopAccountPointsCreditPort),
-            )),
+                pool.clone(),
+                credit.clone(),
+            ))
+            .merge(payment_confirmation_router_with_sqlite_pool(pool, credit)),
     )
 }
 
@@ -103,5 +106,11 @@ fn method_from_openapi(method_name: &str) -> Method {
 }
 
 fn concrete_uri(template_path: &str) -> String {
-    template_path.replace("{orderId}", "order-1")
+    template_path
+        .replace("{orderId}", "order-1")
+        .replace("{checkoutSessionId}", "session-1")
+        .replace("{afterSalesRequestId}", "as-1")
+        .replace("{shipmentId}", "shipment-1")
+        .replace("{fulfillmentId}", "fulfillment-1")
+        .replace("{providerCode}", "wechat_pay")
 }

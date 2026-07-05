@@ -23,9 +23,17 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
   assert.ok(appSpec.components?.schemas?.SdkWorkCommandResponse);
   assert.ok(appSpec.paths["/app/v3/api/orders/{orderId}/payments"]?.get);
   assert.ok(appSpec.paths["/app/v3/api/recharges/packages"]?.get?.parameters?.length > 0);
+  assert.ok(
+    appSpec.paths["/app/v3/api/orders/payments/webhooks/{providerCode}"]?.post,
+    "PSP webhook route must be on order app-api",
+  );
 
   assert.ok(backendSpec.components?.schemas?.SdkWorkCommandResponse);
   assert.ok(backendSpec.paths["/backend/v3/api/orders"]?.get);
+  assert.ok(
+    backendSpec.paths["/backend/v3/api/orders/{orderId}/payment_confirmations"]?.post,
+    "manual payment confirmation must be on order backend-api",
+  );
 });
 
 test("order route manifests are exported from gateway assembly", () => {
@@ -34,4 +42,18 @@ test("order route manifests are exported from gateway assembly", () => {
     "utf8",
   );
   assert.match(assemblyLib, /order_contract_fallback_config/);
+});
+
+test("payment webhook spec declares order ownership", () => {
+  const spec = JSON.parse(
+    fs.readFileSync(
+      path.join(repoRoot, "specs/commerce-payment-webhook.spec.json"),
+      "utf8",
+    ),
+  );
+  assert.match(
+    spec.ownedRoutes.app[0],
+    /\/app\/v3\/api\/orders\/payments\/webhooks/,
+  );
+  assert.ok(spec.forbidden.some((entry) => entry.includes("sdkwork-payment")));
 });

@@ -85,9 +85,22 @@ pnpm test:postgres:required # CI: fails when postgres URL is missing
 
 ## 8. Payment Integration
 
-`sdkwork-order` depends on `sdkwork-payment` for owner-order payment execution (`OwnerOrderPaymentStore`). Standalone gateway wires payment repository in-process; split deployments use HTTP backend APIs.
+`sdkwork-order` depends on `sdkwork-payment` for owner-order payment execution (`OwnerOrderPaymentStore`, `sdkwork-payment-providers`). The standalone gateway wires payment repositories in-process; split deployments use HTTP backend APIs.
 
-Points-recharge fulfillment is triggered by `sdkwork-payment` calling `POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments` after payment confirmation. The backend fulfillment route resolves `owner_user_id` from the order record; callers must not supply it in the request body.
+**Settlement orchestration is owned by order**, not payment:
+
+| Step | Owner | Route / function |
+| --- | --- | --- |
+| PSP webhook | Order app-api | `POST /app/v3/api/orders/payments/webhooks/{providerCode}` |
+| In-process settlement | Order service | `settle_owner_order_after_payment_success` |
+| Manual replay | Order backend-api | `POST /backend/v3/api/orders/{orderId}/payment_confirmations` |
+| Legacy payment webhook | Payment app-api | **410 Gone** (migration shim) |
+
+Configure PSP notify URL: `{ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}`.
+
+`POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments` is a **deprecated alias**; prefer `payment_confirmations`. Duplicate webhook deliveries return `replayed: true` without re-running settlement — use `payment_confirmations` for operator recovery.
+
+See `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md` and `specs/commerce-payment-webhook.spec.json`.
 
 ## 9. Runtime Configuration
 
@@ -97,6 +110,7 @@ Points-recharge fulfillment is triggered by `sdkwork-payment` calling `POST /bac
 | `ORDER_CORS_ALLOW_ORIGINS` | Comma-separated browser origins | empty (same-origin only) |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | Tenant id for public recharge package catalog fallback | `100001` |
 | `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` | Bearer token for account wallet credit during fulfillment | required in production |
+| `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Public base URL registered with PSP for order-owned webhooks | required in production |
 | `ORDER_TEST_POSTGRES_URL` | PostgreSQL URL for repository parity tests | unset (SQLite-only CI) |
 | `RUST_LOG` | Tracing filter (`order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`) | `info` |
 

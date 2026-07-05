@@ -213,18 +213,28 @@
     },
     {
       "id": "O12",
-      "title": "Webhook-driven payment settlement (payment → order fulfillment)",
+      "title": "Webhook-driven payment settlement (payment-owned; superseded by O13)",
+      "status": "superseded",
+      "supersededBy": "O13",
+      "blockedBy": ["O11"]
+    },
+    {
+      "id": "O13",
+      "title": "Order-owned PSP webhooks + in-process settlement (payment -X-> order)",
       "status": "complete",
-      "blockedBy": ["O11"],
+      "blockedBy": ["O12"],
       "deliverables": [
-        "sdkwork-payment webhook_router settlement saga",
-        "ingest_provider_webhook_sqlite integration test",
-        "RECHARGE_ORDER_SPEC pay & fulfill flow"
+        "POST /app/v3/api/orders/payments/webhooks/{providerCode}",
+        "POST /backend/v3/api/orders/{orderId}/payment_confirmations",
+        "sdkwork-order-service::settle_owner_order_after_payment_success",
+        "payment webhook 410 Gone shim on sdkwork-payment",
+        "specs/commerce-payment-webhook.spec.json"
       ]
     }
   ],
   "backendOperationIds": {
     "orders": [
+      "orders.paymentConfirmations.create",
       "orders.pointsRecharge.fulfillments.create"
     ]
   }

@@ -1,17 +1,14 @@
-//! Deprecated alias for [`payment_confirmation_router`]. Prefer
-//! `POST /backend/v3/api/orders/{orderId}/payment_confirmations`.
-
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, State};
-use axum::http::HeaderValue;
 use axum::response::Response;
 use axum::routing::post;
 use axum::{Json, Router};
+use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
-    SqliteCommerceRechargeStore,
+    OrderPaymentSettlementContext, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
+    SqliteCommerceOrderStore, SqliteCommerceRechargeStore,
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort,
@@ -21,21 +18,20 @@ use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_web_core::WebRequestContext;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    forbidden, map_service_error, not_found, success_command, unauthorized, validation,
+    forbidden, map_service_error, not_found, success_item, unauthorized, validation,
 };
-use crate::payment_confirmation_router::OrderSettlementContextLoader;
 use crate::subject::{backend_operator_scope_from_iam, BackendOperatorScope};
 
 mod permissions {
-    pub const FULFILL: &str = "commerce.orders.fulfill";
+    pub const CONFIRM: &str = "commerce.orders.fulfill";
 }
 
 #[derive(Clone)]
-enum LegacyPointsRechargeFulfillmentStoreKind {
+enum PaymentConfirmationStoreKind {
     Sqlite {
         payments: Arc<SqliteCommerceOwnerOrderPaymentStore>,
         recharge: Arc<SqliteCommerceRechargeStore>,
@@ -49,27 +45,35 @@ enum LegacyPointsRechargeFulfillmentStoreKind {
 }
 
 #[derive(Clone)]
-struct LegacyPointsRechargeFulfillmentState {
-    store: LegacyPointsRechargeFulfillmentStoreKind,
+struct PaymentConfirmationState {
+    store: PaymentConfirmationStoreKind,
     credit_port: Arc<dyn AccountPointsCreditPort>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CreatePointsRechargeFulfillmentRequest {
+struct ConfirmOrderPaymentRequest {
     request_no: String,
-    #[serde(default)]
-    idempotency_key: Option<String>,
-    #[serde(default)]
-    paid_at: Option<String>,
 }
 
-pub fn points_recharge_fulfillment_router_with_sqlite_pool(
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfirmOrderPaymentResponse {
+    payment_confirmed: bool,
+    payment_replayed: bool,
+    fulfillment_accepted: bool,
+    fulfillment_replayed: bool,
+    order_id: String,
+    points_credited: i64,
+    fulfillment_status: String,
+}
+
+pub fn payment_confirmation_router_with_sqlite_pool(
     pool: SqlitePool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
 ) -> Router {
-    build_points_recharge_fulfillment_router(LegacyPointsRechargeFulfillmentState {
-        store: LegacyPointsRechargeFulfillmentStoreKind::Sqlite {
+    build_payment_confirmation_router(PaymentConfirmationState {
+        store: PaymentConfirmationStoreKind::Sqlite {
             payments: Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
             recharge: Arc::new(SqliteCommerceRechargeStore::new(pool.clone())),
             orders: Arc::new(SqliteCommerceOrderStore::new(pool)),
@@ -78,12 +82,12 @@ pub fn points_recharge_fulfillment_router_with_sqlite_pool(
     })
 }
 
-pub fn points_recharge_fulfillment_router_with_postgres_pool(
+pub fn payment_confirmation_router_with_postgres_pool(
     pool: PgPool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
 ) -> Router {
-    build_points_recharge_fulfillment_router(LegacyPointsRechargeFulfillmentState {
-        store: LegacyPointsRechargeFulfillmentStoreKind::Postgres {
+    build_payment_confirmation_router(PaymentConfirmationState {
+        store: PaymentConfirmationStoreKind::Postgres {
             payments: Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
             recharge: Arc::new(PostgresCommerceRechargeStore::new(pool.clone())),
             orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
@@ -92,50 +96,41 @@ pub fn points_recharge_fulfillment_router_with_postgres_pool(
     })
 }
 
-fn build_points_recharge_fulfillment_router(state: LegacyPointsRechargeFulfillmentState) -> Router {
+fn build_payment_confirmation_router(state: PaymentConfirmationState) -> Router {
     Router::new()
         .route(
-            "/backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
-            post(create_points_recharge_fulfillment),
+            "/backend/v3/api/orders/{orderId}/payment_confirmations",
+            post(confirm_order_payment),
         )
         .with_state(state)
 }
 
-async fn create_points_recharge_fulfillment(
-    State(state): State<LegacyPointsRechargeFulfillmentState>,
+async fn confirm_order_payment(
+    State(state): State<PaymentConfirmationState>,
     Extension(runtime_context): Extension<IamAppContext>,
     request_context: Extension<WebRequestContext>,
     Path(order_id): Path<String>,
-    Json(body): Json<CreatePointsRechargeFulfillmentRequest>,
+    Json(body): Json<ConfirmOrderPaymentRequest>,
 ) -> Response {
-    let ctx = request_context.0;
-    let subject = match require_fulfillment_subject(runtime_context, Some(&ctx)) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_confirmation_subject(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
 
     if body.request_no.trim().is_empty() {
-        return validation(Some(&ctx), "request_no is required");
-    }
-
-    if body.paid_at.is_some() || body.idempotency_key.is_some() {
-        tracing::warn!(
-            target = "order.deprecation",
-            route = "/backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
-            replacement = "/backend/v3/api/orders/{orderId}/payment_confirmations",
-            "legacy points_recharge fulfillments request fields paid_at/idempotency_key are ignored; use payment_confirmations"
-        );
+        return validation(ctx, "request_no is required");
     }
 
     let credit_port = state.credit_port.clone();
-    let mut response = match state.store {
-        LegacyPointsRechargeFulfillmentStoreKind::Sqlite {
+    match state.store {
+        PaymentConfirmationStoreKind::Sqlite {
             ref payments,
             ref recharge,
             ref orders,
         } => {
-            legacy_settle_points_recharge(
-                Some(&ctx),
+            confirm_order_payment_inner(
+                ctx,
                 &subject,
                 &order_id,
                 &body.request_no,
@@ -146,13 +141,13 @@ async fn create_points_recharge_fulfillment(
             )
             .await
         }
-        LegacyPointsRechargeFulfillmentStoreKind::Postgres {
+        PaymentConfirmationStoreKind::Postgres {
             ref payments,
             ref recharge,
             ref orders,
         } => {
-            legacy_settle_points_recharge(
-                Some(&ctx),
+            confirm_order_payment_inner(
+                ctx,
                 &subject,
                 &order_id,
                 &body.request_no,
@@ -163,21 +158,10 @@ async fn create_points_recharge_fulfillment(
             )
             .await
         }
-    };
-
-    if let Ok(deprecation) = HeaderValue::from_static("true") {
-        response.headers_mut().insert("Deprecation", deprecation);
     }
-    if let Ok(link) = HeaderValue::from_static(
-        "</backend/v3/api/orders/{orderId}/payment_confirmations>; rel=\"successor-version\"",
-    ) {
-        response.headers_mut().insert("Link", link);
-    }
-
-    response
 }
 
-async fn legacy_settle_points_recharge(
+async fn confirm_order_payment_inner(
     ctx: Option<&WebRequestContext>,
     subject: &BackendOperatorScope,
     order_id: &str,
@@ -196,7 +180,7 @@ async fn legacy_settle_points_recharge(
         .await
     {
         Ok(Some(value)) => value,
-        Ok(None) => return not_found(ctx, "points recharge order was not found"),
+        Ok(None) => return not_found(ctx, "order was not found"),
         Err(error) => return map_service_error(ctx, error),
     };
 
@@ -221,14 +205,21 @@ async fn legacy_settle_points_recharge(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    success_command(
+    success_item(
         ctx,
-        Some(settlement_outcome.order_id),
-        Some(settlement_outcome.fulfillment_status),
+        ConfirmOrderPaymentResponse {
+            payment_confirmed: settlement_outcome.payment_confirmed,
+            payment_replayed: settlement_outcome.payment_replayed,
+            fulfillment_accepted: settlement_outcome.fulfillment_accepted,
+            fulfillment_replayed: settlement_outcome.fulfillment_replayed,
+            order_id: settlement_outcome.order_id,
+            points_credited: settlement_outcome.points_credited,
+            fulfillment_status: settlement_outcome.fulfillment_status,
+        },
     )
 }
 
-fn require_fulfillment_subject(
+fn require_confirmation_subject(
     context: IamAppContext,
     web_context: Option<&WebRequestContext>,
 ) -> Result<BackendOperatorScope, Response> {
@@ -238,21 +229,72 @@ fn require_fulfillment_subject(
             "backend api access requires an organization-scoped session",
         ));
     }
-    if !context.has_permission(permissions::FULFILL) {
-        tracing::warn!(
-            target = "order.acl",
-            user_id = %context.user_id,
-            tenant_id = %context.tenant_id,
-            required_permission = permissions::FULFILL,
-            "points recharge fulfillment permission denied"
-        );
+    if !context.has_permission(permissions::CONFIRM) {
         return Err(forbidden(
             web_context,
-            format!("missing required permission: {}", permissions::FULFILL),
+            format!("missing required permission: {}", permissions::CONFIRM),
         ));
     }
     match backend_operator_scope_from_iam(&context) {
         Ok(subject) => Ok(subject),
         Err(message) => Err(unauthorized(web_context, message)),
+    }
+}
+
+pub(crate) trait OrderSettlementContextLoader: Send + Sync {
+    fn load_order_payment_settlement_context<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        order_id: &'a str,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
+                > + Send
+                + 'a,
+        >,
+    >;
+}
+
+impl OrderSettlementContextLoader for SqliteCommerceOrderStore {
+    fn load_order_payment_settlement_context<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        order_id: &'a str,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
+                .await
+        })
+    }
+}
+
+impl OrderSettlementContextLoader for PostgresCommerceOrderStore {
+    fn load_order_payment_settlement_context<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        order_id: &'a str,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
+                .await
+        })
     }
 }

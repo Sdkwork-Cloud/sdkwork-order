@@ -52,17 +52,20 @@ Backend admin: `RechargeAdminService` (package publish) on order-backend-api.
 ```text
 1. recharges.orders.create  → commerce_order (pending_payment)
 2. orders.pay(orderId)      → Payment creates intent + attempt (cashierUrl in paymentParams)
-3. PSP webhook              → Payment ingests event, marks attempt succeeded
-4. Payment settlement       → settle_owner_order_after_payment_success (webhook or backend confirm)
-5. Order saga               → POST .../points_recharge/fulfillments → account ledger credit
-6. Order                    → fulfillment_status = fulfilled (virtual)
+3. PSP webhook              → Order app-api POST .../orders/payments/webhooks/{provider}
+4. Order → Payment port     → ingest webhook, mark attempt succeeded (in-process)
+5. Order settlement         → settle_owner_order_after_payment_success (in-process saga)
+6. Order                    → fulfillment_status = fulfilled; account ledger credit
 ```
 
-Production path: **webhook ingestion** (`POST /app/v3/api/payments/webhooks/{provider}`) triggers settlement automatically when payment status maps to `succeeded`. **Manual replay** uses `POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations` (same settlement saga).
+Production path: **webhook ingestion** on the **order gateway** (`POST /app/v3/api/orders/payments/webhooks/{providerCode}`) verifies the PSP signature, calls the payment repository port, then runs settlement in-process when status maps to `succeeded`. **Manual replay** uses `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
+
+Legacy `POST /app/v3/api/payments/webhooks/{providerCode}` on the payment gateway returns **410 Gone** with a migration hint.
 
 Saga entrypoints (order-service):
 
-- `mark_points_recharge_payment_succeeded` — payment webhook boundary (Payment → Order)
+- `settle_owner_order_after_payment_success` — orchestrates confirm + subject fulfillment
+- `mark_points_recharge_payment_succeeded` — order-side payment success markers
 - `fulfill_points_recharge_order` — credits account via `AccountPointsCreditPort`, then commits order fulfillment
 
 Idempotency keys:
@@ -78,9 +81,9 @@ Order **must not** call payment provider SDK directly; use Payment service/repos
 
 | Direction | Target | Allowed |
 | --- | --- | --- |
-| Order → Payment | `orders.pay`, payment store port | Yes |
+| Order → Payment | `orders.pay`, webhook ingest, confirm payment ports | Yes |
 | Order → Account | backend-api adjustments | Yes (saga) |
-| Payment → Order | read/update order state | Yes |
+| Payment → Order | HTTP or service dependency | **No** |
 | Order → Account tables | direct SQL | **No** |
 
 ## 6. SDK
@@ -103,12 +106,14 @@ Legacy payment-local recharge SQL and routes were removed (P3). Deprecated `/app
 
 | Component | Route / env | Role |
 | --- | --- | --- |
-| Order backend saga | `POST .../orders/{orderId}/points_recharge/fulfillments` | Marks payment success (optional `paidAt`) + fulfills via `AccountPointsCreditPort` |
-| Payment confirmation | `POST .../payments/owner-orders/{orderId}/confirmations` | Marks payment attempt succeeded, then calls order saga (Payment → Order only) |
-| Account credit (HTTP) | `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` (required unless `SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1` for local dev) | Default adapter: `POST .../wallet/adjustments/points` |
+| PSP webhook | `POST .../orders/payments/webhooks/{providerCode}` | Order-owned public route; verify + ingest + settle |
+| Manual confirm | `POST .../orders/{orderId}/payment_confirmations` | Operator replay of settlement saga |
+| Legacy fulfill API | `POST .../orders/{orderId}/points_recharge/fulfillments` | Deprecated alias; prefer payment_confirmations |
+| Webhook base URL | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
+| Account credit (HTTP) | `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` | Default adapter: `POST .../wallet/adjustments/points` |
 | Account credit (store) | `SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=store` | In-process ledger via shared ACCOUNT database pool |
 
-Permissions: `commerce.orders.fulfill` (order backend), `commerce.payments.confirm` (payment backend).
+Permissions: `commerce.orders.fulfill` (order backend payment_confirmations).
 
 Recharge **app-api** responses use `SdkWorkApiResponse` (`code: 0`, `data.item` / `data.items` + `pageInfo`, `traceId`). Errors use `ProblemDetail` with numeric `code`.
 

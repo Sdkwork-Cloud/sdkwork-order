@@ -1700,6 +1700,50 @@
         "x-sdkwork-api-surface": "app-api"
       }
     },
+    "/app/v3/api/orders/payments/webhooks/{providerCode}": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Receive PSP payment webhook",
+        "operationId": "orders.payments.webhooks.receive",
+        "parameters": [
+          {
+            "name": "providerCode",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "additionalProperties": true }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "x-sdkwork-wire-protocol": "external",
+        "x-sdkwork-external-protocol-id": "psp-payment-webhook",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
     "/app/v3/api/after_sales/requests": {
       "get": {
         "tags": [

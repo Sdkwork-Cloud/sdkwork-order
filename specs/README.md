@@ -9,6 +9,8 @@ Local specification index for the order capability (unified `commerce_order`, in
 | [component.spec.json](./component.spec.json) | Workspace manifest |
 | [RECHARGE_ORDER_SPEC.md](./RECHARGE_ORDER_SPEC.md) | Recharge packages, recharge orders, unified order center |
 | [commerce-recharge.spec.json](./commerce-recharge.spec.json) | Machine-readable recharge contract + migration from payment |
+| [commerce-checkout-topology.spec.json](./commerce-checkout-topology.spec.json) | Order ↔ payment dependency and checkout flows |
+| [commerce-payment-webhook.spec.json](./commerce-payment-webhook.spec.json) | Order-owned PSP webhooks and in-process settlement |
 
 ## Sibling specs
 

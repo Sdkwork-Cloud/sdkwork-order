@@ -14,8 +14,8 @@ entries:
     topic: recharge-boundary
   - path: docs/guides/integrator/README.md
     topic: integrator
-  - path: docs/guides/operations/PRODUCTION.md
-    topic: production-operations
+  - path: specs/commerce-payment-webhook.spec.json
+    topic: payment-webhook-orchestration
 domains:
   - commerce
   - checkout

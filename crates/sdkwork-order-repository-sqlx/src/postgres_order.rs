@@ -245,6 +245,8 @@ WHERE (
 ORDER BY COALESCE(m.sort_order, 0) ASC, m.id ASC
 "#;
 
+use crate::order_settlement_context::OrderPaymentSettlementContext;
+
 #[derive(Debug, Clone)]
 pub struct PostgresCommerceOrderStore {
     pool: PgPool,
@@ -257,6 +259,48 @@ impl PostgresCommerceOrderStore {
 
     pub(crate) fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    pub async fn load_order_subject(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+    ) -> Result<Option<String>, CommerceServiceError> {
+        Ok(self
+            .load_order_payment_settlement_context(tenant_id, organization_id, order_id)
+            .await?
+            .map(|context| context.subject)
+            .filter(|subject| !subject.trim().is_empty()))
+    }
+
+    pub async fn load_order_payment_settlement_context(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+    ) -> Result<Option<OrderPaymentSettlementContext>, CommerceServiceError> {
+        let row = sqlx::query(
+            r#"
+            SELECT owner_user_id, subject
+            FROM commerce_order
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND id = CAST($2 AS TEXT)
+              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+            LIMIT 1
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(order_id)
+        .bind(organization_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to load order payment settlement context", error))?;
+
+        Ok(row.map(|row| OrderPaymentSettlementContext {
+            owner_user_id: string_cell(&row, "owner_user_id"),
+            subject: row.try_get("subject").ok().flatten().unwrap_or_default(),
+        }))
     }
 
     pub async fn list_owner_orders(

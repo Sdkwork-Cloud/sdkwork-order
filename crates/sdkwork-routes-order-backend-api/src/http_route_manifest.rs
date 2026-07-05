@@ -54,6 +54,13 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders.pointsRecharge.fulfillments.create",
     )
     .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/orders/{orderId}/payment_confirmations",
+        "orders",
+        "orders.paymentConfirmations.create",
+    )
+    .with_idempotent(true),
 ];
 
 pub fn backend_route_manifest() -> HttpRouteManifest {

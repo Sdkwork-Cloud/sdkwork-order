@@ -1,4 +1,5 @@
 pub mod order_lifecycle;
+pub mod order_settlement_context;
 pub mod postgres_after_sales;
 pub mod postgres_checkout;
 pub mod postgres_fulfillment;
@@ -31,5 +32,6 @@ pub use test_sqlite_pool::{
 
 pub use postgres_order::PostgresCommerceOrderStore;
 pub use postgres_recharge::PostgresCommerceRechargeStore;
-pub use sqlite_order::SqliteCommerceOrderStore;
+pub use order_settlement_context::OrderPaymentSettlementContext;
+pub use sqlite_order::{SqliteCommerceOrderStore};
 pub use sqlite_recharge::SqliteCommerceRechargeStore;

@@ -1,6 +1,12 @@
 mod account_ledger;
+mod owner_order_payment;
 mod points_recharge_fulfillment;
 
+pub use owner_order_payment::{
+    ConfirmOwnerOrderPaymentOutcome, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
+    OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
+};
 pub use account_ledger::{
     points_recharge_fulfillment_idempotency_key, points_recharge_fulfillment_transaction_no,
     points_recharge_payment_success_idempotency_key, AccountPointsCreditFuture,

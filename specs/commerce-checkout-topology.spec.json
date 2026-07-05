@@ -13,7 +13,8 @@
         "commerce_order_event",
         "commerce_order_cancellation",
         "commerce_recharge_package",
-        "checkout sessions and product checkout"
+        "checkout sessions and product checkout",
+        "PSP payment webhook ingestion and payment settlement orchestration"
       ],
       "appApiPrefixes": [
         "/app/v3/api/orders",
@@ -44,14 +45,39 @@
       ]
     }
   },
-  "dependencyDirection": "order -> payment (in-process OwnerOrderPaymentStore; HTTP for standalone gateways)",
-  "fulfillmentCallbacks": [
+  "dependencyDirection": "order -> payment (in-process OwnerOrderPaymentStore and PaymentWebhookStore); payment MUST NOT depend on order",
+  "paymentSettlement": {
+    "webhookOwner": "order",
+    "webhookRoute": "POST /app/v3/api/orders/payments/webhooks/{providerCode}",
+    "manualConfirmRoute": "POST /backend/v3/api/orders/{orderId}/payment_confirmations",
+    "orchestrator": "sdkwork-order-service::settle_owner_order_after_payment_success",
+    "inProcessOnly": true
+  },
+  "subjectFulfillment": [
     {
-      "trigger": "payment.ownerOrders.confirmations.create",
-      "caller": "sdkwork-payment",
-      "target": "POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
-      "owner": "sdkwork-order",
-      "subjects": ["points_recharge"]
+      "subject": "points_recharge",
+      "handler": "PointsRechargeFulfillmentStore + AccountPointsCreditPort",
+      "status": "complete"
+    },
+    {
+      "subject": "product",
+      "handler": "shipment saga",
+      "status": "planned"
+    },
+    {
+      "subject": "virtual_goods",
+      "handler": "account or entitlement port",
+      "status": "planned"
+    },
+    {
+      "subject": "membership",
+      "handler": "membership activation port",
+      "status": "planned"
+    },
+    {
+      "subject": "coupon_package",
+      "handler": "promotion coupon grant port",
+      "status": "planned"
     }
   ],
   "cashier": {
@@ -86,22 +112,23 @@
   "canonicalFlows": {
     "productCheckout": [
       "checkout.sessions.create",
-      "checkout.orders.create",
+      "checkout.sessions.orders.create",
       "orders.pay",
       "paymentParams.cashierUrl -> cashier UI",
-      "payment confirmation -> shipment/fulfillment"
+      "PSP webhook -> order payments webhooks",
+      "order payment settlement -> shipment/fulfillment"
     ],
     "pointsRecharge": [
       "recharges.orders.create",
       "orders.pay",
       "paymentParams.cashierUrl -> cashier UI",
-      "payments.ownerOrders.confirmations.create",
-      "orders.pointsRecharge.fulfillments.create",
-      "account ledger credit"
+      "PSP webhook -> order payments webhooks",
+      "order in-process settlement -> account ledger credit"
     ]
   },
   "forbidden": [
-    "payment provider HTTP in order routes",
+    "payment provider HTTP settlement orchestration in sdkwork-payment routes",
+    "payment HTTP callback to order backend",
     "insert commerce_order in payment repository",
     "raw HTTP to order/payment APIs from app packages (use composed SDKs)"
   ]

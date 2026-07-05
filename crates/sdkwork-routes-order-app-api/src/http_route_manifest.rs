@@ -103,6 +103,13 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders.cancellations.create",
     )
     .with_idempotent(true),
+    // === Payment webhooks (PSP callbacks; no user token) ===
+    HttpRoute::public(
+        HttpMethod::Post,
+        "/app/v3/api/orders/payments/webhooks/{providerCode}",
+        "orders",
+        "orders.payments.webhooks.receive",
+    ),
     // === After-sales ===
     HttpRoute::dual_token(
         HttpMethod::Get,
@@ -235,6 +242,14 @@ mod tests {
         let manifest = app_route_manifest();
         assert!(!manifest.routes().is_empty());
         for route in manifest.routes() {
+            if route.path.contains("/payments/webhooks/") {
+                assert_eq!(
+                    route.auth,
+                    RouteAuth::Public,
+                    "provider webhook routes must be public"
+                );
+                continue;
+            }
             assert_eq!(
                 route.auth,
                 RouteAuth::DualToken,

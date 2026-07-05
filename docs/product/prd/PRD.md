@@ -50,9 +50,9 @@ Primary API prefixes:
 
 ## 5. User Scenarios
 
-- A buyer creates a checkout session, places an order, pays or cancels, and tracks fulfillment status.
+- A buyer creates a checkout session, places an order, pays via the cashier, and receives fulfillment after the order gateway processes the PSP webhook (points recharge credits the wallet in-process).
 - An operator lists orders, inspects lifecycle events, and cancels or closes orders through the backend API.
-- A fulfillment worker completes points-recharge orders via `POST .../points_recharge/fulfillments`.
+- An operator replays stuck settlements via `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
 
 ## 6. Success Metrics
 
@@ -66,6 +66,7 @@ Primary API prefixes:
 - Phase 2 (complete): Payment side-effects owned by payment repository; order validates via one-way dependency.
 - Phase 3 (complete): Backend admin API, backend SDK, OpenAPI discovery, cancel/close audit, strict SQL list pagination, v3 SDK envelope on PC order center.
 - Phase 4 (complete): Operator UI (`/admin/orders`), `HttpRouteManifest`, gateway contract fallback, CI verify with Postgres parity, production operations guide, OpenAPI static contract tests.
+- Phase 5 (complete): Order-owned PSP webhooks, in-process payment settlement, deprecated payment webhook shim (410), `payment_confirmations` backend replay.
 - Post-GA platform work (outside this repo): cluster Prometheus dashboards, Redis-backed rate limiting at the ingress/gateway mesh layer.
 
 ## 8. Linked Requirements

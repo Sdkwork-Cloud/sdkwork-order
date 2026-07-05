@@ -8,6 +8,7 @@ use crate::{
     app_checkout_router_with_postgres_pool, app_checkout_router_with_sqlite_pool,
     app_fulfillment_router_with_postgres_pool, app_fulfillment_router_with_sqlite_pool,
     app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool,
+    app_payment_webhook_router_with_postgres_pool, app_payment_webhook_router_with_sqlite_pool,
     app_recharge_checkout_router_with_postgres_pool, app_recharge_checkout_router_with_sqlite_pool,
     app_shipment_router_with_postgres_pool, app_shipment_router_with_sqlite_pool,
 };
@@ -15,6 +16,7 @@ use crate::openapi_contract::mount_app_openapi;
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
 
 pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
+    let credit_port = host.account_credit_port();
     let router = match host.database_pool() {
         DatabasePool::Postgres(pool, _) => {
             let pool = pool.clone();
@@ -24,7 +26,11 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
                 .merge(app_recharge_checkout_router_with_postgres_pool(pool.clone()))
                 .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
                 .merge(app_shipment_router_with_postgres_pool(pool.clone()))
-                .merge(app_after_sales_router_with_postgres_pool(pool))
+                .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
+                .merge(app_payment_webhook_router_with_postgres_pool(
+                    pool,
+                    credit_port,
+                ))
         }
         DatabasePool::Sqlite(pool, _) => {
             let pool = pool.clone();
@@ -34,7 +40,8 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
                 .merge(app_recharge_checkout_router_with_sqlite_pool(pool.clone()))
                 .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
                 .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
-                .merge(app_after_sales_router_with_sqlite_pool(pool))
+                .merge(app_after_sales_router_with_sqlite_pool(pool.clone()))
+                .merge(app_payment_webhook_router_with_sqlite_pool(pool, credit_port))
         }
     };
     mount_app_openapi(router)

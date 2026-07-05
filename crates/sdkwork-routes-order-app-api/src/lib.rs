@@ -6,6 +6,7 @@ pub mod fulfillment_router;
 pub mod http_route_manifest;
 pub mod openapi_contract;
 pub mod order_router;
+pub mod payment_webhook_router;
 pub mod recharge_router;
 pub mod routes;
 pub mod shipment_router;
@@ -29,6 +30,9 @@ pub use fulfillment_router::{
 pub use order_router::{
     build_app_order_router, app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool,
     CommerceOrderFuture, CommerceOrderStore, OwnerOrderPaymentStore,
+};
+pub use payment_webhook_router::{
+    app_payment_webhook_router_with_postgres_pool, app_payment_webhook_router_with_sqlite_pool,
 };
 pub use recharge_router::{
     build_app_recharge_checkout_router, app_recharge_checkout_router_with_postgres_pool,

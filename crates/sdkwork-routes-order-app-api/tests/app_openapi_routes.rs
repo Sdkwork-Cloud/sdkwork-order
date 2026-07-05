@@ -2,14 +2,35 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
+use sdkwork_order_service::{
+    AccountPointsCreditPort, AccountPointsCreditFuture, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest,
+};
 use sdkwork_routes_order_app_api::{
     app_after_sales_router_with_sqlite_pool, app_checkout_router_with_sqlite_pool,
     app_fulfillment_router_with_sqlite_pool, app_order_router_with_sqlite_pool,
-    app_recharge_checkout_router_with_sqlite_pool, app_shipment_router_with_sqlite_pool,
-    openapi_contract::mount_app_openapi,
+    app_payment_webhook_router_with_sqlite_pool, app_recharge_checkout_router_with_sqlite_pool,
+    app_shipment_router_with_sqlite_pool, openapi_contract::mount_app_openapi,
 };
 use serde_json::Value;
+use std::sync::Arc;
 use tower::util::ServiceExt;
+
+struct NoopAccountPointsCreditPort;
+
+impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
+    fn credit_points_recharge<'a>(
+        &'a self,
+        _request: PointsRechargeCreditRequest,
+    ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
+        Box::pin(async move {
+            Ok(PointsRechargeCreditOutcome {
+                accepted: true,
+                replayed: false,
+            })
+        })
+    }
+}
 
 fn build_test_app_router(pool: sqlx::SqlitePool) -> Router {
     mount_app_openapi(
@@ -19,7 +40,11 @@ fn build_test_app_router(pool: sqlx::SqlitePool) -> Router {
             .merge(app_recharge_checkout_router_with_sqlite_pool(pool.clone()))
             .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
             .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
-            .merge(app_after_sales_router_with_sqlite_pool(pool)),
+            .merge(app_after_sales_router_with_sqlite_pool(pool.clone()))
+            .merge(app_payment_webhook_router_with_sqlite_pool(
+                pool,
+                Arc::new(NoopAccountPointsCreditPort),
+            )),
     )
 }
 
@@ -91,4 +116,5 @@ fn concrete_uri(template_path: &str) -> String {
         .replace("{afterSalesRequestId}", "as-1")
         .replace("{shipmentId}", "shipment-1")
         .replace("{fulfillmentId}", "fulfillment-1")
+        .replace("{providerCode}", "wechat_pay")
 }

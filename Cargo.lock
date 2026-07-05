@@ -1854,6 +1854,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-payment-providers"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "async-trait",
+ "base64",
+ "chrono",
+ "hmac",
+ "reqwest",
+ "ring",
+ "rsa",
+ "sdkwork-contract-service",
+ "sdkwork-order-service",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "urlencoding",
+]
+
+[[package]]
 name = "sdkwork-payment-repository-sqlx"
 version = "0.1.0"
 dependencies = [
@@ -1888,6 +1909,7 @@ dependencies = [
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-order-service-host",
+ "sdkwork-payment-providers",
  "sdkwork-payment-repository-sqlx",
  "sdkwork-payment-service",
  "sdkwork-utils-rust",
@@ -1913,6 +1935,7 @@ dependencies = [
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-order-service-host",
+ "sdkwork-payment-repository-sqlx",
  "sdkwork-utils-rust",
  "sdkwork-web-axum",
  "sdkwork-web-bootstrap",

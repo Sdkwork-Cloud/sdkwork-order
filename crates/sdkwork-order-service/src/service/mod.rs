@@ -1,5 +1,9 @@
+mod order_payment_settlement;
 mod points_recharge_fulfillment;
 
+pub use order_payment_settlement::{
+    settle_owner_order_after_payment_success, OwnerOrderSettlementOutcome,
+};
 pub use points_recharge_fulfillment::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
     ledger_business_type_for_points_recharge, mark_points_recharge_payment_succeeded,
@@ -49,6 +53,7 @@ pub fn order_service_contract() -> CommerceServiceContract {
             crate::ports::IDEMPOTENCY_REPOSITORY_PORT,
             crate::ports::POINTS_RECHARGE_FULFILLMENT_STORE,
             crate::ports::ACCOUNT_POINTS_CREDIT_PORT,
+            crate::ports::OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
         ],
         true,
     )

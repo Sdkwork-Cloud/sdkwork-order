@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.commerce.order.payment-webhook",
+  "capability": "order",
+  "domain": "commerce",
+  "role": "payment-webhook-orchestrator",
+  "dependencyDirection": "order -> payment (in-process PaymentWebhookStore + payment-providers lib); payment -X-> order",
+  "ownedRoutes": {
+    "app": [
+      "POST /app/v3/api/orders/payments/webhooks/{providerCode}"
+    ],
+    "backend": [
+      "POST /backend/v3/api/orders/{orderId}/payment_confirmations"
+    ]
+  },
+  "deprecatedRoutes": {
+    "paymentApp": [
+      "POST /app/v3/api/payments/webhooks/{providerCode}"
+    ],
+    "paymentBackend": [
+      "POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations"
+    ],
+    "orderBackendLegacy": [
+      "POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments"
+    ],
+    "replacement": "order-app-api webhook + order-backend-api payment_confirmations"
+  },
+  "orchestrationSteps": [
+    "resolve_provider_account",
+    "verify_webhook_signature",
+    "normalize_provider_event",
+    "payment.ingest_provider_webhook",
+    "load_order_subject",
+    "settle_owner_order_after_payment_success"
+  ],
+  "paymentPort": {
+    "crate": "sdkwork-payment-repository-sqlx",
+    "operations": [
+      "ingest_provider_webhook_sqlite",
+      "ingest_provider_webhook_postgres",
+      "confirm_owner_order_payment"
+    ],
+    "forbiddenInPayment": [
+      "HTTP callback to order",
+      "JOIN commerce_order",
+      "settle_owner_order_after_payment_success"
+    ]
+  },
+  "environment": {
+    "webhookBaseUrlEnv": "ORDER_PAYMENT_WEBHOOK_BASE_URL",
+    "webhookPathPattern": "{base}/app/v3/api/orders/payments/webhooks/{providerCode}",
+    "legacyPaymentWebhookReturns": "410 Gone with migration ProblemDetail"
+  },
+  "forbidden": [
+    "PSP webhook HTTP handlers in sdkwork-payment (except deprecated 410 shim)",
+    "Payment → Order HTTP fulfillment client",
+    "SDKWORK_PAYMENT_ORDER_SERVICE_AUTH_TOKEN"
+  ]
+}
