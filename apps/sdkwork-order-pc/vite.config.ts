@@ -5,7 +5,11 @@ import { defineConfig, loadEnv } from "vite";
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 const orderAppSdkEntry = path.resolve(
   repoRoot,
-  "sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript/generated/server-openapi/src/index.ts",
+  "sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript/src/index.ts",
+);
+const orderBackendSdkEntry = path.resolve(
+  repoRoot,
+  "sdks/sdkwork-order-backend-sdk/sdkwork-order-backend-sdk-typescript/src/index.ts",
 );
 
 export default defineConfig(({ mode }) => {
@@ -19,6 +23,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: [
         { find: "@sdkwork/order-app-sdk", replacement: orderAppSdkEntry },
+        { find: "@sdkwork/order-backend-sdk", replacement: orderBackendSdkEntry },
         {
           find: "@sdkwork/order-contracts",
           replacement: path.resolve(

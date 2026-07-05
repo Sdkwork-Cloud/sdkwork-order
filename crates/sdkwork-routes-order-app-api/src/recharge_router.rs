@@ -15,7 +15,7 @@ use sdkwork_order_service::{
     CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
     CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome, OrderOwnerListQuery,
     PayOwnerOrderCommand, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
-    RechargePackageListQuery, RechargeSettingsQuery, RechargeSettingsSnapshot,
+    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery, RechargeSettingsSnapshot,
 };
 use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
@@ -30,20 +30,19 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    conflict, map_service_error, success_command, success_item, success_items, unauthorized,
-    validation,
+    map_service_error, not_found, offset_list_page_params_from_query, success_command, success_item,
+    success_items, unauthorized, validation,
 };
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
 use crate::command_headers::validate_app_write_payload;
-use crate::subject::{
-    app_runtime_subject_from_extension, optional_app_runtime_subject_from_headers,
-    AppRuntimeSubject,
-};
+use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
 const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
-const DEFAULT_RECHARGE_PAYMENT_METHOD: &str = "wechat_pay";
+
+/// 允许的支付方式白名单。新增支付方式时只需扩展此处。
+const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
 
 pub type CommerceRechargeCheckoutFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -52,7 +51,7 @@ pub trait CommerceRechargeCheckoutStore: Send + Sync {
     fn list_recharge_packages<'a>(
         &'a self,
         query: RechargePackageListQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, Vec<RechargePackageItem>>;
+    ) -> CommerceRechargeCheckoutFuture<'a, RechargePackageListPage>;
 
     fn load_recharge_settings<'a>(
         &'a self,
@@ -85,6 +84,13 @@ struct RechargeOrderListQueryParams {
     status: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct RechargePackageListQueryParams {
+    page: Option<i64>,
+    #[serde(rename = "pageSize", alias = "page_size")]
+    page_size: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RechargeOrderSummaryResponse {
@@ -104,6 +110,8 @@ struct SubmitRechargeRequest {
     client_request_no: Option<String>,
     currency_code: Option<String>,
     package_id: Option<String>,
+    payment_method: Option<String>,
+    payment_password: Option<String>,
     source: Option<String>,
 }
 
@@ -139,12 +147,14 @@ impl SubmitRechargeRequest {
     fn source(&self) -> Option<&str> {
         self.source.as_deref()
     }
-}
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CommandAccepted {
-    accepted: bool,
+    fn payment_method(&self) -> Option<&str> {
+        self.payment_method.as_deref()
+    }
+
+    fn payment_password(&self) -> Option<&str> {
+        self.payment_password.as_deref()
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -222,7 +232,7 @@ impl CommerceRechargeCheckoutStore for SqliteCommerceRechargeStore {
     fn list_recharge_packages<'a>(
         &'a self,
         query: RechargePackageListQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, Vec<RechargePackageItem>> {
+    ) -> CommerceRechargeCheckoutFuture<'a, RechargePackageListPage> {
         Box::pin(async move { self.list_recharge_packages(query).await })
     }
 
@@ -252,7 +262,7 @@ impl CommerceRechargeCheckoutStore for PostgresCommerceRechargeStore {
     fn list_recharge_packages<'a>(
         &'a self,
         query: RechargePackageListQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, Vec<RechargePackageItem>> {
+    ) -> CommerceRechargeCheckoutFuture<'a, RechargePackageListPage> {
         Box::pin(async move { self.list_recharge_packages(query).await })
     }
 
@@ -333,28 +343,32 @@ async fn fetch_recharge_packages(
     State(state): State<AppRechargeCheckoutState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
-    headers: HeaderMap,
+    Query(params): Query<RechargePackageListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let query = match optional_app_runtime_subject_from_headers(runtime_context, &headers).await {
-        Some(subject) => match RechargePackageListQuery::new(
-            &subject.tenant_id,
-            subject.organization_id.as_deref(),
-        ) {
-            Ok(query) => query,
-            Err(error) => return map_service_error(ctx, error),
-        },
-        None => RechargePackageListQuery::public(),
+    let subject = match app_runtime_subject_from_extension(runtime_context) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
+    let query = match RechargePackageListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        params.page,
+        params.page_size,
+    ) {
+        Ok(query) => query,
+        Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.store.list_recharge_packages(query).await {
-        Ok(items) => {
-            let mapped = items
+    match state.store.list_recharge_packages(query.clone()).await {
+        Ok(page) => {
+            let mapped = page
+                .items
                 .into_iter()
                 .map(map_recharge_package)
                 .collect::<Vec<_>>();
-            let count = mapped.len() as i64;
-            success_items(ctx, mapped, 1, count.max(1))
+            let page_params = offset_list_page_params_from_query(query.page, query.page_size);
+            success_items(ctx, mapped, page.total, page_params)
         }
         Err(error) => map_service_error(ctx, error),
     }
@@ -364,18 +378,16 @@ async fn fetch_recharge_settings(
     State(state): State<AppRechargeCheckoutState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
-    headers: HeaderMap,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let query = match optional_app_runtime_subject_from_headers(runtime_context, &headers).await {
-        Some(subject) => {
-            match RechargeSettingsQuery::new(&subject.tenant_id, subject.organization_id.as_deref())
-            {
-                Ok(query) => query,
-                Err(error) => return map_service_error(ctx, error),
-            }
-        }
-        None => RechargeSettingsQuery::public(),
+    let subject = match app_runtime_subject_from_extension(runtime_context) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
+    let query = match RechargeSettingsQuery::new(&subject.tenant_id, subject.organization_id.as_deref())
+    {
+        Ok(query) => query,
+        Err(error) => return map_service_error(ctx, error),
     };
 
     match state.store.load_recharge_settings(query).await {
@@ -409,24 +421,27 @@ async fn list_recharge_orders(
     };
 
     match state.orders.list_owner_orders(query).await {
-        Ok(page) => success_items(
-            ctx,
-            page
-                .items
-                .into_iter()
-                .map(|item| RechargeOrderSummaryResponse {
-                    order_id: item.order_id,
-                    order_no: item.order_sn,
-                    status: item.status,
-                    subject: item.subject,
-                    amount: item.total_amount.as_str().to_string(),
-                    points: 0,
-                    created_at: item.created_at,
-                })
-                .collect(),
-            page.page,
-            page.page_size,
-        ),
+        Ok(page) => {
+            let page_params = offset_list_page_params_from_query(page.page, page.page_size);
+            success_items(
+                ctx,
+                page
+                    .items
+                    .into_iter()
+                    .map(|item| RechargeOrderSummaryResponse {
+                        order_id: item.order_id,
+                        order_no: item.order_sn,
+                        status: item.status,
+                        subject: item.subject,
+                        amount: item.total_amount.as_str().to_string(),
+                        points: 0,
+                        created_at: item.created_at,
+                    })
+                    .collect(),
+                page.total,
+                page_params,
+            )
+        }
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -455,7 +470,11 @@ async fn cancel_recharge_order(
 
     match state.orders.cancel_owner_order(command.clone()).await {
         Ok(()) => match state.payments.cancel_owner_order_payments(command).await {
-            Ok(()) => success_command(ctx, CommandAccepted { accepted: true }),
+            Ok(()) => success_command(
+                ctx,
+                Some(order_id.clone()),
+                Some("cancelled".to_string()),
+            ),
             Err(error) => map_service_error(ctx, error),
         },
         Err(error) => map_service_error(ctx, error),
@@ -482,9 +501,12 @@ async fn submit_recharge(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let method = DEFAULT_RECHARGE_PAYMENT_METHOD.to_string();
+    let method = match validate_payment_method(request.payment_method()) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
     let write_headers =
-        match validate_app_write_payload(&headers, "recharge.submit", &request, |idempotency_key| {
+        match validate_app_write_payload(ctx, &headers, "recharge.submit", &request, |idempotency_key| {
             fallback_request_no(&subject, amount.as_str(), &method, idempotency_key)
         }) {
             Ok(value) => value,
@@ -512,6 +534,7 @@ async fn submit_recharge(
                 "packageId": command.package_id,
                 "clientRequestNo": command.client_request_no,
                 "source": command.source,
+                "paymentPassword": request.payment_password(),
             })
             .to_string();
             let pay_command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
@@ -519,8 +542,10 @@ async fn submit_recharge(
                 subject.organization_id.as_deref(),
                 &subject.user_id,
                 &command.order_id,
-                DEFAULT_RECHARGE_PAYMENT_METHOD,
+                &method,
                 Some(callback_payload),
+                &format!("{}:pay", write_headers.request_no),
+                &format!("{}:pay", write_headers.idempotency_key),
             ) {
                 Ok(command) => command,
                 Err(error) => return map_service_error(ctx, error),
@@ -564,7 +589,7 @@ async fn fetch_checkout_status(
 
     match state.store.retrieve_checkout_status(query).await {
         Ok(Some(snapshot)) => success_item(ctx, map_checkout_status(snapshot)),
-        Ok(None) => conflict(ctx, "checkout order was not found"),
+        Ok(None) => not_found(ctx, "checkout order was not found"),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -598,6 +623,20 @@ fn validate_currency_code(value: Option<&str>) -> Result<String, String> {
         return Err("currency code must be a 3-letter uppercase code".to_string());
     }
     Ok(currency_code)
+}
+
+fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
+    let method = value.unwrap_or_default().trim().to_ascii_lowercase();
+    if method.is_empty() {
+        return Err("payment method must be provided".to_string());
+    }
+    if !ALLOWED_PAYMENT_METHODS.iter().any(|allowed| *allowed == method) {
+        return Err(format!(
+            "payment method must be one of: {}",
+            ALLOWED_PAYMENT_METHODS.join(", ")
+        ));
+    }
+    Ok(method)
 }
 
 fn validate_checkout_order_no(order_no: String) -> Result<String, String> {

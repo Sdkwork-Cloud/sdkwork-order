@@ -1,8 +1,16 @@
 import { useMemo } from "react";
 
 import { sdkworkOrderPcRuntimeIdentity } from "@sdkwork/order-pc-core";
+import { SdkworkOrderAdminOrdersPage } from "@sdkwork/order-pc-admin-orders";
 import { SdkworkOrderPage } from "@sdkwork/order-pc-order";
 import { SdkworkThemeProvider } from "@sdkwork/ui-pc-react";
+
+function resolveStandaloneSurface(): "app" | "backend-admin" {
+  if (typeof window === "undefined") {
+    return "app";
+  }
+  return window.location.pathname.startsWith("/admin") ? "backend-admin" : "app";
+}
 
 export interface OrderAppShellProps {
   /**
@@ -43,7 +51,8 @@ export function OrderAppShell({
   messages,
   theme = "light",
 }: OrderAppShellProps = {}) {
-  const page = useMemo(
+  const surface = resolveStandaloneSurface();
+  const buyerPage = useMemo(
     () => (
       <SdkworkOrderPage
         controller={orderController}
@@ -53,6 +62,7 @@ export function OrderAppShell({
     ),
     [orderController, locale, messages],
   );
+  const adminPage = useMemo(() => <SdkworkOrderAdminOrdersPage />, []);
 
   return (
     <SdkworkThemeProvider defaultTheme={theme}>
@@ -64,11 +74,17 @@ export function OrderAppShell({
           <span className="order-shell-mark">SDKWork</span>
           <h1 className="order-shell-title">{sdkworkOrderPcRuntimeIdentity.appKey}</h1>
           <p className="order-shell-subtitle">
-            Order capability PC surface — aligned with sdkwork-specs building-block model.
+            {surface === "backend-admin"
+              ? "Order backend-admin surface — operator list, cancel, and close."
+              : "Order capability PC surface — aligned with sdkwork-specs building-block model."}
           </p>
+          <nav className="order-shell-nav" aria-label="Order surfaces">
+            <a href="/app/order">买家订单</a>
+            <a href="/admin/orders">订单监管</a>
+          </nav>
         </header>
         <section className="order-shell-body" role="main">
-          {page}
+          {surface === "backend-admin" ? adminPage : buyerPage}
         </section>
       </main>
     </SdkworkThemeProvider>

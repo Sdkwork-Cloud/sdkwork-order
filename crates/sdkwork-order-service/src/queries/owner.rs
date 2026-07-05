@@ -13,6 +13,85 @@ pub struct OrderOwnerListQuery {
     pub page_size: i64,
 }
 
+/// 订单事件列表查询（owner 域）。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrderOwnerEventListQuery {
+    pub tenant_id: String,
+    pub organization_id: Option<String>,
+    pub owner_user_id: String,
+    pub order_id: String,
+    pub page: i64,
+    pub page_size: i64,
+}
+
+impl OrderOwnerEventListQuery {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        order_id: &str,
+        page: Option<i64>,
+        page_size: Option<i64>,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
+        crate::validation::require_non_empty("order_id", order_id)?;
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
+        Ok(Self {
+            tenant_id: tenant_id.trim().to_string(),
+            organization_id: optional_text(organization_id),
+            owner_user_id: owner_user_id.trim().to_string(),
+            order_id: order_id.trim().to_string(),
+            page,
+            page_size,
+        })
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size
+    }
+
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.page_size
+    }
+}
+
+/// 订单事件视图（owner 域）。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrderOwnerEventView {
+    pub event_id: String,
+    pub order_id: String,
+    pub event_type: String,
+    pub from_status: Option<String>,
+    pub to_status: String,
+    pub actor_type: Option<String>,
+    pub actor_id: Option<String>,
+    pub message: Option<String>,
+    pub created_at: String,
+}
+
+/// 订单事件分页结果（owner 域）。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrderOwnerEventPage {
+    pub items: Vec<OrderOwnerEventView>,
+    pub page: i64,
+    pub page_size: i64,
+    pub total: i64,
+}
+
+impl OrderOwnerEventPage {
+    pub fn has_more(&self) -> bool {
+        self.page.saturating_mul(self.page_size) < self.total
+    }
+
+    pub fn total_pages(&self) -> i64 {
+        if self.page_size <= 0 {
+            return 0;
+        }
+        (self.total + self.page_size - 1) / self.page_size
+    }
+}
+
 /// Paginated result of [`OrderOwnerListQuery`].
 ///
 /// `total` is the unconditional count of rows matching the filter (independent
@@ -71,6 +150,7 @@ pub struct OrderOwnerSummary {
     pub total_amount: CommerceMoney,
     pub paid_amount: Option<CommerceMoney>,
     pub discount_amount: Option<CommerceMoney>,
+    pub currency_code: String,
     pub quantity: i64,
     pub created_at: String,
     pub pay_time: Option<String>,
@@ -118,14 +198,16 @@ impl OrderOwnerListQuery {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
 
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
+
         Ok(Self {
             tenant_id: tenant_id.trim().to_string(),
             organization_id: optional_text(organization_id),
             owner_user_id: owner_user_id.trim().to_string(),
             status: optional_text(status),
             subject: optional_text(subject),
-            page: page.unwrap_or(1).max(1),
-            page_size: page_size.unwrap_or(20).clamp(1, 100),
+            page,
+            page_size,
         })
     }
 
@@ -161,6 +243,7 @@ impl OrderOwnerDetailQuery {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CancelOwnerOrderCommand {
     pub cancel_reason: Option<String>,
+    pub cancel_type: Option<String>,
     pub order_id: String,
     pub organization_id: Option<String>,
     pub owner_user_id: String,
@@ -175,6 +258,8 @@ pub struct PayOwnerOrderCommand {
     pub payment_method: String,
     pub payment_attempt_callback_payload: Option<String>,
     pub tenant_id: String,
+    pub idempotency_key: String,
+    pub request_no: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -195,12 +280,31 @@ impl CancelOwnerOrderCommand {
         order_id: &str,
         cancel_reason: Option<&str>,
     ) -> Result<Self, CommerceServiceError> {
+        Self::with_cancel_type(
+            tenant_id,
+            organization_id,
+            owner_user_id,
+            order_id,
+            cancel_reason,
+            None,
+        )
+    }
+
+    pub fn with_cancel_type(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        order_id: &str,
+        cancel_reason: Option<&str>,
+        cancel_type: Option<&str>,
+    ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
         crate::validation::require_non_empty("order_id", order_id)?;
 
         Ok(Self {
             cancel_reason: optional_text(cancel_reason),
+            cancel_type: optional_text(cancel_type),
             order_id: order_id.trim().to_string(),
             organization_id: optional_text(organization_id),
             owner_user_id: owner_user_id.trim().to_string(),
@@ -260,6 +364,8 @@ impl PayOwnerOrderCommand {
         owner_user_id: &str,
         order_id: &str,
         payment_method: &str,
+        request_no: &str,
+        idempotency_key: &str,
     ) -> Result<Self, CommerceServiceError> {
         Self::with_payment_attempt_callback_payload(
             tenant_id,
@@ -268,6 +374,8 @@ impl PayOwnerOrderCommand {
             order_id,
             payment_method,
             None,
+            request_no,
+            idempotency_key,
         )
     }
 
@@ -278,11 +386,15 @@ impl PayOwnerOrderCommand {
         order_id: &str,
         payment_method: &str,
         payment_attempt_callback_payload: Option<String>,
+        request_no: &str,
+        idempotency_key: &str,
     ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
         crate::validation::require_non_empty("order_id", order_id)?;
         crate::validation::require_non_empty("payment_method", payment_method)?;
+        crate::validation::require_non_empty("request_no", request_no)?;
+        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
 
         Ok(Self {
             order_id: order_id.trim().to_string(),
@@ -293,6 +405,8 @@ impl PayOwnerOrderCommand {
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty()),
             tenant_id: tenant_id.trim().to_string(),
+            idempotency_key: idempotency_key.trim().to_string(),
+            request_no: request_no.trim().to_string(),
         })
     }
 }

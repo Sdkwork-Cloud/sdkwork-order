@@ -7,6 +7,8 @@ pub struct FulfillmentListQuery {
     pub order_id: Option<String>,
     pub status: Option<String>,
     pub tenant_id: String,
+    pub page: i64,
+    pub page_size: i64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -26,6 +28,28 @@ pub struct FulfillmentView {
     pub status: String,
 }
 
+/// 履约分页结果。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FulfillmentListPage {
+    pub items: Vec<FulfillmentView>,
+    pub page: i64,
+    pub page_size: i64,
+    pub total: i64,
+}
+
+impl FulfillmentListPage {
+    pub fn has_more(&self) -> bool {
+        self.page.saturating_mul(self.page_size) < self.total
+    }
+
+    pub fn total_pages(&self) -> i64 {
+        if self.page_size <= 0 {
+            return 0;
+        }
+        (self.total + self.page_size - 1) / self.page_size
+    }
+}
+
 impl FulfillmentListQuery {
     pub fn new(
         tenant_id: &str,
@@ -33,9 +57,13 @@ impl FulfillmentListQuery {
         owner_user_id: &str,
         order_id: Option<&str>,
         status: Option<&str>,
+        page: Option<i64>,
+        page_size: Option<i64>,
     ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
+
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
 
         Ok(Self {
             organization_id: optional_text(organization_id),
@@ -43,7 +71,17 @@ impl FulfillmentListQuery {
             order_id: optional_text(order_id),
             status: optional_text(status),
             tenant_id: tenant_id.trim().to_string(),
+            page,
+            page_size,
         })
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size
+    }
+
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.page_size
     }
 }
 

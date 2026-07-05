@@ -99,8 +99,8 @@ async fn fulfill_points_recharge_order_credits_account_then_commits_order() {
     assert!(outcome.accepted);
     assert!(!outcome.replayed);
     assert_eq!(outcome.points_credited, 250);
-    assert_eq!(credit_port.credit_calls(), 1);
     assert_eq!(store.commit_calls(), 1);
+    assert_eq!(credit_port.credit_calls(), 1);
 }
 
 #[tokio::test]
@@ -213,6 +213,14 @@ impl PointsRechargeFulfillmentStore for MockFulfillmentStore {
                 points,
             ))
         })
+    }
+
+    fn rollback_points_recharge_fulfillment<'a>(
+        &'a self,
+        _command: &'a FulfillPointsRechargeOrderCommand,
+        _context: &'a PointsRechargeFulfillmentContext,
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
+        Box::pin(async { Ok(()) })
     }
 
     fn mark_points_recharge_payment_succeeded<'a>(

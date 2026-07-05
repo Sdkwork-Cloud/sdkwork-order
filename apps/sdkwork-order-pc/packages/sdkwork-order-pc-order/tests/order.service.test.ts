@@ -30,122 +30,108 @@ describe("sdkwork-order-pc-order service", () => {
     const orderAppService = createOrderAppServiceMock({
       orders: {
         cancel: vi.fn().mockResolvedValue({
-          code: "2000",
+          code: 0,
+          data: { accepted: true },
         }),
         retrieve: vi.fn().mockResolvedValue({
-          code: "2000",
-          data: {
-            createdAt: "2026-04-02T08:00:00.000Z",
-            items: [
-              {
-                id: "ITEM-1",
-                productImage,
-                productName: "Pro Annual",
-                quantity: 1,
-                totalAmount: "699",
-              },
-            ],
-            orderId: "ORDER-2",
-            orderSn: "SN-ORDER-2",
-            outTradeNo: "OUT-ORDER-2",
-            paidAmount: "699",
-            payTime: "2026-04-02T08:03:00.000Z",
-            paymentMethod: "WECHAT",
-            productImage,
-            quantity: 1,
-            remark: "Annual renewal",
-            status: "PAID",
-            statusName: "Paid",
-            subject: "Pro Annual",
-            totalAmount: "699",
-            transactionId: "TXN-ORDER-2",
-          },
+          createdAt: "2026-04-02T08:00:00.000Z",
+          items: [
+            {
+              id: "ITEM-1",
+              productImage,
+              productName: "Pro Annual",
+              quantity: 1,
+              totalAmount: "699",
+            },
+          ],
+          orderId: "ORDER-2",
+          orderSn: "SN-ORDER-2",
+          outTradeNo: "OUT-ORDER-2",
+          paidAmount: "699",
+          payTime: "2026-04-02T08:03:00.000Z",
+          paymentMethod: "WECHAT",
+          productImage,
+          quantity: 1,
+          remark: "Annual renewal",
+          status: "paid",
+          statusName: "Paid",
+          subject: "Pro Annual",
+          totalAmount: "699",
+          transactionId: "TXN-ORDER-2",
         }),
         paymentSuccess: {
           retrieve: vi.fn().mockResolvedValue({
-            code: "2000",
-            data: {
-              orderId: "ORDER-2",
-              paid: true,
-              status: "PAID",
-              statusName: "Paid",
-            },
+            orderId: "ORDER-2",
+            paid: true,
+            status: "paid",
+            statusName: "Paid",
           }),
         },
         statistics: {
           retrieve: vi.fn().mockResolvedValue({
-            code: "2000",
-            data: {
-              completed: 8,
-              pendingPayment: 1,
-              pendingReceipt: 0,
-              pendingShipment: 0,
-              totalAmount: "2999",
-              totalOrders: 9,
-            },
+            completed: 8,
+            pendingPayment: 1,
+            pendingReceipt: 0,
+            pendingShipment: 0,
+            totalAmount: "2999",
+            totalOrders: 9,
           }),
         },
         status: {
           retrieve: vi.fn().mockResolvedValue({
-            code: "2000",
-            data: {
-              orderId: "ORDER-2",
-              status: "PAID",
-              statusName: "Paid",
-            },
+            orderId: "ORDER-2",
+            status: "paid",
+            statusName: "Paid",
           }),
         },
         list: vi.fn().mockResolvedValue({
-          code: "2000",
-          data: {
-            content: [
-              {
-                createdAt: "2026-04-02T08:00:00.000Z",
-                discountAmount: "0",
-                orderId: "ORDER-2",
-                orderSn: "SN-ORDER-2",
-                paidAmount: "699",
-                payTime: "2026-04-02T08:03:00.000Z",
-                paymentMethod: "WECHAT",
-                quantity: 1,
-                status: "PAID",
-                statusName: "Paid",
-                subject: "Pro Annual",
-                totalAmount: "699",
-              },
-              {
-                createdAt: "2026-04-03T09:00:00.000Z",
-                discountAmount: "0",
-                expireTime: "2026-04-03T09:30:00.000Z",
-                orderId: "ORDER-3",
-                orderSn: "SN-ORDER-3",
-                paidAmount: "0",
-                paymentMethod: "ALIPAY",
-                quantity: 1,
-                status: "PENDING_PAYMENT",
-                statusName: "Pending payment",
-                subject: "Pro Monthly",
-                totalAmount: "199",
-              },
-            ],
-            hasMore: false,
+          items: [
+            {
+              createdAt: "2026-04-03T09:00:00.000Z",
+              discountAmount: "0",
+              expireTime: "2026-04-03T09:30:00.000Z",
+              orderId: "ORDER-3",
+              orderSn: "SN-ORDER-3",
+              paidAmount: "0",
+              paymentMethod: "ALIPAY",
+              quantity: 1,
+              status: "pending_payment",
+              statusName: "Pending payment",
+              subject: "Pro Monthly",
+              totalAmount: "199",
+            },
+            {
+              createdAt: "2026-04-02T08:00:00.000Z",
+              discountAmount: "0",
+              orderId: "ORDER-2",
+              orderSn: "SN-ORDER-2",
+              paidAmount: "699",
+              payTime: "2026-04-02T08:03:00.000Z",
+              paymentMethod: "WECHAT",
+              quantity: 1,
+              status: "paid",
+              statusName: "Paid",
+              subject: "Pro Annual",
+              totalAmount: "699",
+            },
+          ],
+          pageInfo: {
+            mode: "offset",
             page: 1,
             pageSize: 20,
-            total: 2,
+            totalItems: 2,
+            hasMore: false,
             totalPages: 1,
           },
         }),
         pay: vi.fn().mockResolvedValue({
-          code: "2000",
-          data: {
-            amount: "199",
-            orderId: "ORDER-3",
-            outTradeNo: "OUT-ORDER-3",
-            paymentId: "PAY-ORDER-3",
-            paymentMethod: "ALIPAY",
-            paymentParams: {
-              payUrl: "https://pay.sdkwork.ai/alipay/ORDER-3",
-            },
+          amount: "199",
+          orderId: "ORDER-3",
+          outTradeNo: "OUT-ORDER-3",
+          paymentId: "PAY-ORDER-3",
+          paymentMethod: "ALIPAY",
+          paymentParams: {
+            payUrl: "https://pay.sdkwork.ai/alipay/ORDER-3",
           },
         }),
       },
@@ -225,53 +211,46 @@ describe("sdkwork-order-pc-order service", () => {
     const orderAppService = createOrderAppServiceMock({
       orders: {
         retrieve: vi.fn().mockResolvedValue({
-          code: "2000",
-          data: {
-            createdAt: "2026-04-02T08:00:00.000Z",
-            items: [
-              {
-                quantity: 1,
-                totalAmount: "199",
-              },
-            ],
-            orderId: "ORDER-9",
-            status: "PENDING_PAYMENT",
-            totalAmount: "199",
-          },
+          createdAt: "2026-04-02T08:00:00.000Z",
+          items: [
+            {
+              quantity: 1,
+              totalAmount: "199",
+            },
+          ],
+          orderId: "ORDER-9",
+          status: "pending_payment",
+          totalAmount: "199",
         }),
         paymentSuccess: {
-          retrieve: vi.fn().mockResolvedValue({
-            code: "2000",
-            data: null,
-          }),
+          retrieve: vi.fn().mockResolvedValue(null),
         },
         statistics: {
           retrieve: vi.fn().mockResolvedValue({
-            code: "2000",
-            data: {
-              totalOrders: 1,
-            },
+            totalOrders: 1,
           }),
         },
         status: {
           retrieve: vi.fn().mockResolvedValue({
-            code: "2000",
-            data: {
-              status: "PENDING_PAYMENT",
-            },
+            status: "pending_payment",
           }),
         },
         list: vi.fn().mockResolvedValue({
-          code: "2000",
-          data: {
-            content: [
-              {
-                createdAt: "2026-04-02T08:00:00.000Z",
-                orderId: "ORDER-9",
-                status: "PENDING_PAYMENT",
-                totalAmount: "199",
-              },
-            ],
+          items: [
+            {
+              createdAt: "2026-04-02T08:00:00.000Z",
+              orderId: "ORDER-9",
+              status: "pending_payment",
+              totalAmount: "199",
+            },
+          ],
+          pageInfo: {
+            mode: "offset",
+            page: 1,
+            pageSize: 20,
+            totalItems: 1,
+            hasMore: false,
+            totalPages: 1,
           },
         }),
       },
@@ -318,7 +297,7 @@ describe("sdkwork-order-pc-order service", () => {
       orderAppService: createOrderAppServiceMock({
         orders: {
           pay: vi.fn().mockResolvedValue({
-            code: "5000",
+            code: 50001,
           }),
         },
       }),

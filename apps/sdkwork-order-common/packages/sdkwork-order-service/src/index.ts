@@ -135,15 +135,74 @@ export function unwrapSdkworkOrderResource<T>(
   return data as T;
 }
 
+export interface SdkworkOffsetPageInfo {
+  hasMore?: boolean;
+  mode?: string;
+  page?: number;
+  pageSize?: number;
+  totalItems?: number;
+  totalPages?: number;
+}
+
+export interface SdkworkOffsetListPage<T> {
+  items: T[];
+  pageInfo?: SdkworkOffsetPageInfo;
+}
+
 export function unwrapSdkworkOrderPage<T>(
   value: unknown,
   fallbackMessage = "Request failed.",
 ): T[] {
-  const data = unwrapSdkworkOrderResponse<{ items?: T[] } | T[]>(value, fallbackMessage);
+  return unwrapSdkworkOrderListPage<T>(value, fallbackMessage).items;
+}
+
+export function unwrapSdkworkOrderListPage<T>(
+  value: unknown,
+  fallbackMessage = "Request failed.",
+): SdkworkOffsetListPage<T> {
+  const data = unwrapSdkworkOrderResponse<SdkworkOffsetListPage<T> | T[]>(value, fallbackMessage);
   if (Array.isArray(data)) {
-    return data;
+    return { items: data };
   }
-  return Array.isArray(data?.items) ? data.items : [];
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    pageInfo: data?.pageInfo,
+  };
+}
+
+export function resolveSdkworkOffsetPagination(
+  pageInfo: SdkworkOffsetPageInfo | null | undefined,
+  fallbackPage: number,
+  fallbackPageSize: number,
+): {
+  hasMore: boolean;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+} {
+  const pageSize = toSdkworkOrderNumber(pageInfo?.pageSize, fallbackPageSize) || fallbackPageSize;
+  const page = toSdkworkOrderNumber(pageInfo?.page, fallbackPage) || fallbackPage;
+  const total = toSdkworkOrderNumber(pageInfo?.totalItems);
+  const totalPages = pageInfo?.totalPages === undefined
+    ? (pageSize > 0 ? Math.ceil(total / pageSize) : 0)
+    : toSdkworkOrderNumber(pageInfo?.totalPages);
+  return {
+    page,
+    pageSize,
+    total,
+    hasMore: Boolean(pageInfo?.hasMore ?? page * pageSize < total),
+    totalPages,
+  };
+}
+
+/** Maps UI kebab-case order status filters to API snake_case wire values. */
+export function toApiOrderStatusWire(status: string): string {
+  const normalized = status.trim();
+  if (!normalized || normalized === "all") {
+    return normalized;
+  }
+  return normalized.replace(/-/g, "_").toLowerCase();
 }
 
 export function unwrapSdkworkOrderResponse<T>(value: unknown, fallbackMessage = "Request failed."): T {
@@ -261,10 +320,9 @@ function isSuccessCode(code: number | string | undefined): boolean {
     return true;
   }
   if (typeof code === "number") {
-    return code === 0 || code === 200 || code === 2000;
+    return code === 0;
   }
-  const normalized = String(code).trim();
-  return normalized === "0" || normalized === "200" || normalized === "2000" || normalized === "SUCCESS";
+  return String(code).trim() === "0";
 }
 
 export function bootstrapSdkworkOrderAppService(
@@ -284,3 +342,12 @@ export {
   resolveOrderAppApiOrigin,
   type BootstrapSdkworkOrderAppServiceInput,
 } from "./transport.ts";
+
+export {
+  bootstrapSdkworkOrderBackendSdk,
+  createOrderBackendTransportClient,
+  getSdkworkOrderBackendSdkClient,
+  resetSdkworkOrderBackendSdkClient,
+  resolveOrderBackendApiOrigin,
+  type BootstrapSdkworkOrderBackendSdkInput,
+} from "./backend-transport.ts";

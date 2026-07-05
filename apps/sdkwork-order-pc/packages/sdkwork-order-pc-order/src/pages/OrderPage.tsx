@@ -132,6 +132,18 @@ function SdkworkOrderPageContent({
                 <p className="mt-3 text-sm leading-7" style={createSdkworkOrderHeroTextStyle("muted")}>
                   {copy.page.description}
                 </p>
+                <div className="mt-4">
+                  <Button
+                    disabled={state.isLoading}
+                    onClick={() => {
+                      void controller.refresh();
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    {copy.actions.refresh}
+                  </Button>
+                </div>
               </div>
 
               <div

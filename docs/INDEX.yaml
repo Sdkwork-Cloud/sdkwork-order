@@ -4,5 +4,19 @@ repository: order
 canon:
   prd: docs/product/prd/PRD.md
   techArchitecture: docs/architecture/tech/TECH_ARCHITECTURE.md
-entries: []
-domains: []
+  checkoutArchitecture: docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md
+entries:
+  - path: docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md
+    topic: checkout-payment-topology
+  - path: specs/commerce-checkout-topology.spec.json
+    topic: checkout-machine-contract
+  - path: specs/commerce-recharge.spec.json
+    topic: recharge-boundary
+  - path: docs/guides/integrator/README.md
+    topic: integrator
+  - path: docs/guides/operations/PRODUCTION.md
+    topic: production-operations
+domains:
+  - commerce
+  - checkout
+  - payment

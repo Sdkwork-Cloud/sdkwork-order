@@ -4,7 +4,9 @@ export type SdkworkOrderMessagesOverrides = DeepPartial<SdkworkOrderMessages>;
 
 export interface SdkworkOrderMessages {
   actions: {
+    cancel: string;
     close: string;
+    pay: string;
     refresh: string;
     viewDetails: string;
   };
@@ -154,7 +156,9 @@ function mergeDeep<T>(base: T, overrides?: DeepPartial<T>): T {
 
 const EN_US_MESSAGES: SdkworkOrderMessages = {
   actions: {
+    cancel: "Cancel order",
     close: "Close",
+    pay: "Pay now",
     refresh: "Refresh",
     viewDetails: "View details",
   },
@@ -269,7 +273,9 @@ const EN_US_MESSAGES: SdkworkOrderMessages = {
 
 const ZH_CN_MESSAGES: SdkworkOrderMessages = {
   actions: {
+    cancel: "\u53d6\u6d88\u8ba2\u5355",
     close: "\u5173\u95ed",
+    pay: "\u7acb\u5373\u652f\u4ed8",
     refresh: "\u5237\u65b0",
     viewDetails: "\u67e5\u770b\u8be6\u60c5",
   },

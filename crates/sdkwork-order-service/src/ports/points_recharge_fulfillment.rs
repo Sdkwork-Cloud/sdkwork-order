@@ -23,6 +23,12 @@ pub trait PointsRechargeFulfillmentStore: Send + Sync {
         context: &'a PointsRechargeFulfillmentContext,
     ) -> PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome>;
 
+    fn rollback_points_recharge_fulfillment<'a>(
+        &'a self,
+        command: &'a FulfillPointsRechargeOrderCommand,
+        context: &'a PointsRechargeFulfillmentContext,
+    ) -> PointsRechargeFulfillmentFuture<'a, ()>;
+
     fn mark_points_recharge_payment_succeeded<'a>(
         &'a self,
         command: MarkPointsRechargePaymentSucceededCommand,

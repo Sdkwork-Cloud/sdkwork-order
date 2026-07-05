@@ -66,6 +66,14 @@ impl HttpAccountPointsCreditAdapter {
             self.origin
         );
 
+        if self.auth_token.is_none()
+            && std::env::var("SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE").as_deref() != Ok("1")
+        {
+            return Err(CommerceServiceError::storage(
+                "SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN is required for account points credit; set SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1 only for local development",
+            ));
+        }
+
         let mut builder = http_client()
             .post(&url)
             .header(CONTENT_TYPE, "application/json")

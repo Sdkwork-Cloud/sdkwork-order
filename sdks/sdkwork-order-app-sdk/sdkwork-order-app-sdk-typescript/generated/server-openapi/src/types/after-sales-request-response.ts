@@ -1,9 +1,10 @@
-import type { AfterSalesRequest } from './after-sales-request';
-
 export interface AfterSalesRequestResponse {
-  code: string;
-  message: string;
-  /** Server-owned request correlation id. */
-  requestId: string;
-  data: AfterSalesRequest;
+  afterSalesRequestId: string;
+  afterSalesNo: string;
+  orderId: string;
+  afterSalesType: string;
+  reasonCode: string;
+  requestedAmount: string;
+  currencyCode: string;
+  status: string;
 }

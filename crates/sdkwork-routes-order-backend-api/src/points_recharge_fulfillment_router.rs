@@ -15,13 +15,13 @@ use sdkwork_order_service::{
     AccountPointsCreditPort, MarkPointsRechargePaymentSucceededCommand,
 };
 use sdkwork_web_core::WebRequestContext;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
     forbidden, map_service_error, success_command, unauthorized, validation,
 };
-use crate::subject::{app_runtime_subject_from_iam, AppRuntimeSubject};
+use crate::subject::{backend_operator_scope_from_iam, BackendOperatorScope};
 
 mod permissions {
     /// Saga write: mark payment success and fulfill points recharge orders.
@@ -48,19 +48,6 @@ struct CreatePointsRechargeFulfillmentRequest {
     idempotency_key: Option<String>,
     #[serde(default)]
     paid_at: Option<String>,
-    #[serde(default)]
-    owner_user_id: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PointsRechargeFulfillmentAccepted {
-    accepted: bool,
-    replayed: bool,
-    order_id: String,
-    order_no: String,
-    points_credited: i64,
-    fulfillment_status: String,
 }
 
 pub fn points_recharge_fulfillment_router_with_sqlite_pool(
@@ -90,7 +77,7 @@ pub fn points_recharge_fulfillment_router_with_postgres_pool(
 fn build_points_recharge_fulfillment_router(state: PointsRechargeFulfillmentState) -> Router {
     Router::new()
         .route(
-            "/backend/v3/api/orders/{orderId}/points-recharge/fulfillments",
+            "/backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
             post(create_points_recharge_fulfillment),
         )
         .with_state(state)
@@ -109,11 +96,16 @@ async fn create_points_recharge_fulfillment(
         Err(response) => return response,
     };
 
-    let owner_user_id = body
-        .owner_user_id
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or(subject.user_id.as_str());
+    let owner_user_id = match resolve_points_recharge_order_owner(&state.store, &subject, &order_id).await {
+        Ok(Some(owner_user_id)) => owner_user_id,
+        Ok(None) => {
+            return crate::api_response::not_found(
+                Some(&ctx),
+                "points recharge order was not found",
+            )
+        }
+        Err(error) => return map_service_error(Some(&ctx), error),
+    };
 
     if body.request_no.trim().is_empty() {
         return validation(Some(&ctx), "request_no is required");
@@ -130,7 +122,7 @@ async fn create_points_recharge_fulfillment(
         let payment_command = match MarkPointsRechargePaymentSucceededCommand::new(
             &subject.tenant_id,
             subject.organization_id.as_deref(),
-            owner_user_id,
+            owner_user_id.as_str(),
             &order_id,
             paid_at,
             &body.request_no,
@@ -147,7 +139,7 @@ async fn create_points_recharge_fulfillment(
     let fulfill_command = match default_fulfill_points_recharge_command(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
-        owner_user_id,
+        owner_user_id.as_str(),
         &order_id,
         &body.request_no,
     ) {
@@ -158,14 +150,8 @@ async fn create_points_recharge_fulfillment(
     match fulfill_order(&state.store, state.credit_port.as_ref(), fulfill_command).await {
         Ok(outcome) => success_command(
             Some(&ctx),
-            PointsRechargeFulfillmentAccepted {
-                accepted: outcome.accepted,
-                replayed: outcome.replayed,
-                order_id: outcome.order_id,
-                order_no: outcome.order_no,
-                points_credited: outcome.points_credited,
-                fulfillment_status: outcome.fulfillment_status,
-            },
+            Some(outcome.order_id),
+            Some(outcome.fulfillment_status),
         ),
         Err(error) => map_service_error(Some(&ctx), error),
     }
@@ -174,7 +160,7 @@ async fn create_points_recharge_fulfillment(
 fn require_fulfillment_subject(
     context: IamAppContext,
     web_context: Option<&WebRequestContext>,
-) -> Result<AppRuntimeSubject, Response> {
+) -> Result<BackendOperatorScope, Response> {
     if !context.can_access_backend_api() {
         return Err(forbidden(
             web_context,
@@ -194,7 +180,7 @@ fn require_fulfillment_subject(
             format!("missing required permission: {}", permissions::FULFILL),
         ));
     }
-    match app_runtime_subject_from_iam(&context) {
+    match backend_operator_scope_from_iam(&context) {
         Ok(subject) => Ok(subject),
         Err(message) => Err(unauthorized(web_context, message)),
     }
@@ -225,6 +211,33 @@ async fn fulfill_order(
         }
         PointsRechargeFulfillmentStoreKind::Postgres(store) => {
             fulfill_points_recharge_order(store.as_ref(), credit_port, command).await
+        }
+    }
+}
+
+async fn resolve_points_recharge_order_owner(
+    store: &PointsRechargeFulfillmentStoreKind,
+    subject: &BackendOperatorScope,
+    order_id: &str,
+) -> Result<Option<String>, CommerceServiceError> {
+    match store {
+        PointsRechargeFulfillmentStoreKind::Sqlite(store) => {
+            store
+                .resolve_points_recharge_order_owner(
+                    &subject.tenant_id,
+                    subject.organization_id.as_deref(),
+                    order_id,
+                )
+                .await
+        }
+        PointsRechargeFulfillmentStoreKind::Postgres(store) => {
+            store
+                .resolve_points_recharge_order_owner(
+                    &subject.tenant_id,
+                    subject.organization_id.as_deref(),
+                    order_id,
+                )
+                .await
         }
     }
 }

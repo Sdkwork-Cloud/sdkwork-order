@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CommerceApiResult } from '../types';
+import type { SdkWorkPageData } from '../types';
 
 
 export interface FulfillmentsListParams {
@@ -19,18 +19,18 @@ export class FulfillmentsApi {
 
 
 /** Fulfillments list. */
-  async list(params?: FulfillmentsListParams): Promise<CommerceApiResult> {
+  async list(params?: FulfillmentsListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<CommerceApiResult>(appendQueryString(appApiPath(`/fulfillments`), query));
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/fulfillments`), query));
   }
 
 /** Fulfillments retrieve. */
-  async retrieve(fulfillmentId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/fulfillments/${serializePathParameter(fulfillmentId, { name: 'fulfillmentId', style: 'simple', explode: false })}`));
+  async retrieve(fulfillmentId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/fulfillments/${serializePathParameter(fulfillmentId, { name: 'fulfillmentId', style: 'simple', explode: false })}`));
   }
 }
 

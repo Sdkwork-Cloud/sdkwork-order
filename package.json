@@ -11,8 +11,11 @@
     "test": "pnpm test:node && pnpm test:vitest && cargo test --workspace",
     "test:node": "node --test --test-reporter=spec tests/static/placeholder.test.mjs",
     "test:vitest": "vitest run --config vitest.config.ts --configLoader native --pool vmThreads",
+    "test:postgres": "node scripts/test/postgres-parity.mjs",
+    "test:postgres:required": "node scripts/test/postgres-parity.mjs --require-database",
+    "check:governance": "node ../sdkwork-specs/tools/check-api-response-envelope.mjs --workspace . && node ../sdkwork-specs/tools/check-pagination.mjs --workspace . && node ../sdkwork-specs/tools/check-app-sdk-consumer-imports.mjs --workspace .",
     "typecheck": "tsc --noEmit",
-    "verify": "pnpm typecheck && pnpm test:vitest && cargo test --workspace && pnpm run check:app-composition",
+    "verify": "pnpm typecheck && pnpm test:vitest && cargo test --workspace && pnpm run check:app-composition && pnpm run check:governance",
     "fmt:rust:check": "cargo fmt --all -- --check",
     "check": "pnpm run check:app-composition && pnpm db:validate && pnpm gateway:assembly:validate && pnpm fmt:rust:check",
     "db:validate": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root .",
@@ -28,7 +31,10 @@
     "gateway:assembly:materialize": "node scripts/gateway/assembly-materialize.mjs",
     "gateway:assembly:validate": "node scripts/gateway/assembly-validate.mjs",
     "sync:openapi": "node scripts/openapi/materialize-recharges-openapi.mjs",
+    "prune:openapi": "node scripts/openapi/prune-legacy-openapi.mjs",
+    "align:openapi": "node ../sdkwork-specs/tools/align-openapi-response-envelope.mjs --file apis/app-api/order/order-app-api.openapi.json --legacy-envelope CommerceApiResult",
     "sdk:generate": "node sdks/sdkwork-order-app-sdk/bin/generate-sdk.mjs",
+    "sdk:generate:backend": "node sdks/sdkwork-order-backend-sdk/bin/generate-sdk.mjs",
     "check:app-composition": "node ../sdkwork-specs/tools/verify-repo.mjs --root ."
   },
   "devDependencies": {
@@ -48,5 +54,12 @@
     "vite": "^8.0.3",
     "vitest": "^4.1.2",
     "lucide-react": "^1.7.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   }
 }

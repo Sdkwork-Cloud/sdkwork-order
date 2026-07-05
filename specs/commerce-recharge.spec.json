@@ -67,8 +67,32 @@
     {
       "capability": "account-pc-wallet",
       "purpose": "Recharge UI via order-app-sdk"
+    },
+    {
+      "capability": "mall-pc-checkout",
+      "purpose": "Product checkout via checkout.* and orders.pay"
+    },
+    {
+      "capability": "payment-pc",
+      "purpose": "Cashier UI for paymentParams.cashierUrl"
     }
   ],
+  "clientIntegrationMatrix": {
+    "pc": {
+      "orderCenter": "apps/sdkwork-order-pc",
+      "checkout": "sdkwork-mall-pc-checkout",
+      "cashier": "sdkwork-payment-pc",
+      "sdk": "@sdkwork/order-app-sdk"
+    },
+    "h5": {
+      "orderCenter": "host shell + @sdkwork/order-app-sdk",
+      "cashier": "H5 route at SDKWORK_COMMERCE_CASHIER_BASE_URL"
+    },
+    "flutter": {
+      "orderCenter": "composed order open-api facade",
+      "cashier": "WebView or native payment bridge"
+    }
+  },
   "forbidden": [
     "payment provider HTTP in order routes",
     "direct writes to commerce_account ledger",
@@ -91,7 +115,7 @@
   },
   "migrationFromPayment": {
     "status": "complete",
-    "deprecationPolicy": "Payment /recharges/* proxy remains for one release; local recharge handlers removed"
+    "deprecationPolicy": "Payment /recharges/* proxy is opt-in (SDKWORK_PAYMENT_ENABLE_RECHARGE_PROXY=1); local recharge handlers removed; clients use order app-api"
   },
   "implementationPhases": [
     {
@@ -128,7 +152,7 @@
       "blockedBy": ["O5"],
       "deliverables": [
         "sdkwork-order-integration-account (http|store AccountPointsCreditPort)",
-        "POST /backend/v3/api/orders/{orderId}/points-recharge/fulfillments",
+        "POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
         "POST /backend/v3/api/payments/owner-orders/{orderId}/confirmations",
         "Order backend IAM web-framework wrap"
       ]
@@ -138,6 +162,65 @@
       "title": "Recharge app-api SdkWorkApiResponse v3 envelope",
       "status": "complete",
       "blockedBy": ["O6"]
+    },
+    {
+      "id": "O8",
+      "title": "Order app-api SdkWorkApiResponse v3 envelope (checkout, fulfillment, shipment, after_sales, orders)",
+      "status": "complete",
+      "blockedBy": ["O7"],
+      "deliverables": [
+        "checkout_router.rs",
+        "fulfillment_router.rs",
+        "shipment_router.rs",
+        "after_sales_router.rs",
+        "order_router.rs",
+        "backend_order_admin_router.rs"
+      ]
+    },
+    {
+      "id": "O9",
+      "title": "OpenAPI + order-app-sdk regeneration for v3 envelope",
+      "status": "complete",
+      "blockedBy": ["O8"],
+      "deliverables": [
+        "apis/app-api/order/order-app-api.openapi.json",
+        "sdks/sdkwork-order-app-sdk/openapi/sdkwork-order-app-api.openapi.json",
+        "pnpm sdk:generate"
+      ]
+    },
+    {
+      "id": "O10",
+      "title": "Store-layer E2E: payment success → fulfill → account ledger",
+      "status": "complete",
+      "blockedBy": ["O9"],
+      "deliverables": [
+        "sdkwork-order-integration-account/tests/points_recharge_store_e2e_standard.rs",
+        "sdkwork-order-repository-sqlx/test_migrations/0001_order_points_recharge_e2e.sql",
+        "test-support feature on order/account repository-sqlx crates"
+      ]
+    },
+    {
+      "id": "O11",
+      "title": "Checkout topology + cashier URL alignment with payment",
+      "status": "complete",
+      "blockedBy": ["O10"],
+      "deliverables": [
+        "specs/commerce-checkout-topology.spec.json",
+        "docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md",
+        "sdkwork-utils-rust::build_commerce_cashier_url",
+        "payment fulfillment callback path points_recharge (snake_case)"
+      ]
+    },
+    {
+      "id": "O12",
+      "title": "Webhook-driven payment settlement (payment → order fulfillment)",
+      "status": "complete",
+      "blockedBy": ["O11"],
+      "deliverables": [
+        "sdkwork-payment webhook_router settlement saga",
+        "ingest_provider_webhook_sqlite integration test",
+        "RECHARGE_ORDER_SPEC pay & fulfill flow"
+      ]
     }
   ],
   "backendOperationIds": {

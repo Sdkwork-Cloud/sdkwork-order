@@ -2,9 +2,12 @@ import {
   getSdkworkOrderService,
   hasSdkworkOrderSession,
   requireSdkworkOrderSession,
+  resolveSdkworkOffsetPagination,
+  toApiOrderStatusWire,
   toNullableSdkworkOrderNumber,
   toSdkworkOrderNumber,
   toSdkworkOrderOptionalString,
+  unwrapSdkworkOrderListPage,
   unwrapSdkworkOrderResponse,
   readSdkworkMediaResource,
   type SdkworkOrderAppService,
@@ -92,7 +95,7 @@ export interface SdkworkOrderDetail {
 export interface SdkworkOrderPagination {
   /** 1-based current page number. */
   page: number;
-  /** Page size applied for the current request (clamped to 1..100 by backend). */
+  /** Page size applied for the current request (clamped to 1..200 by API). */
   pageSize: number;
   /** Unconditional total rows matching the active filter, independent of page. */
   total: number;
@@ -111,7 +114,7 @@ export interface SdkworkOrderDashboardData {
 export interface SdkworkOrderDashboardQuery {
   /** 1-based page index. Defaults to `1`. */
   page?: number;
-  /** Page size, clamped to `1..100` by the backend. Defaults to `20`. */
+  /** Page size, clamped to `1..200` per API_SPEC. Defaults to `20`. */
   pageSize?: number;
   /** Optional status filter forwarded to the backend `status` query param. */
   status?: SdkworkOrderStatus | "all";
@@ -184,15 +187,6 @@ interface RemoteOrder {
   totalAmount?: number | string;
 }
 
-interface RemoteOrderPage {
-  content?: RemoteOrder[];
-  page?: number | string;
-  pageSize?: number | string;
-  total?: number | string;
-  hasMore?: boolean;
-  totalPages?: number | string;
-}
-
 interface RemoteOrderItem {
   id?: string;
   productImage?: unknown;
@@ -241,7 +235,7 @@ type SdkworkOrderCopyContext = Pick<SdkworkOrderMessages, "status" | "timeline">
 type SdkworkOrderServiceCopy = SdkworkOrderMessages["service"];
 
 function mapOrderStatus(status: string | undefined): SdkworkOrderStatus {
-  const normalized = (status || "").trim().toUpperCase();
+  const normalized = (status || "").trim().toUpperCase().replace(/-/g, "_");
   if (normalized === "PENDING_PAYMENT" || normalized === "UNPAID" || normalized === "WAIT_PAY") {
     return "pending-payment";
   }
@@ -329,33 +323,13 @@ function createEmptyDashboard(): SdkworkOrderDashboardData {
   };
 }
 
-function resolvePagination(
-  page: RemoteOrderPage | null | undefined,
-  fallbackPage: number,
-  fallbackPageSize: number,
-): SdkworkOrderPagination {
-  const total = toSdkworkOrderNumber(page?.total);
-  const pageSize = toSdkworkOrderNumber(page?.pageSize, fallbackPageSize) || fallbackPageSize;
-  const pageNumber = toSdkworkOrderNumber(page?.page, fallbackPage) || fallbackPage;
-  const totalPages = page?.totalPages === undefined
-    ? (pageSize > 0 ? Math.ceil(total / pageSize) : 0)
-    : toSdkworkOrderNumber(page?.totalPages);
-  return {
-    page: pageNumber,
-    pageSize,
-    total,
-    hasMore: Boolean(page?.hasMore ?? pageNumber * pageSize < total),
-    totalPages,
-  };
-}
-
 function normalizeDashboardQuery(
   query?: SdkworkOrderDashboardQuery,
 ): { page: number; pageSize: number; status: string | undefined } {
   const page = Math.max(1, Math.floor(toSdkworkOrderNumber(query?.page, 1) || 1));
-  const pageSize = Math.min(100, Math.max(1, Math.floor(toSdkworkOrderNumber(query?.pageSize, 20) || 20)));
+  const pageSize = Math.min(200, Math.max(1, Math.floor(toSdkworkOrderNumber(query?.pageSize, 20) || 20)));
   const rawStatus = query?.status;
-  const status = rawStatus && rawStatus !== "all" ? rawStatus : undefined;
+  const status = rawStatus && rawStatus !== "all" ? toApiOrderStatusWire(rawStatus) : undefined;
   return { page, pageSize, status };
 }
 
@@ -535,7 +509,7 @@ export function createSdkworkOrderService(
         }),
         getOrderAppService().orders.statistics.retrieve(),
       ]);
-      const orderPage = unwrapSdkworkOrderResponse<RemoteOrderPage | null>(
+      const orderList = unwrapSdkworkOrderListPage<RemoteOrder>(
         orderPagePayload,
         copy.requestFailed,
       );
@@ -544,13 +518,11 @@ export function createSdkworkOrderService(
         copy.requestFailed,
       );
 
-      const orders = (orderPage?.content ?? [])
-        .map((order) => mapOrderSummary(order, messages, copy))
-        .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+      const orders = orderList.items.map((order) => mapOrderSummary(order, messages, copy));
 
       return {
         orders,
-        pagination: resolvePagination(orderPage, page, pageSize),
+        pagination: resolveSdkworkOffsetPagination(orderList.pageInfo, page, pageSize),
         statistics: mapStatistics(statistics),
       };
     },

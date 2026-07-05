@@ -8,12 +8,19 @@ publish.workspace = true
 [lib]
 path = "src/lib.rs"
 
+[features]
+test-support = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 sdkwork_contract_service.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_payment_service.workspace = true
+sdkwork-utils-rust.workspace = true
 sqlx = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

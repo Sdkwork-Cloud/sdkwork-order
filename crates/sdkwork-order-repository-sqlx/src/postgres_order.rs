@@ -1,10 +1,12 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,
-    OrderOwnerDetailQuery, OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery,
-    OrderOwnerStatistics, OrderOwnerSummary,
+    OrderOwnerDetailQuery, OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView,
+    OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics, OrderOwnerSummary,
 };
-use sdkwork_payment_service::{PaymentMethodItem, PaymentMethodListQuery};
+use sdkwork_payment_service::{
+    parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery,
+};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -52,6 +54,7 @@ SELECT
         NULLIF(pa.payment_method, ''),
         NULLIF(pi.payment_method, '')
     ) AS payment_method,
+    COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
@@ -71,6 +74,33 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND ($5 IS NULL OR o.subject = $5)
 ORDER BY o.created_at DESC, o.id DESC
 LIMIT $6 OFFSET $7
+"#;
+
+const LIST_OWNER_ORDER_EVENTS: &str = r#"
+SELECT
+    e.id AS event_id,
+    e.order_id,
+    e.event_type,
+    e.from_status,
+    e.to_status,
+    e.actor_type,
+    e.actor_id,
+    e.message,
+    e.created_at,
+    COUNT(*) OVER() AS total_count
+FROM commerce_order_event e
+WHERE e.tenant_id = CAST($1 AS TEXT)
+  AND e.order_id = CAST($2 AS TEXT)
+  AND EXISTS (
+        SELECT 1
+        FROM commerce_order o
+        WHERE o.tenant_id = e.tenant_id
+          AND o.id = e.order_id
+          AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $3 IS NULL))
+          AND o.owner_user_id = CAST($4 AS TEXT)
+      )
+ORDER BY e.created_at DESC, e.id DESC
+LIMIT $5 OFFSET $6
 "#;
 
 const RETRIEVE_OWNER_ORDER: &str = r#"
@@ -117,6 +147,7 @@ SELECT
         NULLIF(pa.payment_method, ''),
         NULLIF(pi.payment_method, '')
     ) AS payment_method,
+    COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, '')) AS out_trade_no,
     CAST(pa.id AS TEXT) AS transaction_id
 FROM commerce_order o
@@ -183,18 +214,35 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
 
 const LIST_PAYMENT_METHODS: &str = r#"
 SELECT
-    id,
-    method_key,
-    display_name,
-    provider_code,
-    sort_order
-FROM commerce_payment_method
+    m.id,
+    m.method_key,
+    m.display_name,
+    m.provider_code,
+    m.sort_order,
+    COALESCE((
+        SELECT STRING_AGG(DISTINCT c.scene_code, ',')
+        FROM commerce_payment_channel c
+        WHERE c.tenant_id = m.tenant_id
+          AND (
+                c.organization_id IS NULL
+                OR m.organization_id IS NULL
+                OR c.organization_id = m.organization_id
+              )
+          AND (
+                c.method_id = m.id
+                OR (c.method_id IS NULL AND c.provider_code = m.provider_code)
+              )
+          AND c.status = 'active'
+          AND c.deleted_at IS NULL
+    ), 'web') AS scene_codes
+FROM commerce_payment_method m
 WHERE (
-        (tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($2 AS TEXT))
-        OR (tenant_id = CAST($1 AS TEXT) AND organization_id IS NULL)
+        (m.tenant_id = CAST($1 AS TEXT) AND m.organization_id = CAST($2 AS TEXT))
+        OR (m.tenant_id = CAST($1 AS TEXT) AND m.organization_id IS NULL)
       )
-  AND status = 'active'
-ORDER BY COALESCE(sort_order, 0) ASC, id ASC
+  AND m.status = 'active'
+  AND m.deleted_at IS NULL
+ORDER BY COALESCE(m.sort_order, 0) ASC, m.id ASC
 "#;
 
 #[derive(Debug, Clone)]
@@ -241,6 +289,45 @@ impl PostgresCommerceOrderStore {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(OrderOwnerListPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
+    }
+
+    /// 列出订单事件（owner 域）。
+    ///
+    /// 通过 `EXISTS` 子查询校验订单归属，避免越权读取其他用户的事件。
+    /// `COUNT(*) OVER()` 窗口函数在一次往返中给出无条件总数，用于
+    /// `hasMore` / 总页数渲染，避免 N+1 或双查询模式。
+    pub async fn list_owner_order_events(
+        &self,
+        query: OrderOwnerEventListQuery,
+    ) -> Result<OrderOwnerEventPage, CommerceServiceError> {
+        let rows = sqlx::query(LIST_OWNER_ORDER_EVENTS)
+            .bind(&query.tenant_id)
+            .bind(&query.order_id)
+            .bind(query.organization_id.as_deref())
+            .bind(&query.owner_user_id)
+            .bind(query.limit())
+            .bind(query.offset())
+            .fetch_all(&self.pool)
+            .await
+            .or_else(empty_rows_when_read_model_is_missing)
+            .map_err(|error| store_error("failed to list owner order events", error))?;
+
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
+            .iter()
+            .map(map_owner_order_event_row)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(OrderOwnerEventPage {
             items,
             page: query.page,
             page_size: query.page_size,
@@ -331,6 +418,7 @@ impl PostgresCommerceOrderStore {
                 method_key: string_cell(row, "method_key"),
                 display_name: string_cell(row, "display_name"),
                 provider_code: string_cell(row, "provider_code"),
+                scene_codes: parse_scene_codes_csv(&string_cell(row, "scene_codes")),
                 sort_order: row.try_get::<i64, _>("sort_order").unwrap_or(0),
             })
             .collect())
@@ -529,7 +617,46 @@ impl PostgresCommerceOrderStore {
         &self,
         command: CancelOwnerOrderCommand,
     ) -> Result<(), CommerceServiceError> {
+        use crate::order_lifecycle::{
+            insert_order_cancellation_postgres, insert_order_event_postgres,
+            order_cancel_idempotency_key, OrderLifecycleAuditInput,
+        };
+
         let now = current_command_timestamp();
+        let idempotency_key = order_cancel_idempotency_key(&command.order_id);
+        let request_no = format!("cancel-{}", command.order_id);
+
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| store_error("failed to begin cancel owner order transaction", error))?;
+
+        let from_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT status
+            FROM commerce_order
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND owner_user_id = CAST($3 AS TEXT)
+              AND id = CAST($4 AS TEXT)
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to load order status before cancel", error))?;
+
+        let Some(from_status) = from_status else {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
+            return Err(CommerceServiceError::not_found("order was not found"));
+        };
+
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
@@ -538,9 +665,9 @@ impl PostgresCommerceOrderStore {
                 cancelled_at = $1,
                 updated_at = $2
             WHERE tenant_id = CAST($3 AS TEXT)
-              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $5 IS NULL))
-              AND owner_user_id = CAST($6 AS TEXT)
-              AND id = CAST($7 AS TEXT)
+              AND ((organization_id = CAST($4 AS TEXT)) OR (organization_id IS NULL AND $4 IS NULL))
+              AND owner_user_id = CAST($5 AS TEXT)
+              AND id = CAST($6 AS TEXT)
               AND LOWER(COALESCE(status, '')) IN ('draft', 'pending', 'pending_payment', 'unpaid')
             "#,
         )
@@ -548,21 +675,45 @@ impl PostgresCommerceOrderStore {
         .bind(&now)
         .bind(&command.tenant_id)
         .bind(command.organization_id.as_deref())
-        .bind(command.organization_id.as_deref())
         .bind(&command.owner_user_id)
         .bind(&command.order_id)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to cancel owner order", error))?;
 
         if result.rows_affected() == 0 {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
             return Err(CommerceServiceError::conflict(
                 "order is not cancellable or was not found",
             ));
         }
 
-        let _ = command.cancel_reason;
+        let audit = OrderLifecycleAuditInput {
+            tenant_id: command.tenant_id.clone(),
+            organization_id: command.organization_id.clone(),
+            order_id: command.order_id.clone(),
+            event_type: "cancelled",
+            from_status,
+            to_status: "cancelled",
+            actor_type: "buyer",
+            actor_id: Some(command.owner_user_id.clone()),
+            reason_code: command
+                .cancel_type
+                .clone()
+                .or_else(|| Some("user_cancel".to_owned())),
+            reason_message: command.cancel_reason.clone(),
+            request_no,
+            idempotency_key,
+            now: now.clone(),
+        };
+        insert_order_event_postgres(&mut tx, &audit).await?;
+        insert_order_cancellation_postgres(&mut tx, &audit).await?;
 
+        tx.commit()
+            .await
+            .map_err(|error| store_error("failed to commit cancel owner order transaction", error))?;
         Ok(())
     }
 }
@@ -595,6 +746,22 @@ async fn load_order_items(
         .collect()
 }
 
+fn map_owner_order_event_row(
+    row: &sqlx::postgres::PgRow,
+) -> Result<OrderOwnerEventView, CommerceServiceError> {
+    Ok(OrderOwnerEventView {
+        event_id: string_cell(row, "event_id"),
+        order_id: string_cell(row, "order_id"),
+        event_type: string_cell(row, "event_type"),
+        from_status: optional_string_cell(row, "from_status"),
+        to_status: string_cell(row, "to_status"),
+        actor_type: optional_string_cell(row, "actor_type"),
+        actor_id: optional_string_cell(row, "actor_id"),
+        message: optional_string_cell(row, "message"),
+        created_at: string_cell(row, "created_at"),
+    })
+}
+
 fn map_order_summary_row(
     row: &sqlx::postgres::PgRow,
 ) -> Result<OrderOwnerSummary, CommerceServiceError> {
@@ -620,6 +787,7 @@ fn map_order_summary_row(
         total_amount,
         paid_amount,
         discount_amount: Some(discount_amount),
+        currency_code: string_cell(row, "currency_code"),
         quantity: row.try_get::<i64, _>("quantity").unwrap_or(1),
         created_at: string_cell(row, "created_at"),
         pay_time: optional_string_cell(row, "pay_time"),

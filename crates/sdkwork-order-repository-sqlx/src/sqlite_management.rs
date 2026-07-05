@@ -1,8 +1,9 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
-    OrderCancellationView, OrderManagementDetailQuery, OrderManagementEventListQuery,
-    OrderManagementEventView, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerItem,
+    OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
+    OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
+    OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerItem,
     OrderOwnerSummary,
 };
 use sqlx::{Row, SqlitePool};
@@ -13,7 +14,7 @@ impl SqliteCommerceOrderStore {
     pub async fn list_management_orders(
         &self,
         query: OrderManagementListQuery,
-    ) -> Result<Vec<OrderOwnerSummary>, CommerceServiceError> {
+    ) -> Result<OrderManagementListPage, CommerceServiceError> {
         let search = query
             .q
             .as_deref()
@@ -62,7 +63,9 @@ impl SqliteCommerceOrderStore {
                 COALESCE(
                     NULLIF(pa.payment_method, ''),
                     NULLIF(pi.payment_method, '')
-                ) AS payment_method
+                ) AS payment_method,
+                COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
+                COUNT(*) OVER() AS total_count
             FROM commerce_order o
             LEFT JOIN commerce_payment_intent pi
                 ON pi.tenant_id = o.tenant_id
@@ -102,7 +105,21 @@ impl SqliteCommerceOrderStore {
         .await
         .map_err(|error| store_error("failed to list management orders", error))?;
 
-        rows.iter().map(map_management_summary_row).collect()
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
+            .iter()
+            .map(map_management_summary_row)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(OrderManagementListPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
     pub async fn retrieve_management_order(
@@ -154,6 +171,7 @@ impl SqliteCommerceOrderStore {
                     NULLIF(pa.payment_method, ''),
                     NULLIF(pi.payment_method, '')
                 ) AS payment_method,
+                COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
                 COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, '')) AS out_trade_no,
                 pa.id AS transaction_id
             FROM commerce_order o
@@ -199,7 +217,45 @@ impl SqliteCommerceOrderStore {
         &self,
         command: CancelManagementOrderCommand,
     ) -> Result<(), CommerceServiceError> {
+        use crate::order_lifecycle::{
+            insert_order_cancellation_sqlite, insert_order_event_sqlite,
+            order_cancel_idempotency_key, OrderLifecycleAuditInput,
+        };
+
         let now = current_command_timestamp();
+        let idempotency_key = order_cancel_idempotency_key(&command.order_id);
+        let request_no = format!("admin-cancel-{}", command.order_id);
+
+        let mut tx = self
+            .pool()
+            .begin()
+            .await
+            .map_err(|error| store_error("failed to begin cancel management order transaction", error))?;
+
+        let from_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT status
+            FROM commerce_order
+            WHERE tenant_id = ?
+              AND ((organization_id = ?) OR (organization_id IS NULL AND ? IS NULL))
+              AND id = ?
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
+        .bind(&command.order_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to load order status before cancel", error))?;
+
+        let Some(from_status) = from_status else {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            return Err(CommerceServiceError::not_found("order was not found"));
+        };
+
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
@@ -219,17 +275,43 @@ impl SqliteCommerceOrderStore {
         .bind(command.organization_id.as_deref())
         .bind(command.organization_id.as_deref())
         .bind(&command.order_id)
-        .execute(self.pool())
+        .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to cancel management order", error))?;
 
         if result.rows_affected() == 0 {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
             return Err(CommerceServiceError::conflict(
                 "order is not cancellable or was not found",
             ));
         }
 
-        let _ = command.cancel_reason;
+        let audit = OrderLifecycleAuditInput {
+            tenant_id: command.tenant_id.clone(),
+            organization_id: command.organization_id.clone(),
+            order_id: command.order_id.clone(),
+            event_type: "cancelled",
+            from_status,
+            to_status: "cancelled",
+            actor_type: "admin",
+            actor_id: None,
+            reason_code: command
+                .cancel_type
+                .clone()
+                .or_else(|| Some("admin_cancel".to_owned())),
+            reason_message: command.cancel_reason.clone(),
+            request_no,
+            idempotency_key,
+            now: now.clone(),
+        };
+        insert_order_event_sqlite(&mut tx, &audit).await?;
+        insert_order_cancellation_sqlite(&mut tx, &audit).await?;
+
+        tx.commit()
+            .await
+            .map_err(|error| store_error("failed to commit cancel management order transaction", error))?;
         Ok(())
     }
 
@@ -237,7 +319,44 @@ impl SqliteCommerceOrderStore {
         &self,
         command: CloseManagementOrderCommand,
     ) -> Result<(), CommerceServiceError> {
+        use crate::order_lifecycle::{
+            insert_order_event_sqlite, order_close_idempotency_key, OrderLifecycleAuditInput,
+        };
+
         let now = current_command_timestamp();
+        let idempotency_key = order_close_idempotency_key(&command.order_id);
+        let request_no = format!("admin-close-{}", command.order_id);
+
+        let mut tx = self
+            .pool()
+            .begin()
+            .await
+            .map_err(|error| store_error("failed to begin close management order transaction", error))?;
+
+        let from_status = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT status
+            FROM commerce_order
+            WHERE tenant_id = ?
+              AND ((organization_id = ?) OR (organization_id IS NULL AND ? IS NULL))
+              AND id = ?
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
+        .bind(&command.order_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to load order status before close", error))?;
+
+        let Some(from_status) = from_status else {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            return Err(CommerceServiceError::not_found("order was not found"));
+        };
+
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
@@ -254,27 +373,53 @@ impl SqliteCommerceOrderStore {
         .bind(command.organization_id.as_deref())
         .bind(command.organization_id.as_deref())
         .bind(&command.order_id)
-        .execute(self.pool())
+        .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to close management order", error))?;
 
         if result.rows_affected() == 0 {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
             return Err(CommerceServiceError::conflict(
                 "order is not closable or was not found",
             ));
         }
 
-        let _ = command.close_reason;
+        let audit = OrderLifecycleAuditInput {
+            tenant_id: command.tenant_id.clone(),
+            organization_id: command.organization_id.clone(),
+            order_id: command.order_id.clone(),
+            event_type: "closed",
+            from_status,
+            to_status: "closed",
+            actor_type: "admin",
+            actor_id: None,
+            reason_code: command
+                .close_type
+                .clone()
+                .or_else(|| Some("admin_close".to_owned())),
+            reason_message: command.close_reason.clone(),
+            request_no,
+            idempotency_key,
+            now: now.clone(),
+        };
+        insert_order_event_sqlite(&mut tx, &audit).await?;
+
+        tx.commit()
+            .await
+            .map_err(|error| store_error("failed to commit close management order transaction", error))?;
         Ok(())
     }
 
     pub async fn list_management_order_events(
         &self,
         query: OrderManagementEventListQuery,
-    ) -> Result<Vec<OrderManagementEventView>, CommerceServiceError> {
+    ) -> Result<OrderManagementEventPage, CommerceServiceError> {
         let rows = sqlx::query(
             r#"
-            SELECT id, event_type, from_status, to_status, actor_type, actor_id, message, created_at
+            SELECT id, event_type, from_status, to_status, actor_type, actor_id, message, created_at,
+                   COUNT(*) OVER() AS total_count
             FROM commerce_order_event
             WHERE tenant_id = ?
               AND order_id = ?
@@ -290,7 +435,11 @@ impl SqliteCommerceOrderStore {
         .await
         .map_err(|error| store_error("failed to list management order events", error))?;
 
-        Ok(rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
             .iter()
             .map(|row| OrderManagementEventView {
                 id: string_cell(row, "id"),
@@ -302,16 +451,24 @@ impl SqliteCommerceOrderStore {
                 message: optional_string_cell(row, "message"),
                 created_at: string_cell(row, "created_at"),
             })
-            .collect())
+            .collect();
+
+        Ok(OrderManagementEventPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
     pub async fn list_order_cancellations(
         &self,
         query: OrderCancellationListQuery,
-    ) -> Result<Vec<OrderCancellationView>, CommerceServiceError> {
+    ) -> Result<OrderCancellationPage, CommerceServiceError> {
         let rows = sqlx::query(
             r#"
-            SELECT id, order_id, status, reason_code, reason_message, created_at
+            SELECT id, order_id, status, reason_code, reason_message, created_at,
+                   COUNT(*) OVER() AS total_count
             FROM commerce_order_cancellation
             WHERE tenant_id = ?
               AND (? IS NULL OR status = ?)
@@ -328,7 +485,11 @@ impl SqliteCommerceOrderStore {
         .await
         .map_err(|error| store_error("failed to list order cancellations", error))?;
 
-        Ok(rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
             .iter()
             .map(|row| OrderCancellationView {
                 id: string_cell(row, "id"),
@@ -338,7 +499,14 @@ impl SqliteCommerceOrderStore {
                 reason_message: optional_string_cell(row, "reason_message"),
                 created_at: string_cell(row, "created_at"),
             })
-            .collect())
+            .collect();
+
+        Ok(OrderCancellationPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 }
 
@@ -392,6 +560,7 @@ fn map_management_summary_row(
             CommerceMoney::new(&string_cell(row, "discount_amount"))
                 .map_err(CommerceServiceError::storage)?,
         ),
+        currency_code: string_cell(row, "currency_code"),
         quantity: row.try_get::<i64, _>("quantity").unwrap_or(1),
         created_at: string_cell(row, "created_at"),
         pay_time: optional_string_cell(row, "pay_time"),

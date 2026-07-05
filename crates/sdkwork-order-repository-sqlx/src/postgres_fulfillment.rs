@@ -1,19 +1,28 @@
 use sdkwork_contract_service::CommerceServiceError;
-use sdkwork_order_service::{
-    FulfillmentDetailQuery, FulfillmentListQuery, FulfillmentView,
-};
+use sdkwork_order_service::{FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView};
 use sqlx::Row;
 
 use crate::postgres_order::PostgresCommerceOrderStore;
 
 impl PostgresCommerceOrderStore {
+    /// 列出履约（owner 域）。
+    ///
+    /// 通过 `INNER JOIN commerce_order` 限定 `owner_user_id` 归属，避免越权读取。
+    /// `COUNT(*) OVER()` 在一次往返中给出无条件总数，配合 `LIMIT`/`OFFSET`
+    /// 实现真正的数据库分页（避免内存分页导致的 OOM 与性能问题）。
     pub async fn list_owner_fulfillments(
         &self,
         query: FulfillmentListQuery,
-    ) -> Result<Vec<FulfillmentView>, CommerceServiceError> {
+    ) -> Result<FulfillmentListPage, CommerceServiceError> {
         let rows = sqlx::query(
             r#"
-            SELECT f.id, f.fulfillment_no, f.order_id, f.fulfillment_type, f.status
+            SELECT
+                f.id,
+                f.fulfillment_no,
+                f.order_id,
+                f.fulfillment_type,
+                f.status,
+                COUNT(*) OVER() AS total_count
             FROM commerce_fulfillment_order f
             INNER JOIN commerce_order o
                 ON o.tenant_id = f.tenant_id
@@ -24,7 +33,8 @@ impl PostgresCommerceOrderStore {
               AND ($5 IS NULL OR f.order_id = CAST($6 AS TEXT))
               AND ($7 IS NULL OR LOWER(f.status) = LOWER(CAST($8 AS TEXT)))
             ORDER BY f.created_at DESC, f.id DESC
-           "#,
+            LIMIT $9 OFFSET $10
+            "#,
         )
         .bind(&query.tenant_id)
         .bind(query.organization_id.as_deref())
@@ -34,11 +44,18 @@ impl PostgresCommerceOrderStore {
         .bind(query.order_id.as_deref())
         .bind(query.status.as_deref())
         .bind(query.status.as_deref())
+        .bind(query.limit())
+        .bind(query.offset())
         .fetch_all(self.pool())
         .await
         .map_err(|error| store_error("failed to list owner fulfillments", error))?;
 
-        Ok(rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
             .into_iter()
             .map(|row| FulfillmentView {
                 fulfillment_id: string_cell(&row, "id"),
@@ -47,7 +64,14 @@ impl PostgresCommerceOrderStore {
                 fulfillment_type: string_cell(&row, "fulfillment_type"),
                 status: string_cell(&row, "status"),
             })
-            .collect())
+            .collect();
+
+        Ok(FulfillmentListPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
     pub async fn retrieve_owner_fulfillment(
@@ -66,7 +90,7 @@ impl PostgresCommerceOrderStore {
               AND o.owner_user_id = CAST($4 AS TEXT)
               AND f.id = CAST($5 AS TEXT)
             LIMIT 1
-           "#,
+            "#,
         )
         .bind(&query.tenant_id)
         .bind(query.organization_id.as_deref())

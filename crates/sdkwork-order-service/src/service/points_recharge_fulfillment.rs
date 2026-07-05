@@ -53,6 +53,10 @@ where
         .commit_points_recharge_fulfillment(command, &context)
         .await?;
 
+    if outcome.replayed {
+        return Ok(outcome);
+    }
+
     outcome.replayed = credit_outcome.replayed;
     Ok(outcome)
 }

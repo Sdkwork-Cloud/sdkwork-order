@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CommerceApiResult, CommerceOperationCommand } from '../types';
+import type { CommerceOperationCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
 export class OrdersStatusApi {
@@ -13,8 +13,8 @@ export class OrdersStatusApi {
 
 
 /** Orders status retrieve. */
-  async retrieve(orderId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/status`));
+  async retrieve(orderId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/status`));
   }
 }
 
@@ -27,8 +27,8 @@ export class OrdersStatisticsApi {
 
 
 /** Orders statistics retrieve. */
-  async retrieve(): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/orders/statistics`));
+  async retrieve(): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/statistics`));
   }
 }
 
@@ -41,8 +41,8 @@ export class OrdersPaymentSuccessApi {
 
 
 /** Orders payment Success retrieve. */
-  async retrieve(orderId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`));
+  async retrieve(orderId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`));
   }
 }
 
@@ -55,9 +55,14 @@ export class OrdersCancellationsApi {
 
 
 /** Orders cancellations create. */
-  async create(orderId: string, body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancellations`), body, undefined, undefined, 'application/json');
+  async create(orderId: string, body: CommerceOperationCommand): Promise<SdkWorkCommandData> {
+    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancellations`), body, undefined, undefined, 'application/json');
   }
+}
+
+export interface OrdersEventsListParams {
+  page?: number;
+  pageSize?: number;
 }
 
 export class OrdersEventsApi {
@@ -69,8 +74,12 @@ export class OrdersEventsApi {
 
 
 /** Orders events list. */
-  async list(orderId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`));
+  async list(orderId: string, params?: OrdersEventsListParams): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query));
   }
 }
 
@@ -99,33 +108,33 @@ export class OrdersApi {
 
 
 /** Orders list. */
-  async list(params?: OrdersListParams): Promise<CommerceApiResult> {
+  async list(params?: OrdersListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<CommerceApiResult>(appendQueryString(appApiPath(`/orders`), query));
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query));
   }
 
 /** Orders create. */
-  async create(body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/orders`), body, undefined, undefined, 'application/json');
+  async create(body: CommerceOperationCommand): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(appApiPath(`/orders`), body, undefined, undefined, 'application/json');
   }
 
 /** Orders retrieve. */
-  async retrieve(orderId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
+  async retrieve(orderId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
   }
 
 /** Orders pay. */
-  async pay(orderId: string, body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), body, undefined, undefined, 'application/json');
+  async pay(orderId: string, body: CommerceOperationCommand): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), body, undefined, undefined, 'application/json');
   }
 
 /** Orders cancel. */
-  async cancel(orderId: string, body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, undefined, 'application/json');
+  async cancel(orderId: string, body: CommerceOperationCommand): Promise<SdkWorkCommandData> {
+    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, undefined, 'application/json');
   }
 }
 

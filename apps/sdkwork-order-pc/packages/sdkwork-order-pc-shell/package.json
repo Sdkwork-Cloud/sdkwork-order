@@ -4,9 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.tsx"
+    ".": {
+      "types": "./src/index.tsx",
+      "import": "./src/index.tsx",
+      "default": "./src/index.tsx"
+    }
   },
   "dependencies": {
+    "@sdkwork/order-pc-admin-orders": "workspace:*",
     "@sdkwork/order-pc-core": "workspace:*",
     "@sdkwork/order-pc-order": "workspace:*",
     "@sdkwork/ui-pc-react": "workspace:*",

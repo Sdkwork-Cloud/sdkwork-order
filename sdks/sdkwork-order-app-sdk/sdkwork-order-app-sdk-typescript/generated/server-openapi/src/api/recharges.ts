@@ -1,18 +1,64 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CommerceApiResult, CommerceOperationCommand } from '../types';
+import type { CommerceOperationCommand, RechargeOrderCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
-export interface RechargeOrderCreateCommand {
-  amount?: string | number;
-  clientRequestNo?: string;
-  currencyCode?: string;
-  packageId?: string;
-  source?: string;
-}
 
 export interface RechargesOrdersListParams {
   status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export class RechargesOrdersApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Recharges orders list. */
+  async list(params?: RechargesOrdersListParams): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/orders`), query));
+  }
+
+/** Recharges orders create. */
+  async create(body: RechargeOrderCreateCommand): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(appApiPath(`/recharges/orders`), body, undefined, undefined, 'application/json');
+  }
+
+/** Recharges orders retrieve. */
+  async retrieve(orderId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
+  }
+
+/** Recharges orders cancel. */
+  async cancel(orderId: string, body?: CommerceOperationCommand): Promise<SdkWorkCommandData> {
+    return this.client.post<SdkWorkCommandData>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, undefined, 'application/json');
+  }
+}
+
+export class RechargesSettingsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Recharges settings retrieve. */
+  async retrieve(): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/recharges/settings`));
+  }
+}
+
+export interface RechargesPackagesListParams {
   page?: number;
   pageSize?: number;
 }
@@ -24,76 +70,30 @@ export class RechargesPackagesApi {
     this.client = client;
   }
 
-  async list(): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath('/recharges/packages'));
-  }
-}
 
-export class RechargesSettingsApi {
-  private client: HttpClient;
-
-  constructor(client: HttpClient) {
-    this.client = client;
-  }
-
-  async retrieve(): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath('/recharges/settings'));
-  }
-}
-
-export class RechargesOrdersApi {
-  private client: HttpClient;
-
-  constructor(client: HttpClient) {
-    this.client = client;
-  }
-
-  async list(params?: RechargesOrdersListParams): Promise<CommerceApiResult> {
+/** Recharges packages list. */
+  async list(params?: RechargesPackagesListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
-      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<CommerceApiResult>(appendQueryString(appApiPath('/recharges/orders'), query));
-  }
-
-  async create(body: RechargeOrderCreateCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(
-      appApiPath('/recharges/orders'),
-      body,
-      undefined,
-      undefined,
-      'application/json',
-    );
-  }
-
-  async retrieve(orderId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(
-      appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`),
-    );
-  }
-
-  async cancel(orderId: string, body?: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(
-      appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`),
-      body ?? {},
-      undefined,
-      undefined,
-      'application/json',
-    );
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/packages`), query));
   }
 }
 
 export class RechargesApi {
+  private client: HttpClient;
   public readonly packages: RechargesPackagesApi;
   public readonly settings: RechargesSettingsApi;
   public readonly orders: RechargesOrdersApi;
 
   constructor(client: HttpClient) {
+    this.client = client;
     this.packages = new RechargesPackagesApi(client);
     this.settings = new RechargesSettingsApi(client);
     this.orders = new RechargesOrdersApi(client);
   }
+
 }
 
 export function createRechargesApi(client: HttpClient): RechargesApi {
@@ -179,29 +179,39 @@ function serializePathPrimitive(value: unknown): string {
   }
   return String(value);
 }
-
 interface QueryParameterSpec {
   name: string;
   value: unknown;
   style: string;
   explode: boolean;
   allowReserved: boolean;
+  contentType?: string;
 }
 
 function buildQueryString(parameters: QueryParameterSpec[]): string {
   const pairs: string[] = [];
   for (const parameter of parameters) {
-    appendQueryParameter(pairs, parameter);
+    appendSerializedParameter(pairs, parameter);
   }
-  return pairs.length > 0 ? `?${pairs.join('&')}` : '';
+  return pairs.join('&');
 }
 
-function appendQueryParameter(pairs: string[], parameter: QueryParameterSpec): void {
+function appendSerializedParameter(pairs: string[], parameter: QueryParameterSpec): void {
   if (parameter.value === undefined || parameter.value === null) {
     return;
   }
 
+  if (parameter.contentType) {
+    pairs.push(`${encodeQueryComponent(parameter.name)}=${encodeQueryValue(JSON.stringify(parameter.value), parameter.allowReserved)}`);
+    return;
+  }
+
   const style = parameter.style || 'form';
+  if (style === 'deepObject') {
+    appendDeepObjectParameter(pairs, parameter.name, parameter.value, parameter.allowReserved);
+    return;
+  }
+
   if (Array.isArray(parameter.value)) {
     appendArrayParameter(pairs, parameter.name, parameter.value, style, parameter.explode, parameter.allowReserved);
     return;
@@ -262,6 +272,25 @@ function appendObjectParameter(
 
   const serialized = entries.flatMap(([key, entryValue]) => [key, serializePrimitive(entryValue)]).join(',');
   pairs.push(`${encodeQueryComponent(name)}=${encodeQueryValue(serialized, allowReserved)}`);
+}
+
+function appendDeepObjectParameter(
+  pairs: string[],
+  name: string,
+  value: unknown,
+  allowReserved: boolean,
+): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    pairs.push(`${encodeQueryComponent(name)}=${encodeQueryValue(serializePrimitive(value), allowReserved)}`);
+    return;
+  }
+
+  for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
+    if (entryValue === undefined || entryValue === null) {
+      continue;
+    }
+    pairs.push(`${encodeQueryComponent(`${name}[${key}]`)}=${encodeQueryValue(serializePrimitive(entryValue), allowReserved)}`);
+  }
 }
 
 function serializePrimitive(value: unknown): string {

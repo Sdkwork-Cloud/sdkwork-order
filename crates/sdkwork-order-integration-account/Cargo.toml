@@ -18,9 +18,14 @@ sdkwork_contract_service.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_account_service.workspace = true
 sdkwork_account_repository_sqlx.workspace = true
-sdkwork_database_config.workspace = true
-sdkwork_database_sqlx.workspace = true
+sdkwork-database-config.workspace = true
+sdkwork-database-sqlx.workspace = true
 sdkwork-utils-rust.workspace = true
 dotenvy = { workspace = true }
 sqlx = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+sdkwork_order_repository_sqlx = { workspace = true, features = ["test-support"] }
+sdkwork_account_repository_sqlx = { workspace = true, features = ["test-support"] }

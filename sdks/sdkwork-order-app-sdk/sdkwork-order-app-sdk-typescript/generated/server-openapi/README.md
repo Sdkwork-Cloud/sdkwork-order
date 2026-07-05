@@ -60,6 +60,7 @@ const client = new SdkworkAppClient({
 - `client.afterSales` - after_sales API
 - `client.fulfillments` - fulfillments API
 - `client.shipments` - shipments API
+- `client.recharges` - recharges API
 
 ## Usage Examples
 
@@ -83,7 +84,11 @@ const result = await client.orders.statistics.retrieve();
 ```typescript
 // Payments order Payments list.
 const orderId = '1';
-const result = await client.payments.orderPayments.list(orderId);
+const params = {
+  page: 1,
+  page_size: 2,
+};
+const result = await client.payments.orderPayments.list(orderId, params);
 ```
 
 ### after_sales
@@ -117,6 +122,13 @@ const result = await client.fulfillments.list(params);
 // Shipments retrieve.
 const shipmentId = '1';
 const result = await client.shipments.retrieve(shipmentId);
+```
+
+### recharges
+
+```typescript
+// Recharges settings retrieve.
+const result = await client.recharges.settings.retrieve();
 ```
 
 ## Error Handling

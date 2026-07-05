@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CommerceApiResult, CommerceOperationCommand } from '../types';
+import type { CommerceOperationCommand } from '../types';
 
 
 export class CheckoutSessionsOrdersApi {
@@ -13,8 +13,8 @@ export class CheckoutSessionsOrdersApi {
 
 
 /** Checkout sessions orders create. */
-  async create(checkoutSessionId: string, body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/orders`), body, undefined, undefined, 'application/json');
+  async create(checkoutSessionId: string, body: CommerceOperationCommand): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/orders`), body, undefined, undefined, 'application/json');
   }
 }
 
@@ -27,8 +27,8 @@ export class CheckoutSessionsQuotesApi {
 
 
 /** Checkout sessions quotes create. */
-  async create(checkoutSessionId: string, body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/quotes`), body, undefined, undefined, 'application/json');
+  async create(checkoutSessionId: string, body: CommerceOperationCommand): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/quotes`), body, undefined, undefined, 'application/json');
   }
 }
 
@@ -45,13 +45,13 @@ export class CheckoutSessionsApi {
 
 
 /** Checkout sessions create. */
-  async create(body: CommerceOperationCommand): Promise<CommerceApiResult> {
-    return this.client.post<CommerceApiResult>(appApiPath(`/checkout/sessions`), body, undefined, undefined, 'application/json');
+  async create(body: CommerceOperationCommand): Promise<Record<string, unknown>> {
+    return this.client.post<Record<string, unknown>>(appApiPath(`/checkout/sessions`), body, undefined, undefined, 'application/json');
   }
 
 /** Checkout sessions retrieve. */
-  async retrieve(checkoutSessionId: string): Promise<CommerceApiResult> {
-    return this.client.get<CommerceApiResult>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}`));
+  async retrieve(checkoutSessionId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}`));
   }
 }
 

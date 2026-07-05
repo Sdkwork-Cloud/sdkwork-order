@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "sdkFamily": "sdkwork-order-backend-sdk",
+  "sdkName": "sdkwork-order-backend-sdk",
+  "packageName": "@sdkwork/order-backend-sdk",
+  "transportPackageName": "sdkwork-order-backend-sdk-generated-typescript",
+  "typescript": {
+    "composedRoot": "sdkwork-order-backend-sdk-typescript",
+    "composedEntry": "sdkwork-order-backend-sdk-typescript/src/index.ts",
+    "transportRoot": "sdkwork-order-backend-sdk-typescript/generated/server-openapi",
+    "transportEntry": "sdkwork-order-backend-sdk-typescript/generated/server-openapi/src/index.ts"
+  },
+  "workspace": "sdkwork-order-backend-sdk",
+  "title": "SDKWork Order Backend API",
+  "apiVersion": "1.0.0",
+  "openapiVersion": "3.1.2",
+  "authoritySpec": "openapi/sdkwork-order-backend-api.openapi.json",
+  "generationInputSpec": "openapi/sdkwork-order-backend-api.openapi.json",
+  "derivedSpecs": {
+    "default": "openapi/sdkwork-order-backend-api.openapi.json"
+  },
+  "sdkOwner": "sdkwork-order",
+  "apiAuthority": "sdkwork-order-backend-api",
+  "discoverySurface": {
+    "sdkTarget": "backend",
+    "apiPrefix": "/backend/v3/api",
+    "schemaUrl": "/backend/v3/api/openapi.json",
+    "generatedProtocols": ["http-openapi"],
+    "manualTransports": []
+  },
+  "sdkDependencies": [],
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardProfile": "sdkwork-v3",
+    "supportedLanguageSubset": ["typescript"]
+  },
+  "languages": [
+    {
+      "language": "typescript",
+      "workspace": "sdkwork-order-backend-sdk-typescript",
+      "generationState": "source_ready",
+      "releaseState": "not_published",
+      "packagePath": "sdkwork-order-backend-sdk-typescript/generated/server-openapi",
+      "manifestPath": "sdkwork-order-backend-sdk-typescript/generated/server-openapi/package.json",
+      "version": "0.1.0",
+      "description": "Generator-owned TypeScript transport SDK for SDKWork Order Backend API.",
+      "generatedPath": "sdkwork-order-backend-sdk-typescript/generated/server-openapi",
+      "consumerPackageName": "@sdkwork/order-backend-sdk",
+      "transportPackageName": "sdkwork-order-backend-sdk-generated-typescript"
+    }
+  ]
+}

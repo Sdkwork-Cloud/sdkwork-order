@@ -61,13 +61,8 @@ export interface CreateSdkworkOrderControllerOptions {
 
 function deriveVisibleOrders(
   dashboard: SdkworkOrderDashboardData,
-  activeFilter: SdkworkOrderFilter,
 ): SdkworkOrderSummary[] {
-  if (activeFilter === "all") {
-    return dashboard.orders;
-  }
-
-  return dashboard.orders.filter((order) => order.status === activeFilter);
+  return dashboard.orders;
 }
 
 export function createSdkworkOrderController(
@@ -108,7 +103,7 @@ export function createSdkworkOrderController(
     visibleOrders: [],
     ...options.initialState,
   };
-  state.visibleOrders = deriveVisibleOrders(state.dashboard, state.activeFilter);
+  state.visibleOrders = deriveVisibleOrders(state.dashboard);
 
   function emit(): void {
     listeners.forEach((listener) => listener());
@@ -124,7 +119,7 @@ export function createSdkworkOrderController(
       ...state,
       ...partial,
     };
-    state.visibleOrders = deriveVisibleOrders(state.dashboard, state.activeFilter);
+    state.visibleOrders = deriveVisibleOrders(state.dashboard);
     emit();
   }
 

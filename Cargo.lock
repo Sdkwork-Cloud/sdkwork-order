@@ -1789,11 +1789,13 @@ dependencies = [
  "sdkwork-contract-service",
  "sdkwork-database-config",
  "sdkwork-database-sqlx",
+ "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-utils-rust",
  "serde",
  "serde_json",
  "sqlx",
+ "tokio",
  "tracing",
 ]
 
@@ -1805,9 +1807,11 @@ dependencies = [
  "sdkwork-contract-service",
  "sdkwork-order-service",
  "sdkwork-payment-service",
+ "sdkwork-utils-rust",
  "serde",
  "serde_json",
  "sqlx",
+ "tokio",
  "uuid",
 ]
 
@@ -1816,6 +1820,7 @@ name = "sdkwork-order-service"
 version = "0.1.0"
 dependencies = [
  "sdkwork-contract-service",
+ "sdkwork-utils-rust",
  "tokio",
 ]
 
@@ -1856,6 +1861,7 @@ dependencies = [
  "sdkwork-order-repository-sqlx",
  "sdkwork-order-service",
  "sdkwork-payment-service",
+ "sdkwork-utils-rust",
  "serde",
  "serde_json",
  "sqlx",
@@ -1882,6 +1888,7 @@ dependencies = [
  "sdkwork-order-service",
  "sdkwork-order-service-host",
  "sdkwork-payment-repository-sqlx",
+ "sdkwork-payment-service",
  "sdkwork-utils-rust",
  "sdkwork-web-axum",
  "sdkwork-web-bootstrap",
@@ -1890,6 +1897,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tower",
 ]
 
 [[package]]
@@ -1911,6 +1919,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "tokio",
+ "tower",
  "tracing",
 ]
 

@@ -2,9 +2,11 @@
 
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
-    AfterSalesEventListQuery, AfterSalesEventView, AfterSalesRequestDetailQuery,
-    AfterSalesRequestView, AfterSalesReturnShipmentView, CreateAfterSalesRequestCommand,
-    CreateAfterSalesReturnShipmentCommand, OrderOwnerDetailQuery, UpdateAfterSalesRequestCommand,
+    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView, AfterSalesRequestDetailQuery,
+    AfterSalesRequestListQuery, AfterSalesRequestPage, AfterSalesRequestView,
+    AfterSalesReturnShipmentListQuery, AfterSalesReturnShipmentPage, AfterSalesReturnShipmentView,
+    CreateAfterSalesRequestCommand, CreateAfterSalesReturnShipmentCommand,
+    OrderOwnerDetailQuery, UpdateAfterSalesRequestCommand,
 };
 use sqlx::{Row, Sqlite, Transaction};
 
@@ -38,7 +40,15 @@ impl SqliteCommerceOrderStore {
         let now = current_timestamp_string();
         let request_id = after_sales_request_id(&command);
         let after_sales_no = format!("AS-{}", command.request_no);
-        let requested_amount = detail.summary.total_amount.as_str().to_owned();
+        // 优先采用调用方显式提供的金额与币种；缺失时回退到订单应付总额与订单币种。
+        let requested_amount = command
+            .requested_amount
+            .clone()
+            .unwrap_or_else(|| detail.summary.total_amount.as_str().to_owned());
+        let currency_code = command
+            .currency_code
+            .clone()
+            .unwrap_or_else(|| detail.summary.currency_code.clone());
 
         sqlx::query(
             r#"
@@ -48,7 +58,7 @@ impl SqliteCommerceOrderStore {
                  reason_code, description, requested_amount, approved_amount, currency_code,
                  requested_by_type, requested_by, request_no, idempotency_key, created_at, updated_at)
             VALUES
-                (?, ?, ?, ?, ?, ?, ?, 'submitted', 'none', 'none', 'none', ?, ?, ?, '0.00', 'CNY',
+                (?, ?, ?, ?, ?, ?, ?, 'submitted', 'none', 'none', 'none', ?, ?, ?, '0.00', ?,
                  'buyer', ?, ?, ?, ?, ?)
             "#,
         )
@@ -62,6 +72,7 @@ impl SqliteCommerceOrderStore {
         .bind(&command.reason_code)
         .bind(command.description.as_deref())
         .bind(&requested_amount)
+        .bind(&currency_code)
         .bind(&command.owner_user_id)
         .bind(&command.request_no)
         .bind(&command.idempotency_key)
@@ -70,6 +81,41 @@ impl SqliteCommerceOrderStore {
         .execute(&mut *tx)
         .await
         .map_err(|error| store_error("failed to insert after sales request", error))?;
+
+        // 写入行项明细（部分退款 / 换货场景）。
+        for item in &command.items {
+            let item_id = stable_storage_id(&[
+                "after-sales-item",
+                &command.tenant_id,
+                &request_id,
+                &item.order_item_id,
+            ]);
+            let item_amount = item
+                .requested_amount
+                .clone()
+                .unwrap_or_else(|| "0.00".to_string());
+            sqlx::query(
+                r#"
+                INSERT INTO commerce_after_sales_request_item
+                    (id, tenant_id, organization_id, after_sales_id, order_item_id,
+                     quantity, requested_amount, currency_code, created_at)
+                VALUES
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+            )
+            .bind(&item_id)
+            .bind(&command.tenant_id)
+            .bind(command.organization_id.as_deref())
+            .bind(&request_id)
+            .bind(&item.order_item_id)
+            .bind(item.quantity)
+            .bind(&item_amount)
+            .bind(&currency_code)
+            .bind(&now)
+            .execute(&mut *tx)
+            .await
+            .map_err(|error| store_error("failed to insert after sales request item", error))?;
+        }
 
         insert_after_sales_event(
             &mut tx,
@@ -96,7 +142,7 @@ impl SqliteCommerceOrderStore {
             reason_code: command.reason_code,
             requested_amount: CommerceMoney::new(&requested_amount)
                 .map_err(CommerceServiceError::storage)?,
-            currency_code: "CNY".to_owned(),
+            currency_code,
             status: "submitted".to_owned(),
         })
     }
@@ -221,10 +267,66 @@ impl SqliteCommerceOrderStore {
         .ok_or_else(|| CommerceServiceError::not_found("after sales request was not found"))
     }
 
+    pub async fn list_after_sales_requests(
+        &self,
+        query: AfterSalesRequestListQuery,
+    ) -> Result<AfterSalesRequestPage, CommerceServiceError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
+                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status,
+                   COUNT(*) OVER() AS total_count
+            FROM commerce_after_sales_request
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+              AND owner_user_id = CAST(? AS TEXT)
+              AND (? IS NULL OR order_id = CAST(? AS TEXT))
+              AND (? IS NULL OR after_sales_type = CAST(? AS TEXT))
+              AND (? IS NULL OR status = CAST(? AS TEXT))
+              AND (? IS NULL OR id = CAST(? AS TEXT))
+            ORDER BY created_at DESC, id DESC
+            LIMIT ? OFFSET ?
+            "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(query.organization_id.as_deref())
+        .bind(query.organization_id.as_deref())
+        .bind(&query.owner_user_id)
+        .bind(query.order_id.as_deref())
+        .bind(query.order_id.as_deref())
+        .bind(query.after_sales_type.as_deref())
+        .bind(query.after_sales_type.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.after_sales_request_id.as_deref())
+        .bind(query.after_sales_request_id.as_deref())
+        .bind(query.limit())
+        .bind(query.offset())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|error| store_error("failed to list after sales requests", error))?;
+
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
+            .into_iter()
+            .map(map_after_sales_request_row)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(AfterSalesRequestPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
+    }
+
     pub async fn list_after_sales_events(
         &self,
         query: AfterSalesEventListQuery,
-    ) -> Result<Vec<AfterSalesEventView>, CommerceServiceError> {
+    ) -> Result<AfterSalesEventPage, CommerceServiceError> {
         let exists = self
             .retrieve_after_sales_request(AfterSalesRequestDetailQuery {
                 after_sales_request_id: query.after_sales_request_id.clone(),
@@ -241,20 +343,28 @@ impl SqliteCommerceOrderStore {
 
         let rows = sqlx::query(
             r#"
-            SELECT id, after_sales_id, event_no, event_type, to_status
+            SELECT id, after_sales_id, event_no, event_type, to_status,
+                   COUNT(*) OVER() AS total_count
             FROM commerce_after_sales_event
             WHERE tenant_id = CAST(? AS TEXT)
               AND after_sales_id = CAST(? AS TEXT)
             ORDER BY created_at ASC, id ASC
+            LIMIT ? OFFSET ?
             "#,
         )
         .bind(&query.tenant_id)
         .bind(&query.after_sales_request_id)
+        .bind(query.limit())
+        .bind(query.offset())
         .fetch_all(self.pool())
         .await
         .map_err(|error| store_error("failed to list after sales events", error))?;
 
-        Ok(rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
             .into_iter()
             .map(|row| AfterSalesEventView {
                 event_id: string_cell(&row, "id"),
@@ -263,7 +373,77 @@ impl SqliteCommerceOrderStore {
                 event_type: string_cell(&row, "event_type"),
                 to_status: string_cell(&row, "to_status"),
             })
-            .collect())
+            .collect();
+
+        Ok(AfterSalesEventPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
+    }
+
+    pub async fn list_after_sales_return_shipments(
+        &self,
+        query: AfterSalesReturnShipmentListQuery,
+    ) -> Result<AfterSalesReturnShipmentPage, CommerceServiceError> {
+        let exists = self
+            .retrieve_after_sales_request(AfterSalesRequestDetailQuery {
+                after_sales_request_id: query.after_sales_request_id.clone(),
+                organization_id: query.organization_id.clone(),
+                owner_user_id: query.owner_user_id.clone(),
+                tenant_id: query.tenant_id.clone(),
+            })
+            .await?;
+        if exists.is_none() {
+            return Err(CommerceServiceError::not_found(
+                "after sales request was not found",
+            ));
+        }
+
+        let rows = sqlx::query(
+            r#"
+            SELECT id, after_sales_id, return_shipment_no, tracking_no, status,
+                   COUNT(*) OVER() AS total_count
+            FROM commerce_after_sales_return_shipment
+            WHERE tenant_id = ?
+              AND after_sales_id = ?
+              AND (? IS NULL OR status = ?)
+            ORDER BY created_at DESC, id DESC
+            LIMIT ? OFFSET ?
+            "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(&query.after_sales_request_id)
+        .bind(query.status.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.limit())
+        .bind(query.offset())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|error| store_error("failed to list after sales return shipments", error))?;
+
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
+            .into_iter()
+            .map(|row| AfterSalesReturnShipmentView {
+                return_shipment_id: string_cell(&row, "id"),
+                after_sales_request_id: string_cell(&row, "after_sales_id"),
+                return_shipment_no: string_cell(&row, "return_shipment_no"),
+                status: string_cell(&row, "status"),
+                tracking_no: optional_string_cell(&row, "tracking_no"),
+            })
+            .collect();
+
+        Ok(AfterSalesReturnShipmentPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
     pub async fn create_after_sales_return_shipment(

@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "language": "typescript",
   "sdkType": "app",
-  "packageName": "@sdkwork/order-app-sdk",
+  "packageName": "sdkwork-order-app-sdk-generated-typescript",
+  "transportPackageName": "sdkwork-order-app-sdk-generated-typescript",
+  "consumerPackageName": "@sdkwork/order-app-sdk",
   "generator": "@sdkwork/sdk-generator",
   "capabilities": {
     "supportsGeneratedTests": true,

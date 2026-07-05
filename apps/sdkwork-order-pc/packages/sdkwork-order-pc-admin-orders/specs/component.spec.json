@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/order-pc-admin-orders",
+    "type": "typescript-package",
+    "root": "apps/sdkwork-order-pc/packages/sdkwork-order-pc-admin-orders",
+    "domain": "order",
+    "capability": "admin-orders",
+    "surface": "backend-admin",
+    "languages": [
+      "typescript"
+    ],
+    "generated": false
+  },
+  "contracts": {
+    "sdkDependencies": [
+      {
+        "workspace": "sdkwork-order-backend-sdk",
+        "surface": "backend-api",
+        "credentialMode": "authenticated-backend-admin"
+      }
+    ],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": []
+  }
+}

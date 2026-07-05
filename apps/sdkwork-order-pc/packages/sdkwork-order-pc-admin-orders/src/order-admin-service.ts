@@ -1,0 +1,74 @@
+import type {
+  CancelOrderRequest,
+  CloseOrderRequest,
+  OrderDetail,
+  OrderSummary,
+  SdkworkOrderBackendClient,
+} from "@sdkwork/order-backend-sdk";
+import {
+  resolveSdkworkOffsetPagination,
+  unwrapSdkworkOrderListPage,
+  unwrapSdkworkOrderResource,
+} from "@sdkwork/order-service";
+
+export interface OrderAdminListQuery {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  q?: string;
+}
+
+export interface OrderAdminListResult {
+  items: OrderSummary[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface OrderAdminService {
+  listOrders(query: OrderAdminListQuery): Promise<OrderAdminListResult>;
+  getOrder(orderId: string): Promise<OrderDetail>;
+  cancelOrder(orderId: string, body?: CancelOrderRequest): Promise<void>;
+  closeOrder(orderId: string, body?: CloseOrderRequest): Promise<void>;
+}
+
+export function createOrderAdminService(
+  client: SdkworkOrderBackendClient,
+): OrderAdminService {
+  return {
+    async listOrders(query) {
+      const page = query.page ?? 1;
+      const pageSize = query.pageSize ?? 20;
+      const raw = await client.orders.admin.list({
+        page: String(page),
+        pageSize: String(pageSize),
+        status: query.status,
+        q: query.q,
+      });
+      const listPage = unwrapSdkworkOrderListPage<OrderSummary>(raw);
+      const pagination = resolveSdkworkOffsetPagination(
+        listPage.pageInfo,
+        page,
+        pageSize,
+      );
+      return {
+        items: listPage.items,
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        totalItems: pagination.total,
+        totalPages: pagination.totalPages,
+      };
+    },
+    async getOrder(orderId) {
+      const raw = await client.orders.admin.retrieve(orderId);
+      return unwrapSdkworkOrderResource<OrderDetail>(raw);
+    },
+    async cancelOrder(orderId, body) {
+      await client.orders.admin.cancel(orderId, body ?? { reason: "platform-cancel" });
+    },
+    async closeOrder(orderId, body) {
+      await client.orders.admin.close(orderId, body ?? { reason: "platform-close" });
+    },
+  };
+}

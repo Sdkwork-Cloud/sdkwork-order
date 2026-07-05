@@ -1,3 +1,4 @@
+import { useSdkworkOrderIntl } from "../order-intl";
 import {
   Button,
   DetailDrawer,
@@ -7,7 +8,6 @@ import {
 } from "@sdkwork/ui-pc-react";
 import type { SdkworkOrderController } from "../order-controller";
 import { useSdkworkOrderControllerState } from "../order-controller";
-import { useSdkworkOrderIntl } from "../order-intl";
 
 export interface SdkworkOrderDetailDrawerProps {
   controller: SdkworkOrderController;
@@ -29,11 +29,46 @@ export function SdkworkOrderDetailDrawer({
     formatTimestamp,
   } = useSdkworkOrderIntl();
 
+  const canPay = detail?.status === "pending-payment";
+  const canCancel = detail?.status === "pending-payment";
+
   return (
     <DetailDrawer
       description={detail?.subject || copy.detail.description}
       footer={(
         <div className="flex flex-wrap justify-end gap-3">
+          {canCancel ? (
+            <Button
+              disabled={state.isMutating}
+              onClick={() => {
+                if (!detail) {
+                  return;
+                }
+                void controller.cancelOrder({ orderId: detail.id });
+              }}
+              type="button"
+              variant="ghost"
+            >
+              {copy.actions.cancel}
+            </Button>
+          ) : null}
+          {canPay ? (
+            <Button
+              disabled={state.isMutating}
+              onClick={() => {
+                if (!detail) {
+                  return;
+                }
+                void controller.payOrder({
+                  orderId: detail.id,
+                  paymentMethod: detail.paymentMethod || "balance",
+                });
+              }}
+              type="button"
+            >
+              {copy.actions.pay}
+            </Button>
+          ) : null}
           <Button onClick={() => controller.closeDetail()} type="button" variant="ghost">
             {copy.actions.close}
           </Button>

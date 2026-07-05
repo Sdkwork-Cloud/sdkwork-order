@@ -2,8 +2,9 @@
 
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
-    ShipmentDetailQuery, ShipmentPackageListQuery, ShipmentPackageView,
-    ShipmentTrackingEventListQuery, ShipmentTrackingEventView, ShipmentView,
+    ShipmentDetailQuery, ShipmentPackageListQuery, ShipmentPackagePage, ShipmentPackageView,
+    ShipmentTrackingEventListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
+    ShipmentView,
 };
 use sqlx::Row;
 
@@ -43,10 +44,14 @@ impl SqliteCommerceOrderStore {
         row.map(map_shipment_row).transpose()
     }
 
+    /// 列出物流包裹（owner 域）。
+    ///
+    /// 先校验 shipment 归属再分页查询包裹，`COUNT(*) OVER()` 在一次往返中
+    /// 给出无条件总数，配合 `LIMIT`/`OFFSET` 实现真正的数据库分页。
     pub async fn list_owner_shipment_packages(
         &self,
         query: ShipmentPackageListQuery,
-    ) -> Result<Vec<ShipmentPackageView>, CommerceServiceError> {
+    ) -> Result<ShipmentPackagePage, CommerceServiceError> {
         if self
             .retrieve_owner_shipment(ShipmentDetailQuery {
                 tenant_id: query.tenant_id.clone(),
@@ -62,20 +67,35 @@ impl SqliteCommerceOrderStore {
 
         let rows = sqlx::query(
             r#"
-            SELECT id, shipment_id, package_no, package_type, tracking_no, status
+            SELECT
+                id,
+                shipment_id,
+                package_no,
+                package_type,
+                tracking_no,
+                status,
+                COUNT(*) OVER() AS total_count
             FROM commerce_shipment_package
             WHERE tenant_id = CAST(? AS TEXT)
               AND shipment_id = CAST(? AS TEXT)
             ORDER BY created_at ASC, id ASC
+            LIMIT ? OFFSET ?
             "#,
         )
         .bind(&query.tenant_id)
         .bind(&query.shipment_id)
+        .bind(query.limit())
+        .bind(query.offset())
         .fetch_all(self.pool())
         .await
         .map_err(|error| store_error("failed to list shipment packages", error))?;
 
-        Ok(rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
             .into_iter()
             .map(|row| ShipmentPackageView {
                 package_id: string_cell(&row, "id"),
@@ -85,13 +105,24 @@ impl SqliteCommerceOrderStore {
                 tracking_no: optional_string_cell(&row, "tracking_no"),
                 status: string_cell(&row, "status"),
             })
-            .collect())
+            .collect();
+
+        Ok(ShipmentPackagePage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
+    /// 列出物流轨迹事件（owner 域）。
+    ///
+    /// 先校验 shipment 归属再分页查询轨迹事件，`COUNT(*) OVER()` 在一次往返中
+    /// 给出无条件总数，配合 `LIMIT`/`OFFSET` 实现真正的数据库分页。
     pub async fn list_owner_shipment_tracking_events(
         &self,
         query: ShipmentTrackingEventListQuery,
-    ) -> Result<Vec<ShipmentTrackingEventView>, CommerceServiceError> {
+    ) -> Result<ShipmentTrackingEventPage, CommerceServiceError> {
         if self
             .retrieve_owner_shipment(ShipmentDetailQuery {
                 tenant_id: query.tenant_id.clone(),
@@ -107,20 +138,36 @@ impl SqliteCommerceOrderStore {
 
         let rows = sqlx::query(
             r#"
-            SELECT id, shipment_id, tracking_event_no, event_type, event_status, event_time, location_text
+            SELECT
+                id,
+                shipment_id,
+                tracking_event_no,
+                event_type,
+                event_status,
+                event_time,
+                location_text,
+                COUNT(*) OVER() AS total_count
             FROM commerce_shipment_tracking_event
             WHERE tenant_id = CAST(? AS TEXT)
               AND shipment_id = CAST(? AS TEXT)
             ORDER BY event_time ASC, id ASC
+            LIMIT ? OFFSET ?
             "#,
         )
         .bind(&query.tenant_id)
         .bind(&query.shipment_id)
+        .bind(query.limit())
+        .bind(query.offset())
         .fetch_all(self.pool())
         .await
         .map_err(|error| store_error("failed to list shipment tracking events", error))?;
 
-        Ok(rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+
+        let items = rows
             .into_iter()
             .map(|row| ShipmentTrackingEventView {
                 event_id: string_cell(&row, "id"),
@@ -131,7 +178,14 @@ impl SqliteCommerceOrderStore {
                 event_time: string_cell(&row, "event_time"),
                 location_text: optional_string_cell(&row, "location_text"),
             })
-            .collect())
+            .collect();
+
+        Ok(ShipmentTrackingEventPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 }
 

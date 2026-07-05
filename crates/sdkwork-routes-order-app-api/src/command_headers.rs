@@ -1,6 +1,8 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use sdkwork_utils_rust::{SdkWorkProblemDetail, SdkWorkResultCode};
+use sdkwork_web_core::WebRequestContext;
 use serde::Serialize;
 
 pub(crate) const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
@@ -17,13 +19,7 @@ pub(crate) struct AppWriteCommandHeaders {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WriteCommandHeaderError {
     MissingHeader(&'static str),
-    InvalidHeader(&'static str),
-}
-
-#[derive(Debug, Serialize)]
-struct CommandHeaderErrorBody {
-    code: &'static str,
-    msg: String,
+    InvalidHeader(String),
 }
 
 pub(crate) fn stable_command_request_hash(scope: &str, parts: &[&str]) -> String {
@@ -52,7 +48,7 @@ pub(crate) fn stable_json_request_hash(
 ) -> Result<String, WriteCommandHeaderError> {
     let value = serde_json::to_value(value).map_err(|_| {
         WriteCommandHeaderError::InvalidHeader(
-            "request body could not be canonicalized for request hash validation",
+            "request body could not be canonicalized for request hash validation".to_owned(),
         )
     })?;
     Ok(stable_canonical_json_request_hash(scope, &value))
@@ -109,7 +105,7 @@ pub(crate) fn validate_write_payload(
     let expected_hash = stable_json_request_hash(scope, body)?;
     if expected_hash.trim() != write_headers.request_hash.trim() {
         return Err(WriteCommandHeaderError::InvalidHeader(
-            "Sdkwork-Request-Hash does not match the command payload",
+            "Sdkwork-Request-Hash does not match the command payload".to_owned(),
         ));
     }
     Ok(write_headers)
@@ -117,13 +113,14 @@ pub(crate) fn validate_write_payload(
 
 #[allow(clippy::result_large_err)]
 pub(crate) fn validate_app_write_payload(
+    context: Option<&WebRequestContext>,
     headers: &HeaderMap,
     scope: &str,
     body: &impl Serialize,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<AppWriteCommandHeaders, Response> {
     validate_write_payload(headers, scope, body, fallback_request_no)
-        .map_err(write_command_header_error_to_app_response)
+        .map_err(|error| write_command_header_error_to_app_response(context, error))
 }
 
 pub(crate) fn write_payload_with_route_param(
@@ -161,24 +158,41 @@ pub(crate) fn parse_required_write_command_headers(
 
 #[allow(clippy::result_large_err)]
 pub(crate) fn required_app_write_command_headers(
+    context: Option<&WebRequestContext>,
     headers: &HeaderMap,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<AppWriteCommandHeaders, Response> {
     parse_required_write_command_headers(headers, fallback_request_no)
-        .map_err(write_command_header_error_to_app_response)
+        .map_err(|error| write_command_header_error_to_app_response(context, error))
 }
 
-fn write_command_header_error_to_app_response(error: WriteCommandHeaderError) -> Response {
+fn write_command_header_error_to_app_response(
+    context: Option<&WebRequestContext>,
+    error: WriteCommandHeaderError,
+) -> Response {
+    let trace_id = context
+        .and_then(|ctx| ctx.trace_id.clone())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| sdkwork_utils_rust::uuid());
     match error {
-        WriteCommandHeaderError::MissingHeader(name) => {
-            command_header_error_response(format!("{name} header is required"))
-        }
-        WriteCommandHeaderError::InvalidHeader(message) => validation_response(message),
+        WriteCommandHeaderError::MissingHeader(name) => problem_response(
+            StatusCode::BAD_REQUEST,
+            SdkWorkResultCode::MissingRequiredField,
+            format!("{name} header is required"),
+            &trace_id,
+        ),
+        WriteCommandHeaderError::InvalidHeader(message) => problem_response(
+            StatusCode::BAD_REQUEST,
+            SdkWorkResultCode::ValidationError,
+            message,
+            &trace_id,
+        ),
     }
 }
 
 #[allow(clippy::result_large_err)]
 pub(crate) fn ensure_request_hash_matches(
+    context: Option<&WebRequestContext>,
     expected_hash: &str,
     provided_hash: &str,
 ) -> Result<(), Response> {
@@ -186,28 +200,38 @@ pub(crate) fn ensure_request_hash_matches(
         return Ok(());
     }
 
-    Err(validation_response(
+    let trace_id = context
+        .and_then(|ctx| ctx.trace_id.clone())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| sdkwork_utils_rust::uuid());
+    Err(problem_response(
+        StatusCode::BAD_REQUEST,
+        SdkWorkResultCode::ValidationError,
         "Sdkwork-Request-Hash does not match the command payload",
+        &trace_id,
     ))
 }
 
 #[allow(clippy::result_large_err)]
-fn required_text_header(headers: &HeaderMap, name: &'static str) -> Result<String, Response> {
+fn required_text_header(
+    headers: &HeaderMap,
+    name: &'static str,
+) -> Result<String, WriteCommandHeaderError> {
     let value = headers
         .get(name)
-        .ok_or_else(|| command_header_error_response(format!("{name} header is required")))?
+        .ok_or_else(|| WriteCommandHeaderError::MissingHeader(name))?
         .to_str()
         .map(str::trim)
-        .map_err(|_| command_header_error_response(format!("{name} header value is invalid")))?;
+        .map_err(|_| {
+            WriteCommandHeaderError::InvalidHeader(format!("{name} header value is invalid"))
+        })?;
     if value.is_empty() {
-        return Err(command_header_error_response(format!(
-            "{name} header is required"
-        )));
+        return Err(WriteCommandHeaderError::MissingHeader(name));
     }
     Ok(value.to_owned())
 }
 
-fn optional_text_header(headers: &HeaderMap, name: &'static str) -> Option<String> {
+fn optional_text_header(headers: &HeaderMap, name: &str) -> Option<String> {
     headers
         .get(name)
         .and_then(|value| value.to_str().ok())
@@ -216,33 +240,26 @@ fn optional_text_header(headers: &HeaderMap, name: &'static str) -> Option<Strin
         .map(str::to_owned)
 }
 
-fn command_header_error_response(message: impl Into<String>) -> Response {
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(CommandHeaderErrorBody {
-            code: "4010",
-            msg: message.into(),
-        }),
-    )
-        .into_response()
-}
-
-fn validation_response(message: impl Into<String>) -> Response {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(CommandHeaderErrorBody {
-            code: "4001",
-            msg: message.into(),
-        }),
-    )
-        .into_response()
+fn problem_response(
+    status: StatusCode,
+    result_code: SdkWorkResultCode,
+    detail: impl Into<String>,
+    trace_id: &str,
+) -> Response {
+    let problem = SdkWorkProblemDetail::platform(result_code, detail, trace_id.to_owned());
+    (status, Json(problem)).into_response()
 }
 
 #[cfg(test)]
 mod tests {
     use axum::http::HeaderValue;
+    use sdkwork_web_core::WebRequestContext;
 
     use super::*;
+
+    fn ctx() -> Option<WebRequestContext> {
+        None
+    }
 
     #[test]
     fn required_app_write_command_headers_requires_idempotency_and_request_hash() {
@@ -250,8 +267,10 @@ mod tests {
         headers.insert(IDEMPOTENCY_KEY_HEADER, HeaderValue::from_static("idem-1"));
         headers.insert(REQUEST_HASH_HEADER, HeaderValue::from_static("hash-1"));
 
-        let parsed = required_app_write_command_headers(&headers, |_| "request-1".to_owned())
-            .expect("headers");
+        let parsed = required_app_write_command_headers(ctx().as_ref(), &headers, |_| {
+            "request-1".to_owned()
+        })
+        .expect("headers");
         assert_eq!(parsed.idempotency_key, "idem-1");
         assert_eq!(parsed.request_hash, "hash-1");
         assert_eq!(parsed.request_no, "request-1");
@@ -290,8 +309,19 @@ mod tests {
     }
 
     #[test]
-    fn ensure_request_hash_matches_rejects_mismatch() {
-        let error = ensure_request_hash_matches("expected", "provided").expect_err("mismatch");
+    fn ensure_request_hash_matches_rejects_mismatch_with_problem_detail() {
+        let error =
+            ensure_request_hash_matches(ctx().as_ref(), "expected", "provided").expect_err("mismatch");
         assert_eq!(error.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn missing_header_returns_numeric_validation_problem() {
+        let headers = HeaderMap::new();
+        let response = required_app_write_command_headers(ctx().as_ref(), &headers, |_| {
+            "request-1".to_owned()
+        })
+        .expect_err("missing header");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

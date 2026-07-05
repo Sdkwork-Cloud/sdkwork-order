@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { AfterSalesEventListResponse, AfterSalesRequestListResponse, AfterSalesRequestResponse, AfterSalesReturnShipmentListResponse, AfterSalesReturnShipmentResponse, CreateAfterSalesRequest, CreateAfterSalesReturnShipmentRequest, UpdateAfterSalesRequest } from '../types';
+import type { AfterSalesRequestResponse, AfterSalesReturnShipmentResponse, CreateAfterSalesRequest, CreateAfterSalesReturnShipmentRequest, SdkWorkPageData, UpdateAfterSalesRequest } from '../types';
 
 
 export interface AfterSalesEventsListParams {
@@ -18,12 +18,12 @@ export class AfterSalesEventsApi {
 
 
 /** After Sales events list. */
-  async list(afterSalesRequestId: string, params?: AfterSalesEventsListParams): Promise<AfterSalesEventListResponse> {
+  async list(afterSalesRequestId: string, params?: AfterSalesEventsListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<AfterSalesEventListResponse>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/events`), query));
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/events`), query));
   }
 }
 
@@ -46,13 +46,13 @@ export class AfterSalesReturnShipmentsApi {
 
 
 /** After Sales return Shipments list. */
-  async list(afterSalesRequestId: string, params?: AfterSalesReturnShipmentsListParams): Promise<AfterSalesReturnShipmentListResponse> {
+  async list(afterSalesRequestId: string, params?: AfterSalesReturnShipmentsListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<AfterSalesReturnShipmentListResponse>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), query));
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), query));
   }
 
 /** After Sales return Shipments create. */
@@ -87,14 +87,14 @@ export class AfterSalesRequestsApi {
 
 
 /** After Sales requests list. */
-  async list(params?: AfterSalesRequestsListParams): Promise<AfterSalesRequestListResponse> {
+  async list(params?: AfterSalesRequestsListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'order_id', value: params?.orderId, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<AfterSalesRequestListResponse>(appendQueryString(appApiPath(`/after_sales/requests`), query));
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests`), query));
   }
 
 /** After Sales requests create. */

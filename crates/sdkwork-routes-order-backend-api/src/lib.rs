@@ -1,5 +1,7 @@
 pub mod api_response;
 pub mod backend_order_admin_router;
+pub mod http_route_manifest;
+pub mod openapi_contract;
 pub mod points_recharge_fulfillment_router;
 pub mod routes;
 pub mod subject;

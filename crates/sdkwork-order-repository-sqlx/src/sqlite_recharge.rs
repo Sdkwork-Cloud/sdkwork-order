@@ -9,10 +9,18 @@ use sdkwork_order_service::{
     CreatePointsRechargeOrderOutcome, FulfillPointsRechargeOrderCommand,
     FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
     PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore, RechargeGrantPreview,
-    RechargePackageItem, RechargePackageListQuery, RechargeSettingsQuery, RechargeSettingsSnapshot,
+    RechargePackageItem, RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
+    RechargeSettingsSnapshot,
 };
+use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
 use serde::Deserialize;
 use sqlx::{Row, Sqlite, SqlitePool, Transaction};
+
+use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
+
+fn catalog_sql(template: &'static str) -> String {
+    materialize_platform_catalog_sql(template)
+}
 
 const DEFAULT_BASE_CURRENCY_CODE: &str = "CNY";
 const DEFAULT_BASE_POINTS_PER_CNY: &str = "10";
@@ -27,77 +35,74 @@ fn legacy_appbase_organization_id(organization_id: Option<&str>) -> String {
         .unwrap_or(LEGACY_APPBASE_PLATFORM_ORGANIZATION_ID)
         .to_owned()
 }
-const DEFAULT_RECHARGE_PACKAGES: [(&str, &str); 9] = [
-    ("500", "5.00"),
-    ("1000", "10.00"),
-    ("2000", "20.00"),
-    ("3000", "30.00"),
-    ("5000", "50.00"),
-    ("10000", "100.00"),
-    ("20000", "200.00"),
-    ("50000", "500.00"),
-    ("100000", "1000.00"),
-];
-
-const LOAD_RECHARGE_PACKAGES_SCOPED: &str = r#"
+const LIST_RECHARGE_PACKAGES_PAGINATED: &str = r#"
+WITH scoped_packages AS (
+    SELECT
+        p.id,
+        CAST(p.price_amount AS TEXT) AS price_amount,
+        COALESCE(NULLIF(p.currency_code, ''), 'CNY') AS currency_code,
+        COALESCE(p.bonus_points, 0) AS bonus_points,
+        CASE
+            WHEN p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id = CAST(?2 AS TEXT) THEN 0
+            WHEN p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id IS NULL THEN 1
+            ELSE 2
+        END AS scope_rank,
+        COALESCE(p.sort_weight, 0) AS sort_weight
+    FROM commerce_recharge_package p
+    LEFT JOIN commerce_product_sku s
+        ON s.id = p.sku_id
+       AND s.sales_status = 'active'
+    LEFT JOIN commerce_product_spu pr
+        ON pr.id = s.spu_id
+       AND pr.sales_status = 'active'
+    WHERE (
+            (p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id = CAST(?2 AS TEXT))
+            OR (p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id IS NULL)
+          )
+      AND p.status = 'active'
+      AND (p.valid_from IS NULL OR p.valid_from <= ?3)
+      AND (p.valid_to IS NULL OR p.valid_to >= ?3)
+    GROUP BY p.id, p.tenant_id, p.organization_id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
+),
+public_packages AS (
+    SELECT
+        p.id,
+        CAST(p.price_amount AS TEXT) AS price_amount,
+        COALESCE(NULLIF(p.currency_code, ''), 'CNY') AS currency_code,
+        COALESCE(p.bonus_points, 0) AS bonus_points,
+        0 AS scope_rank,
+        COALESCE(p.sort_weight, 0) AS sort_weight
+    FROM commerce_recharge_package p
+    LEFT JOIN commerce_product_sku s
+        ON s.id = p.sku_id
+       AND s.sales_status = 'active'
+    LEFT JOIN commerce_product_spu pr
+        ON pr.id = s.spu_id
+       AND pr.sales_status = 'active'
+    WHERE p.tenant_id = '__PLATFORM_TENANT__'
+      AND (p.organization_id = '0' OR p.organization_id IS NULL)
+      AND p.status = 'active'
+      AND (p.valid_from IS NULL OR p.valid_from <= ?3)
+      AND (p.valid_to IS NULL OR p.valid_to >= ?3)
+    GROUP BY p.id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
+),
+effective_packages AS (
+    SELECT id, price_amount, currency_code, bonus_points, scope_rank, sort_weight
+    FROM scoped_packages
+    UNION ALL
+    SELECT id, price_amount, currency_code, bonus_points, scope_rank, sort_weight
+    FROM public_packages
+    WHERE NOT EXISTS (SELECT 1 FROM scoped_packages)
+)
 SELECT
-    p.id,
-    CAST(p.price_amount AS TEXT) AS price_amount,
-    COALESCE(NULLIF(p.currency_code, ''), 'CNY') AS currency_code,
-    COALESCE(p.bonus_points, 0) AS bonus_points
-FROM commerce_recharge_package p
-LEFT JOIN commerce_product_sku s
-    ON s.id = p.sku_id
-   AND s.sales_status = 'active'
-LEFT JOIN commerce_product_spu pr
-    ON pr.id = s.spu_id
-   AND pr.sales_status = 'active'
-WHERE (
-        (p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id = CAST(?2 AS TEXT))
-        OR (p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id IS NULL)
-      )
-  AND p.status = 'active'
-  AND (p.valid_from IS NULL OR p.valid_from <= ?3)
-  AND (p.valid_to IS NULL OR p.valid_to >= ?3)
-GROUP BY p.id, p.tenant_id, p.organization_id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
-ORDER BY
-    CASE
-        WHEN p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id = CAST(?2 AS TEXT) THEN 0
-        WHEN p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id IS NULL THEN 1
-        ELSE 2
-    END ASC,
-    COALESCE(p.sort_weight, 0) ASC,
-    p.currency_code ASC,
-    p.price_amount ASC,
-    p.id ASC
-LIMIT 100
-"#;
-
-const LOAD_RECHARGE_PACKAGES_PUBLIC: &str = r#"
-SELECT
-    p.id,
-    CAST(p.price_amount AS TEXT) AS price_amount,
-    COALESCE(NULLIF(p.currency_code, ''), 'CNY') AS currency_code,
-    COALESCE(p.bonus_points, 0) AS bonus_points
-FROM commerce_recharge_package p
-LEFT JOIN commerce_product_sku s
-    ON s.id = p.sku_id
-   AND s.sales_status = 'active'
-LEFT JOIN commerce_product_spu pr
-    ON pr.id = s.spu_id
-   AND pr.sales_status = 'active'
-WHERE p.tenant_id = '100001'
-  AND (p.organization_id = '0' OR p.organization_id IS NULL)
-  AND p.status = 'active'
-  AND (p.valid_from IS NULL OR p.valid_from <= ?1)
-  AND (p.valid_to IS NULL OR p.valid_to >= ?1)
-GROUP BY p.id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
-ORDER BY
-    COALESCE(p.sort_weight, 0) ASC,
-    p.currency_code ASC,
-    p.price_amount ASC,
-    p.id ASC
-LIMIT 100
+    id,
+    price_amount,
+    currency_code,
+    bonus_points,
+    COUNT(*) OVER() AS total_count
+FROM effective_packages
+ORDER BY scope_rank ASC, sort_weight ASC, currency_code ASC, price_amount ASC, id ASC
+LIMIT ?4 OFFSET ?5
 "#;
 
 const LOAD_RECHARGE_SETTINGS_SCOPED: &str = r#"
@@ -131,7 +136,7 @@ SELECT
     rate,
     remark
 FROM commerce_exchange_rule
-WHERE tenant_id = '100001'
+WHERE tenant_id = '__PLATFORM_TENANT__'
   AND (organization_id = '0' OR organization_id IS NULL)
   AND LOWER(source_asset_type) = 'cash'
   AND LOWER(target_asset_type) = 'points'
@@ -182,7 +187,7 @@ SELECT
     COALESCE(p.bonus_points, 0) AS bonus_points,
     p.sku_id
 FROM commerce_recharge_package p
-WHERE p.tenant_id = '100001'
+WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND (p.organization_id = '0' OR p.organization_id IS NULL)
   AND p.status = 'active'
   AND p.id = ?1
@@ -230,7 +235,7 @@ SELECT
     COALESCE(p.bonus_points, 0) AS bonus_points,
     p.sku_id
 FROM commerce_recharge_package p
-WHERE p.tenant_id = '100001'
+WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND (p.organization_id = '0' OR p.organization_id IS NULL)
   AND p.status = 'active'
   AND COALESCE(NULLIF(p.currency_code, ''), 'CNY') = ?1
@@ -247,7 +252,7 @@ FROM commerce_payment_method
 WHERE (
         (tenant_id = CAST(?1 AS TEXT) AND organization_id = CAST(?2 AS TEXT))
         OR (tenant_id = CAST(?1 AS TEXT) AND organization_id IS NULL)
-        OR (tenant_id = '100001' AND (organization_id = '0' OR organization_id IS NULL))
+        OR (tenant_id = '__PLATFORM_TENANT__' AND (organization_id = '0' OR organization_id IS NULL))
       )
   AND status = 'active'
   AND LOWER(method_key) = ?3
@@ -307,9 +312,9 @@ SELECT
     COALESCE(NULLIF(s.name, ''), NULLIF(s.title, ''), NULLIF(pr.title, ''), 'Points recharge') AS product_name
 FROM commerce_product_sku s
 JOIN commerce_product_spu pr ON pr.id = s.spu_id
-WHERE s.tenant_id = '100001'
+WHERE s.tenant_id = '__PLATFORM_TENANT__'
   AND (s.organization_id = '0' OR s.organization_id IS NULL)
-  AND pr.tenant_id = '100001'
+  AND pr.tenant_id = '__PLATFORM_TENANT__'
   AND (pr.organization_id = '0' OR pr.organization_id IS NULL)
   AND COALESCE(NULLIF(s.currency_code, ''), 'CNY') = ?1
   AND s.sales_status = 'active'
@@ -502,45 +507,44 @@ impl SqliteCommerceRechargeStore {
     pub async fn list_recharge_packages(
         &self,
         query: RechargePackageListQuery,
-    ) -> Result<Vec<RechargePackageItem>, CommerceServiceError> {
+    ) -> Result<RechargePackageListPage, CommerceServiceError> {
+        if query.tenant_id.trim().is_empty() {
+            return Ok(RechargePackageListPage::empty_for(&query));
+        }
+
         let settings = self
             .load_recharge_settings_model(
                 &query.tenant_id,
                 Some(legacy_appbase_organization_id(query.organization_id.as_deref()).as_str()),
             )
             .await?;
-        let rows = if query.tenant_id.trim().is_empty() {
-            Vec::new()
-        } else {
-            let organization_id = legacy_appbase_organization_id(query.organization_id.as_deref());
-            let scoped_rows = sqlx::query(LOAD_RECHARGE_PACKAGES_SCOPED)
-                .bind(&query.tenant_id)
-                .bind(&organization_id)
-                .bind(current_query_timestamp())
-                .fetch_all(&self.pool)
-                .await
-                .or_else(empty_rows_when_read_model_is_missing)
-                .map_err(|error| store_error("failed to list recharge packages", error))?;
-            if scoped_rows.is_empty() {
-                sqlx::query(LOAD_RECHARGE_PACKAGES_PUBLIC)
-                    .bind(current_query_timestamp())
-                    .fetch_all(&self.pool)
-                    .await
-                    .or_else(empty_rows_when_read_model_is_missing)
-                    .map_err(|error| store_error("failed to list recharge packages", error))?
-            } else {
-                scoped_rows
-            }
-        };
+        let organization_id = legacy_appbase_organization_id(query.organization_id.as_deref());
+        let rows = sqlx::query(&catalog_sql(LIST_RECHARGE_PACKAGES_PAGINATED))
+            .bind(&query.tenant_id)
+            .bind(&organization_id)
+            .bind(current_query_timestamp())
+            .bind(query.limit())
+            .bind(query.offset())
+            .fetch_all(&self.pool)
+            .await
+            .or_else(empty_rows_when_read_model_is_missing)
+            .map_err(|error| store_error("failed to list recharge packages", error))?;
 
-        let mut packages = rows
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
             .iter()
             .map(|row| map_package_row(row, &settings))
             .collect::<Result<Vec<_>, _>>()?;
-        if packages.is_empty() {
-            packages = default_recharge_packages(&settings)?;
-        }
-        Ok(packages)
+
+        Ok(RechargePackageListPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
     }
 
     pub async fn load_recharge_settings(
@@ -664,6 +668,33 @@ impl SqliteCommerceRechargeStore {
         row.as_ref().map(map_points_recharge_fulfillment_context).transpose()
     }
 
+    pub async fn resolve_points_recharge_order_owner(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+    ) -> Result<Option<String>, CommerceServiceError> {
+        let organization_id = legacy_appbase_organization_id(organization_id);
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT owner_user_id
+            FROM commerce_order
+            WHERE tenant_id = ?
+              AND ((organization_id = ?) OR (organization_id IS NULL AND ? IS NULL))
+              AND id = ?
+              AND subject = 'points_recharge'
+            LIMIT 1
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&organization_id)
+        .bind(&organization_id)
+        .bind(order_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to resolve points recharge order owner", error))
+    }
+
     pub async fn commit_points_recharge_fulfillment(
         &self,
         command: FulfillPointsRechargeOrderCommand,
@@ -716,10 +747,20 @@ impl SqliteCommerceRechargeStore {
             tx.rollback().await.map_err(|error| {
                 store_error("failed to rollback points recharge fulfillment transaction", error)
             })?;
-            return Ok(FulfillPointsRechargeOrderOutcome::replayed(
-                &context.order_id,
-                &context.order_no,
-                context.points,
+            let reloaded = self
+                .load_points_recharge_fulfillment_context(&command)
+                .await?;
+            if let Some(reloaded_context) = reloaded {
+                if reloaded_context.already_fulfilled() {
+                    return Ok(FulfillPointsRechargeOrderOutcome::replayed(
+                        &reloaded_context.order_id,
+                        &reloaded_context.order_no,
+                        reloaded_context.points,
+                    ));
+                }
+            }
+            return Err(CommerceServiceError::conflict(
+                "points recharge order could not be marked fulfilled; verify payment state and ownership scope",
             ));
         }
 
@@ -732,6 +773,39 @@ impl SqliteCommerceRechargeStore {
             &context.order_no,
             context.points,
         ))
+    }
+
+    pub async fn rollback_points_recharge_fulfillment(
+        &self,
+        command: &FulfillPointsRechargeOrderCommand,
+        context: &PointsRechargeFulfillmentContext,
+    ) -> Result<(), CommerceServiceError> {
+        let now = current_query_timestamp();
+        let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
+        sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET status = ?,
+                fulfillment_status = 'unfulfilled',
+                updated_at = ?
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND organization_id = CAST(? AS TEXT)
+              AND owner_user_id = CAST(? AS TEXT)
+              AND id = CAST(? AS TEXT)
+              AND subject = 'points_recharge'
+              AND LOWER(COALESCE(fulfillment_status, '')) = 'fulfilled'
+            "#,
+        )
+        .bind(&context.order_status)
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to rollback points recharge fulfillment", error))?;
+        Ok(())
     }
 
     pub async fn mark_points_recharge_payment_succeeded(
@@ -835,7 +909,7 @@ async fn load_recharge_settings_from_pool(
     organization_id: Option<&str>,
 ) -> Result<RechargeSettingsModel, CommerceServiceError> {
     let row = if tenant_id.trim().is_empty() {
-        sqlx::query(LOAD_RECHARGE_SETTINGS_PUBLIC)
+        sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
             .bind(RECHARGE_RULE_NO)
             .fetch_optional(pool)
             .await
@@ -851,7 +925,7 @@ async fn load_recharge_settings_from_pool(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(LOAD_RECHARGE_SETTINGS_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
                 .bind(RECHARGE_RULE_NO)
                 .fetch_optional(pool)
                 .await
@@ -868,7 +942,7 @@ async fn load_recharge_settings_for_transaction(
     organization_id: Option<&str>,
 ) -> Result<RechargeSettingsModel, CommerceServiceError> {
     let row = if tenant_id.trim().is_empty() {
-        sqlx::query(LOAD_RECHARGE_SETTINGS_PUBLIC)
+        sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
             .bind(RECHARGE_RULE_NO)
             .fetch_optional(&mut **tx)
             .await
@@ -884,7 +958,7 @@ async fn load_recharge_settings_for_transaction(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(LOAD_RECHARGE_SETTINGS_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
                 .bind(RECHARGE_RULE_NO)
                 .fetch_optional(&mut **tx)
                 .await
@@ -990,47 +1064,13 @@ fn map_package_row(
     )
 }
 
-fn default_recharge_packages(
-    settings: &RechargeSettingsModel,
-) -> Result<Vec<RechargePackageItem>, CommerceServiceError> {
-    DEFAULT_RECHARGE_PACKAGES
-        .iter()
-        .map(|(amount_minor, price_amount)| {
-            let package_id = format!("seed-recharge-package-cny-{amount_minor}");
-            default_recharge_package(&package_id, price_amount, settings)
-        })
-        .collect()
-}
-
-fn default_recharge_package(
-    id: &str,
-    price_amount: &str,
-    settings: &RechargeSettingsModel,
-) -> Result<RechargePackageItem, CommerceServiceError> {
-    let price_amount = CommerceMoney::new(price_amount).map_err(CommerceServiceError::storage)?;
-    let grant_amount = compute_grant_amount(
-        price_amount.as_str(),
-        DEFAULT_BASE_CURRENCY_CODE,
-        0,
-        settings,
-    )?;
-    RechargePackageItem::new(
-        id,
-        price_amount,
-        DEFAULT_BASE_CURRENCY_CODE,
-        0,
-        grant_amount,
-        grant_amount,
-    )
-}
-
 async fn load_recharge_method(
     tx: &mut Transaction<'_, Sqlite>,
     command: &CreatePointsRechargeOrderCommand,
 ) -> Result<RechargeMethod, CommerceServiceError> {
     let requested_method = normalize_method_key(&command.method);
     let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
-    let row = sqlx::query(LOAD_RECHARGE_METHOD)
+    let row = sqlx::query(&catalog_sql(LOAD_RECHARGE_METHOD))
         .bind(&command.tenant_id)
         .bind(&organization_id)
         .bind(&requested_method)
@@ -1055,7 +1095,7 @@ async fn load_recharge_pack(
     let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
     if let Some(package_id) = command.package_id.as_deref() {
         let row = if command.tenant_id.trim().is_empty() {
-            sqlx::query(LOAD_RECHARGE_PACK_BY_ID_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC))
                 .bind(package_id)
                 .bind(&command.requested_at)
                 .fetch_optional(&mut **tx)
@@ -1072,7 +1112,7 @@ async fn load_recharge_pack(
             if scoped_row.is_some() {
                 Ok(scoped_row)
             } else {
-                sqlx::query(LOAD_RECHARGE_PACK_BY_ID_PUBLIC)
+                sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC))
                     .bind(package_id)
                     .bind(&command.requested_at)
                     .fetch_optional(&mut **tx)
@@ -1092,7 +1132,7 @@ async fn load_recharge_pack(
 
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC)
+        sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC))
             .bind(&command.currency_code)
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
@@ -1115,7 +1155,7 @@ async fn load_recharge_pack(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC))
                 .bind(&command.currency_code)
                 .bind(command.amount.as_str())
                 .bind(&amount_match.compact)
@@ -1184,7 +1224,7 @@ async fn load_recharge_product_sku(
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let organization_id = legacy_appbase_organization_id(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC)
+        sqlx::query(&catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC))
             .bind(&command.currency_code)
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
@@ -1205,7 +1245,7 @@ async fn load_recharge_product_sku(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC))
                 .bind(&command.currency_code)
                 .bind(command.amount.as_str())
                 .bind(&amount_match.compact)
@@ -1257,9 +1297,9 @@ async fn insert_order(
     sqlx::query(
         r#"
         INSERT INTO commerce_order
-            (id, tenant_id, organization_id, owner_user_id, order_no, status, subject, currency_code, request_no, idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
+            (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status, fulfillment_status, refund_status, subject, currency_code, request_no, idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
         VALUES
-            (?, CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), ?, 'pending_payment', 'points_recharge', ?, ?, ?, ?, NULL, NULL, ?, ?)
+            (?, CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), ?, 'pending_payment', 'pending', 'unfulfilled', 'none', 'points_recharge', ?, ?, ?, ?, NULL, NULL, ?, ?)
         "#,
     )
     .bind(&command.order_id)
@@ -1508,8 +1548,10 @@ fn checkout_next_action(status: &str) -> &'static str {
 }
 
 fn recharge_cashier_url(order_no: &str, out_trade_no: &str) -> String {
-    format!(
-        "https://im.sdkwork.com/cashier?scene=recharge&orderId={order_no}&outTradeNo={out_trade_no}"
+    build_commerce_cashier_url(
+        commerce_cashier_scene(Some("points_recharge")),
+        order_no,
+        out_trade_no,
     )
 }
 
@@ -1903,6 +1945,16 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome> {
         Box::pin(async move {
             self.commit_points_recharge_fulfillment(command, context).await
+        })
+    }
+
+    fn rollback_points_recharge_fulfillment<'a>(
+        &'a self,
+        command: &'a FulfillPointsRechargeOrderCommand,
+        context: &'a PointsRechargeFulfillmentContext,
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
+        Box::pin(async move {
+            self.rollback_points_recharge_fulfillment(command, context).await
         })
     }
 

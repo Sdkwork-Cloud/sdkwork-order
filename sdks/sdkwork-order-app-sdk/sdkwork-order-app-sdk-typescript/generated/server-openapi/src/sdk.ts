@@ -5,10 +5,10 @@ import type { AuthTokenManager } from '@sdkwork/sdk-common';
 import { CheckoutApi, createCheckoutApi } from './api/checkout';
 import { OrdersApi, createOrdersApi } from './api/orders';
 import { PaymentsApi, createPaymentsApi } from './api/payments';
-import { RechargesApi, createRechargesApi } from './api/recharges';
 import { AfterSalesApi, createAfterSalesApi } from './api/after-sales';
 import { FulfillmentsApi, createFulfillmentsApi } from './api/fulfillments';
 import { ShipmentsApi, createShipmentsApi } from './api/shipments';
+import { RechargesApi, createRechargesApi } from './api/recharges';
 
 export class SdkworkAppClient {
   private httpClient: HttpClient;
@@ -16,10 +16,10 @@ export class SdkworkAppClient {
   public readonly checkout: CheckoutApi;
   public readonly orders: OrdersApi;
   public readonly payments: PaymentsApi;
-  public readonly recharges: RechargesApi;
   public readonly afterSales: AfterSalesApi;
   public readonly fulfillments: FulfillmentsApi;
   public readonly shipments: ShipmentsApi;
+  public readonly recharges: RechargesApi;
 
   constructor(config: SdkworkAppConfig) {
     this.httpClient = createHttpClient(config);
@@ -29,13 +29,13 @@ export class SdkworkAppClient {
 
     this.payments = createPaymentsApi(this.httpClient);
 
-    this.recharges = createRechargesApi(this.httpClient);
-
     this.afterSales = createAfterSalesApi(this.httpClient);
 
     this.fulfillments = createFulfillmentsApi(this.httpClient);
 
     this.shipments = createShipmentsApi(this.httpClient);
+
+    this.recharges = createRechargesApi(this.httpClient);
   }
   setAuthToken(token: string): this {
     this.httpClient.setAuthToken(token);

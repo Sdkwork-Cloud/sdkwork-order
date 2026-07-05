@@ -10,27 +10,34 @@ use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
     checkout_owner_order_request_hash, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
-    CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerListPage,
-    OrderOwnerListQuery, OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand,
-    PayOwnerOrderOutcome,
+    CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
+    OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
+    OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderOutcome,
 };
 use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, SqliteCommerceOrderStore,
 };
 use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+    PostgresCommerceOwnerOrderPaymentStore, PostgresCommercePaymentRecordStore,
+    SqliteCommerceOwnerOrderPaymentStore, SqliteCommercePaymentRecordStore,
 };
+use sdkwork_payment_service::{PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery};
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    conflict, map_service_error, not_found, not_implemented, success_command, success_item,
-    success_items, unauthorized, validation,
+    map_service_error, not_found, offset_list_page_params_from_query, success_command,
+    success_item, success_items, unauthorized, validation,
 };
-use crate::command_headers::{ensure_request_hash_matches, required_app_write_command_headers};
+use crate::command_headers::{
+    ensure_request_hash_matches, required_app_write_command_headers, validate_app_write_payload,
+};
 use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
+
+/// 允许的支付方式白名单，避免硬编码单一渠道。
+const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
 
 pub type CommerceOrderFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -53,6 +60,11 @@ pub trait CommerceOrderStore: Send + Sync {
         owner_user_id: String,
     ) -> CommerceOrderFuture<'a, OrderOwnerStatistics>;
 
+    fn list_owner_order_events<'a>(
+        &'a self,
+        query: OrderOwnerEventListQuery,
+    ) -> CommerceOrderFuture<'a, OrderOwnerEventPage>;
+
     fn cancel_owner_order<'a>(
         &'a self,
         command: CancelOwnerOrderCommand,
@@ -68,6 +80,14 @@ pub trait CommerceOrderStore: Send + Sync {
 struct AppOrderState {
     store: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
+    payment_records: Arc<dyn OrderPaymentRecordStore>,
+}
+
+pub trait OrderPaymentRecordStore: Send + Sync {
+    fn list_payment_records_by_order<'a>(
+        &'a self,
+        query: PaymentRecordOrderListQuery,
+    ) -> CommerceOrderFuture<'a, PaymentRecordOrderListPage>;
 }
 
 pub trait OwnerOrderPaymentStore: Send + Sync {
@@ -90,18 +110,31 @@ struct OrderListQueryParams {
     status: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct OrderPaymentListQueryParams {
+    page: Option<i64>,
+    #[serde(rename = "pageSize", alias = "page_size")]
+    page_size: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct OrderPageResponse {
-    content: Vec<OrderSummaryResponse>,
-    page: i64,
-    #[serde(rename = "pageSize")]
-    page_size: i64,
-    total: i64,
-    #[serde(rename = "hasMore")]
-    has_more: bool,
-    #[serde(rename = "totalPages", skip_serializing_if = "Option::is_none")]
-    total_pages: Option<i64>,
+struct OrderPaymentRecordResponse {
+    payment_id: String,
+    order_id: String,
+    out_trade_no: String,
+    payment_method: String,
+    amount: String,
+    created_at: String,
+    status: String,
+    status_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OrderEventListQueryParams {
+    page: Option<i64>,
+    #[serde(rename = "pageSize", alias = "page_size")]
+    page_size: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -157,6 +190,24 @@ struct OrderItemResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+struct OrderEventResponse {
+    event_id: String,
+    order_id: String,
+    event_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    from_status: Option<String>,
+    to_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actor_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actor_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+    created_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct OrderStatusResponse {
     status: String,
     status_name: String,
@@ -178,12 +229,37 @@ struct CancelOrderRequest {
     cancel_type: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct PayOrderRequest {
     #[serde(rename = "paymentMethod", alias = "payment_method")]
     payment_method: Option<String>,
     #[serde(rename = "paymentPassword", alias = "payment_password")]
     payment_password: Option<String>,
+}
+
+impl PayOrderRequest {
+    fn payment_method(&self) -> Option<&str> {
+        self.payment_method.as_deref().map(str::trim).filter(|v| !v.is_empty())
+    }
+
+    fn payment_password(&self) -> Option<&str> {
+        self.payment_password.as_deref().map(str::trim).filter(|v| !v.is_empty())
+    }
+}
+
+/// 校验支付方式：必须非空且在白名单内，统一转小写以避免大小写歧义。
+fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
+    let method = value.unwrap_or_default().trim().to_ascii_lowercase();
+    if method.is_empty() {
+        return Err("payment method must be provided".to_string());
+    }
+    if !ALLOWED_PAYMENT_METHODS.iter().any(|allowed| *allowed == method) {
+        return Err(format!(
+            "payment method must be one of: {}",
+            ALLOWED_PAYMENT_METHODS.join(", ")
+        ));
+    }
+    Ok(method)
 }
 
 #[derive(Debug, Deserialize)]
@@ -226,29 +302,35 @@ struct OrderStatisticsResponse {
 pub fn app_order_router_with_sqlite_pool(pool: SqlitePool) -> Router {
     build_app_order_router(
         Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-        Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool)),
+        Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
+        Arc::new(SqliteCommercePaymentRecordStore::new(pool)),
     )
 }
 
 pub fn app_order_router_with_postgres_pool(pool: PgPool) -> Router {
     build_app_order_router(
         Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
-        Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool)),
+        Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
+        Arc::new(PostgresCommercePaymentRecordStore::new(pool)),
     )
 }
 
 pub fn build_app_order_router(
     store: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
+    payment_records: Arc<dyn OrderPaymentRecordStore>,
 ) -> Router {
     Router::new()
             .route("/app/v3/api/orders", get(list_orders).post(create_order))
             .route("/app/v3/api/orders/statistics", get(fetch_order_statistics))
             .route(
                 "/app/v3/api/orders/{orderId}",
-                get(fetch_order).patch(unavailable_command),
+                get(fetch_order),
             )
-            .route("/app/v3/api/orders/{orderId}/payments", post(pay_order))
+            .route(
+                "/app/v3/api/orders/{orderId}/payments",
+                get(list_order_payments).post(pay_order),
+            )
             .route("/app/v3/api/orders/{orderId}/cancel", post(cancel_order))
             .route(
                 "/app/v3/api/orders/{orderId}/status",
@@ -266,7 +348,11 @@ pub fn build_app_order_router(
                 "/app/v3/api/orders/{orderId}/cancellations",
                 post(cancel_order),
             )
-            .with_state(AppOrderState { store, payments })
+            .with_state(AppOrderState {
+                store,
+                payments,
+                payment_records,
+            })
 }
 
 async fn list_orders(
@@ -295,16 +381,9 @@ async fn list_orders(
 
     match state.store.list_owner_orders(query).await {
         Ok(page) => {
-            let has_more = page.has_more();
-            let total_pages = page.total_pages();
-            success_item(ctx, OrderPageResponse {
-                content: page.items.into_iter().map(map_order_summary).collect(),
-                page: page.page,
-                page_size: page.page_size,
-                total: page.total,
-                has_more,
-                total_pages: Some(total_pages),
-            })
+            let page_params = offset_list_page_params_from_query(page.page, page.page_size);
+            let mapped = page.items.into_iter().map(map_order_summary).collect();
+            success_items(ctx, mapped, page.total, page_params)
         }
         Err(error) => map_service_error(ctx, error),
     }
@@ -442,15 +521,33 @@ async fn fetch_order_events(
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
     Path(order_id): Path<String>,
+    Query(params): Query<OrderEventListQueryParams>,
 ) -> Response {
-    let _ = (state, order_id);
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let _ = subject;
-    success_items(ctx, Vec::<serde_json::Value>::new(), 1, 1)
+    let query = match OrderOwnerEventListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &subject.user_id,
+        &order_id,
+        params.page,
+        params.page_size,
+    ) {
+        Ok(query) => query,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.list_owner_order_events(query).await {
+        Ok(page) => {
+            let page_params = offset_list_page_params_from_query(page.page, page.page_size);
+            let mapped = page.items.into_iter().map(map_order_event).collect();
+            success_items(ctx, mapped, page.total, page_params)
+        }
+        Err(error) => map_service_error(ctx, error),
+    }
 }
 
 async fn cancel_order(
@@ -466,13 +563,14 @@ async fn cancel_order(
         Err(message) => return unauthorized(ctx, message),
     };
     let cancel_reason = body.as_ref().and_then(|body| body.cancel_reason.clone());
-    let _ = body.as_ref().and_then(|body| body.cancel_type.clone());
-    let command = match CancelOwnerOrderCommand::new(
+    let cancel_type = body.as_ref().and_then(|body| body.cancel_type.clone());
+    let command = match CancelOwnerOrderCommand::with_cancel_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
         &order_id,
         cancel_reason.as_deref(),
+        cancel_type.as_deref(),
     ) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
@@ -480,9 +578,56 @@ async fn cancel_order(
 
     match state.store.cancel_owner_order(command.clone()).await {
         Ok(()) => match state.payments.cancel_owner_order_payments(command).await {
-            Ok(()) => success_command(ctx, ()),
+            Ok(()) => success_command(
+                ctx,
+                Some(order_id.clone()),
+                Some("cancelled".to_string()),
+            ),
             Err(error) => map_service_error(ctx, error),
         },
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn list_order_payments(
+    State(state): State<AppOrderState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Path(order_id): Path<String>,
+    Query(params): Query<OrderPaymentListQueryParams>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match app_runtime_subject_from_extension(runtime_context) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
+    let (page_number, page_size) = match sdkwork_order_service::validation::offset_list_params(
+        params.page,
+        params.page_size,
+    ) {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    let query = match PaymentRecordOrderListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &subject.user_id,
+        &order_id,
+    ) {
+        Ok(query) => query.with_paging((page_number - 1) * page_size, page_size),
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.payment_records.list_payment_records_by_order(query).await {
+        Ok(page) => {
+            let page_params = offset_list_page_params_from_query(page_number, page_size);
+            let items = page
+                .items
+                .into_iter()
+                .map(map_order_payment_record)
+                .collect::<Vec<_>>();
+            success_items(ctx, items, page.total_items, page_params)
+        }
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -491,6 +636,7 @@ async fn pay_order(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
     Path(order_id): Path<String>,
     body: Option<Json<PayOrderRequest>>,
 ) -> Response {
@@ -499,17 +645,36 @@ async fn pay_order(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let payment_method = body
-        .as_ref()
-        .and_then(|body| body.payment_method.clone())
-        .unwrap_or_else(|| "wechat_pay".to_owned());
-    let _ = body.as_ref().and_then(|body| body.payment_password.clone());
-    let command = match PayOwnerOrderCommand::new(
+    let body = body.map(|Json(value)| value).unwrap_or(PayOrderRequest {
+        payment_method: None,
+        payment_password: None,
+    });
+    let payment_method = match validate_payment_method(body.payment_method()) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
+    let write_headers = match validate_app_write_payload(
+        ctx,
+        &headers,
+        "orders.pay",
+        &body,
+        |idempotency_key| format!("pay-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let callback_payload = body
+        .payment_password()
+        .map(|password| format!(r#"{{"paymentPassword":"{password}"}}"#));
+    let command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
         &order_id,
         &payment_method,
+        callback_payload,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
     ) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
@@ -533,7 +698,7 @@ async fn create_order(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let write_headers = match required_app_write_command_headers(&headers, |idempotency_key| {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
         fallback_order_request_no(&subject, &body.checkout_session_id, idempotency_key)
     }) {
         Ok(value) => value,
@@ -551,6 +716,7 @@ async fn create_order(
         Err(error) => return map_service_error(ctx, error),
     };
     if let Err(response) = ensure_request_hash_matches(
+        ctx,
         &checkout_owner_order_request_hash(&command),
         &write_headers.request_hash,
     ) {
@@ -561,13 +727,6 @@ async fn create_order(
         Ok(outcome) => success_item(ctx, map_create_order(outcome)),
         Err(error) => map_service_error(ctx, error),
     }
-}
-
-async fn unavailable_command(
-    request_context: Option<Extension<WebRequestContext>>,
-) -> Response {
-    let ctx = request_context.as_ref().map(|value| &value.0);
-    not_implemented(ctx, "commerce order command store is not configured")
 }
 
 fn map_create_order(value: CreateOwnerOrderOutcome) -> CreateOrderResponse {
@@ -587,6 +746,20 @@ fn map_pay_outcome(value: PayOwnerOrderOutcome) -> OrderPaymentParamsResponse {
         payment_id: value.payment_id,
         payment_method: value.payment_method,
         payment_params: value.payment_params,
+    }
+}
+
+fn map_order_event(value: OrderOwnerEventView) -> OrderEventResponse {
+    OrderEventResponse {
+        event_id: value.event_id,
+        order_id: value.order_id,
+        event_type: value.event_type,
+        from_status: value.from_status,
+        to_status: value.to_status,
+        actor_type: value.actor_type,
+        actor_id: value.actor_id,
+        message: value.message,
+        created_at: value.created_at,
     }
 }
 
@@ -658,6 +831,40 @@ fn format_order_status_name(status: &str) -> String {
     }
 }
 
+fn map_order_payment_record(value: PaymentRecordItem) -> OrderPaymentRecordResponse {
+    let status = map_order_payment_status_code(&value.status);
+    OrderPaymentRecordResponse {
+        payment_id: value.id,
+        order_id: value.order_id,
+        out_trade_no: value.order_no,
+        payment_method: value.method,
+        amount: value.amount.as_str().to_owned(),
+        created_at: value.date,
+        status: status.to_owned(),
+        status_name: format_order_payment_status_name(status),
+    }
+}
+
+fn map_order_payment_status_code(status: &str) -> &'static str {
+    match status.trim().to_ascii_lowercase().as_str() {
+        "success" | "succeeded" | "paid" => "SUCCESS",
+        "failed" => "FAILED",
+        "timeout" => "TIMEOUT",
+        "closed" | "canceled" | "cancelled" => "CLOSED",
+        _ => "PENDING",
+    }
+}
+
+fn format_order_payment_status_name(status: &str) -> String {
+    match status {
+        "SUCCESS" => "Success".to_owned(),
+        "FAILED" => "Failed".to_owned(),
+        "TIMEOUT" => "Timeout".to_owned(),
+        "CLOSED" => "Closed".to_owned(),
+        _ => "Pending".to_owned(),
+    }
+}
+
 fn fallback_order_request_no(
     subject: &AppRuntimeSubject,
     checkout_session_id: &str,
@@ -698,6 +905,13 @@ impl CommerceOrderStore for SqliteCommerceOrderStore {
             )
             .await
         })
+    }
+
+    fn list_owner_order_events<'a>(
+        &'a self,
+        query: OrderOwnerEventListQuery,
+    ) -> CommerceOrderFuture<'a, OrderOwnerEventPage> {
+        Box::pin(async move { self.list_owner_order_events(query).await })
     }
 
     fn cancel_owner_order<'a>(
@@ -746,6 +960,13 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         })
     }
 
+    fn list_owner_order_events<'a>(
+        &'a self,
+        query: OrderOwnerEventListQuery,
+    ) -> CommerceOrderFuture<'a, OrderOwnerEventPage> {
+        Box::pin(async move { self.list_owner_order_events(query).await })
+    }
+
     fn cancel_owner_order<'a>(
         &'a self,
         command: CancelOwnerOrderCommand,
@@ -790,5 +1011,23 @@ impl OwnerOrderPaymentStore for PostgresCommerceOwnerOrderPaymentStore {
         command: CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()> {
         Box::pin(async move { self.cancel_owner_order_payments(command).await })
+    }
+}
+
+impl OrderPaymentRecordStore for SqliteCommercePaymentRecordStore {
+    fn list_payment_records_by_order<'a>(
+        &'a self,
+        query: PaymentRecordOrderListQuery,
+    ) -> CommerceOrderFuture<'a, PaymentRecordOrderListPage> {
+        Box::pin(async move { self.list_payment_records_by_order(query).await })
+    }
+}
+
+impl OrderPaymentRecordStore for PostgresCommercePaymentRecordStore {
+    fn list_payment_records_by_order<'a>(
+        &'a self,
+        query: PaymentRecordOrderListQuery,
+    ) -> CommerceOrderFuture<'a, PaymentRecordOrderListPage> {
+        Box::pin(async move { self.list_payment_records_by_order(query).await })
     }
 }

@@ -101,10 +101,11 @@ describe("sdkwork-order-pc-order intl", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "\u8ba2\u5355\u4e2d\u5fc3",
+        name: "\u8d26\u5355\u4e0e\u62a5\u8868",
+        level: 1,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "\u8d26\u5355\u5386\u53f2" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "\u8d26\u5355\u660e\u7ec6" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "\u5168\u90e8" })).toBeInTheDocument();
 
     fireEvent.click(
@@ -189,8 +190,8 @@ describe("sdkwork-order-pc-order intl", () => {
       </SdkworkThemeProvider>,
     );
 
-    expect(screen.getByText("Total orders")).toBeInTheDocument();
-    expect(screen.getByText("Pending payment")).toBeInTheDocument();
+    expect(screen.getByText("Total Bills")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
   });
 
   it("lets standalone order components consume Chinese copy through the intl provider", () => {
@@ -211,7 +212,7 @@ describe("sdkwork-order-pc-order intl", () => {
       </SdkworkThemeProvider>,
     );
 
-    expect(screen.getAllByText("\u8ba2\u5355\u603b\u91cf").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("\u8d26\u5355\u603b\u6570").length).toBeGreaterThan(0);
     expect(screen.getAllByText("\u5f85\u652f\u4ed8").length).toBeGreaterThan(0);
   });
 });

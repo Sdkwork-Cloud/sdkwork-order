@@ -85,7 +85,8 @@ describe("sdkwork-order-pc-order page", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: /order center/i,
+        name: "Bills & Reports",
+        level: 1,
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("Pro Monthly")).toBeInTheDocument();

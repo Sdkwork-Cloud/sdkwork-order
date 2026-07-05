@@ -3,8 +3,9 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_utils_rust::{
-    PageInfo, PageMode, SdkWorkApiResponse, SdkWorkPageData, SdkWorkProblemDetail,
-    SdkWorkResourceData, SdkWorkResultCode,
+    offset_list_page_info, offset_list_page_params_from_values, validated_offset_list_params,
+    OffsetListPageParams, PageInfo, SdkWorkApiResponse, SdkWorkCommandData, SdkWorkPageData,
+    SdkWorkProblemDetail, SdkWorkResourceData, SdkWorkResultCode, MAX_LIST_PAGE_SIZE,
 };
 use sdkwork_web_core::WebRequestContext;
 
@@ -15,6 +16,7 @@ pub fn resolve_trace_id(context: Option<&WebRequestContext>) -> String {
         .unwrap_or_else(|| sdkwork_utils_rust::uuid())
 }
 
+/// 单资源响应：`{ code: 0, data: { item }, traceId }`。
 pub fn success_item<T: serde::Serialize>(
     context: Option<&WebRequestContext>,
     item: T,
@@ -24,38 +26,83 @@ pub fn success_item<T: serde::Serialize>(
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
 }
 
-pub fn success_command<T: serde::Serialize>(
+/// 命令响应：`{ code: 0, data: { accepted: true, resourceId?, status? }, traceId }`。
+pub fn success_command(
     context: Option<&WebRequestContext>,
-    accepted: T,
+    resource_id: Option<String>,
+    status: Option<String>,
 ) -> Response {
     let trace_id = resolve_trace_id(context);
-    let envelope = SdkWorkApiResponse::success(accepted, trace_id.clone());
+    let payload = SdkWorkCommandData {
+        accepted: true,
+        resource_id,
+        status,
+    };
+    let envelope = SdkWorkApiResponse::success(payload, trace_id.clone());
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
 }
 
+/// 标准偏移分页列表响应：`{ code: 0, data: { items, pageInfo: { mode: 'offset', ... } }, traceId }`。
+/// `total_items` 为本次过滤后的总条数，`page`/`page_size` 来自 `OffsetListPageParams`。
 pub fn success_items<T: serde::Serialize>(
     context: Option<&WebRequestContext>,
     items: Vec<T>,
-    page: i64,
-    page_size: i64,
+    total_items: i64,
+    params: OffsetListPageParams,
 ) -> Response {
     let trace_id = resolve_trace_id(context);
-    let envelope = SdkWorkApiResponse::success(
-        SdkWorkPageData {
-            items,
-            page_info: PageInfo {
-                mode: PageMode::Offset,
-                page: Some(page as i32),
-                page_size: Some(page_size as i32),
-                total_items: None,
-                total_pages: None,
-                next_cursor: None,
-                has_more: None,
-            },
-        },
-        trace_id.clone(),
-    );
+    let page_data: SdkWorkPageData<T> = SdkWorkPageData {
+        items,
+        page_info: offset_list_page_info(total_items, params),
+    };
+    let envelope = SdkWorkApiResponse::success(page_data, trace_id.clone());
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
+}
+
+/// 已知 `PageInfo` 的列表响应（适用于 cursor 模式或自定义偏移元数据）。
+pub fn success_items_with_page_info<T: serde::Serialize>(
+    context: Option<&WebRequestContext>,
+    items: Vec<T>,
+    page_info: PageInfo,
+) -> Response {
+    let trace_id = resolve_trace_id(context);
+    let page_data = SdkWorkPageData { items, page_info };
+    let envelope = SdkWorkApiResponse::success(page_data, trace_id.clone());
+    attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
+}
+
+pub fn offset_list_page_params_from_query(page: i64, page_size: i64) -> OffsetListPageParams {
+    offset_list_page_params_from_values(page, page_size)
+}
+
+/// 解析标准 `page` / `page_size` 查询参数；非法值返回 400 而非静默 clamp。
+pub fn parse_offset_list_params_validated(
+    context: Option<&WebRequestContext>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+) -> Result<OffsetListPageParams, Response> {
+    validated_offset_list_params(page, page_size).map_err(|_| {
+        validation(
+            context,
+            format!(
+                "page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"
+            ),
+        )
+    })
+}
+
+/// 解析标准 `page` / `page_size` 查询参数为 `OffsetListPageParams`，统一 clamp 到 `[1, 200]`。
+/// 仅用于已校验或测试场景；列表 handler 应使用 `parse_offset_list_params_validated`。
+pub fn parse_offset_list_params(page: Option<i64>, page_size: Option<i64>) -> OffsetListPageParams {
+    OffsetListPageParams::parse(page, page_size)
+}
+
+/// 校验 `page_size` 不超过 `MAX_LIST_PAGE_SIZE`（200），超出返回 `INVALID_PARAMETER`。
+pub fn validate_page_size(
+    context: Option<&WebRequestContext>,
+    page_size: Option<i64>,
+) -> Result<i64, Response> {
+    parse_offset_list_params_validated(context, Some(1), page_size).map(|params| params.page_size)
 }
 
 pub fn map_service_error(
@@ -74,14 +121,24 @@ pub fn map_service_error(
             SdkWorkResultCode::NotFound,
             error.message().to_string(),
         ),
-        "conflict" | "invalid-state" | "unsupported-capability" => (
+        "conflict" | "unsupported-capability" => (
             StatusCode::CONFLICT,
             SdkWorkResultCode::Conflict,
+            error.message().to_string(),
+        ),
+        "invalid-state" => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            SdkWorkResultCode::UnprocessableEntity,
             error.message().to_string(),
         ),
         "unauthenticated" | "unauthorized" => (
             StatusCode::UNAUTHORIZED,
             SdkWorkResultCode::AuthenticationRequired,
+            error.message().to_string(),
+        ),
+        "forbidden" => (
+            StatusCode::FORBIDDEN,
+            SdkWorkResultCode::PermissionRequired,
             error.message().to_string(),
         ),
         _ => (
@@ -102,6 +159,16 @@ pub fn unauthorized(context: Option<&WebRequestContext>, detail: impl Into<Strin
         trace_id.clone(),
     );
     attach_trace_header((StatusCode::UNAUTHORIZED, Json(problem)).into_response(), &trace_id)
+}
+
+pub fn forbidden(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
+    let trace_id = resolve_trace_id(context);
+    let problem = SdkWorkProblemDetail::platform(
+        SdkWorkResultCode::PermissionRequired,
+        detail,
+        trace_id.clone(),
+    );
+    attach_trace_header((StatusCode::FORBIDDEN, Json(problem)).into_response(), &trace_id)
 }
 
 pub fn validation(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
@@ -134,6 +201,22 @@ pub fn not_found(context: Option<&WebRequestContext>, detail: impl Into<String>)
     attach_trace_header((StatusCode::NOT_FOUND, Json(problem)).into_response(), &trace_id)
 }
 
+pub fn unprocessable_entity(
+    context: Option<&WebRequestContext>,
+    detail: impl Into<String>,
+) -> Response {
+    let trace_id = resolve_trace_id(context);
+    let problem = SdkWorkProblemDetail::platform(
+        SdkWorkResultCode::UnprocessableEntity,
+        detail,
+        trace_id.clone(),
+    );
+    attach_trace_header(
+        (StatusCode::UNPROCESSABLE_ENTITY, Json(problem)).into_response(),
+        &trace_id,
+    )
+}
+
 pub fn not_implemented(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     let trace_id = resolve_trace_id(context);
     let problem = SdkWorkProblemDetail::platform(
@@ -156,4 +239,42 @@ fn attach_trace_header(response: Response, trace_id: &str) -> Response {
         );
     }
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn success_items_uses_offset_page_info_with_total_items() {
+        let params = OffsetListPageParams::parse(Some(2), Some(10));
+        let response = success_items(None, vec!["a".to_string()], 45, params);
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn validate_page_size_rejects_zero_and_over_max() {
+        assert!(validate_page_size(None, Some(0)).is_err());
+        assert!(validate_page_size(None, Some(201)).is_err());
+        assert!(validate_page_size(None, Some(200)).is_ok());
+        assert!(validate_page_size(None, Some(1)).is_ok());
+    }
+
+    #[test]
+    fn forbidden_response_returns_403() {
+        let response = forbidden(None, "no access");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn unprocessable_entity_response_returns_422() {
+        let response = unprocessable_entity(None, "invalid state");
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn success_command_returns_accepted_payload() {
+        let response = success_command(None, Some("order-1".to_string()), Some("cancelled".to_string()));
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }

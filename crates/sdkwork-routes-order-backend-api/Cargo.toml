@@ -18,10 +18,15 @@ sdkwork_order_repository_sqlx.workspace = true
 sdkwork_order_service.workspace = true
 sdkwork_iam_context_service.workspace = true
 sdkwork_order_service_host.workspace = true
-sdkwork_database_sqlx.workspace = true
+sdkwork-database-sqlx.workspace = true
 sdkwork-web-core.workspace = true
 sdkwork-web-axum.workspace = true
 sdkwork-web-bootstrap.workspace = true
 sdkwork-iam-web-adapter.workspace = true
 sdkwork-utils-rust.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }
+tower = { workspace = true }
+sdkwork_order_repository_sqlx = { workspace = true, features = ["test-support"] }

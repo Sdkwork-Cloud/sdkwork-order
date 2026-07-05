@@ -1,27 +1,16 @@
-use axum::Extension;
 use sdkwork_iam_context_service::IamAppContext;
 
 #[derive(Debug, Clone)]
-pub(crate) struct AppRuntimeSubject {
+pub(crate) struct BackendOperatorScope {
     pub tenant_id: String,
     pub organization_id: Option<String>,
-    pub user_id: String,
 }
 
-pub(crate) fn app_runtime_subject_from_extension(
-    context: Option<Extension<IamAppContext>>,
-) -> Result<AppRuntimeSubject, String> {
-    let Some(Extension(context)) = context else {
-        return Err("authenticated runtime context is required".to_owned());
-    };
-    app_runtime_subject_from_iam(&context)
-}
-
-pub(crate) fn app_runtime_subject_from_iam(
+pub(crate) fn backend_operator_scope_from_iam(
     context: &IamAppContext,
-) -> Result<AppRuntimeSubject, String> {
+) -> Result<BackendOperatorScope, String> {
     let tenant_id = required_context_text(&context.tenant_id, "tenant_id")?;
-    let user_id = required_context_text(&context.user_id, "user_id")?;
+    let _user_id = required_context_text(&context.user_id, "user_id")?;
     let organization_id = context
         .organization_id
         .as_deref()
@@ -29,10 +18,9 @@ pub(crate) fn app_runtime_subject_from_iam(
         .filter(|value| !value.is_empty())
         .map(str::to_owned);
 
-    Ok(AppRuntimeSubject {
+    Ok(BackendOperatorScope {
         tenant_id,
         organization_id,
-        user_id,
     })
 }
 

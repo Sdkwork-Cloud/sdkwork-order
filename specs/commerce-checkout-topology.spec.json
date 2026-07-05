@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.commerce.checkout.topology",
+  "domain": "commerce",
+  "capabilities": {
+    "order": {
+      "repository": "sdkwork-order",
+      "role": "unified-order-center",
+      "owns": [
+        "commerce_order",
+        "commerce_order_item",
+        "commerce_order_amount_breakdown",
+        "commerce_order_event",
+        "commerce_order_cancellation",
+        "commerce_recharge_package",
+        "checkout sessions and product checkout"
+      ],
+      "appApiPrefixes": [
+        "/app/v3/api/orders",
+        "/app/v3/api/recharges",
+        "/app/v3/api/checkout"
+      ],
+      "backendApiPrefixes": [
+        "/backend/v3/api/orders"
+      ]
+    },
+    "payment": {
+      "repository": "sdkwork-payment",
+      "role": "payment-executor",
+      "owns": [
+        "commerce_payment_intent",
+        "commerce_payment_attempt",
+        "commerce_payment_record",
+        "commerce_refund",
+        "commerce_payment_provider_account",
+        "commerce_payment_channel",
+        "commerce_payment_webhook_event"
+      ],
+      "appApiPrefixes": [
+        "/app/v3/api/payments"
+      ],
+      "backendApiPrefixes": [
+        "/backend/v3/api/payments"
+      ]
+    }
+  },
+  "dependencyDirection": "order -> payment (in-process OwnerOrderPaymentStore; HTTP for standalone gateways)",
+  "fulfillmentCallbacks": [
+    {
+      "trigger": "payment.ownerOrders.confirmations.create",
+      "caller": "sdkwork-payment",
+      "target": "POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
+      "owner": "sdkwork-order",
+      "subjects": ["points_recharge"]
+    }
+  ],
+  "cashier": {
+    "urlBuilder": "sdkwork-utils-rust::build_commerce_cashier_url",
+    "baseUrlEnv": "SDKWORK_COMMERCE_CASHIER_BASE_URL",
+    "defaultBaseUrl": "https://im.sdkwork.com/cashier",
+    "queryParams": ["scene", "orderId", "outTradeNo"],
+    "orderIdWire": "business order_no (orderSn), not internal UUID",
+    "paymentParamsKeys": ["cashierUrl", "nextAction", "orderSn", "cashierScene", "qrCodePayload"]
+  },
+  "clientSurfaces": {
+    "pc": {
+      "orderCenter": {
+        "standalone": "apps/sdkwork-order-pc",
+        "composed": ["sdkwork-mall-pc-checkout", "sdkwork-account-pc-wallet"],
+        "sdk": "@sdkwork/order-app-sdk"
+      },
+      "cashier": {
+        "primary": "sdkwork-payment-pc or host shell route /cashier",
+        "sdk": "@sdkwork/payment-app-sdk"
+      }
+    },
+    "h5": {
+      "orderCenter": "@sdkwork/order-app-sdk via Capacitor/WeChat-H5 shell",
+      "cashier": "shared H5 cashier route; deep-link from paymentParams.cashierUrl"
+    },
+    "flutter": {
+      "orderCenter": "Dart facade over order open-api (generated or composed)",
+      "cashier": "WebView or native bridge to payment-app-sdk cashier surface"
+    }
+  },
+  "canonicalFlows": {
+    "productCheckout": [
+      "checkout.sessions.create",
+      "checkout.orders.create",
+      "orders.pay",
+      "paymentParams.cashierUrl -> cashier UI",
+      "payment confirmation -> shipment/fulfillment"
+    ],
+    "pointsRecharge": [
+      "recharges.orders.create",
+      "orders.pay",
+      "paymentParams.cashierUrl -> cashier UI",
+      "payments.ownerOrders.confirmations.create",
+      "orders.pointsRecharge.fulfillments.create",
+      "account ledger credit"
+    ]
+  },
+  "forbidden": [
+    "payment provider HTTP in order routes",
+    "insert commerce_order in payment repository",
+    "raw HTTP to order/payment APIs from app packages (use composed SDKs)"
+  ]
+}

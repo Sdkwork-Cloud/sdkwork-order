@@ -12,22 +12,10 @@ pub use points_recharge_fulfillment::{
     POINTS_RECHARGE_FULFILLMENT_STORE,
 };
 
-use crate::{CreateOrderCommand, OrderDetailQuery, OrderListQuery, PaidOrderReference};
-use sdkwork_contract_service::CommerceServiceError;
-
-pub trait OrderRepositoryPort {
-    fn create_order(
-        &self,
-        command: &CreateOrderCommand,
-    ) -> Result<PaidOrderReference, CommerceServiceError>;
-
-    fn retrieve_order(
-        &self,
-        query: &OrderDetailQuery,
-    ) -> Result<Option<PaidOrderReference>, CommerceServiceError>;
-
-    fn list_orders(&self, query: &OrderListQuery) -> Result<Vec<String>, CommerceServiceError>;
-}
-
+/// 仓储端口标识符，用于 `CommerceServiceContract` 能力注册。
+///
+/// 实际仓储抽象由 `SqliteCommerceOrderStore` / `PostgresCommerceOrderStore` 通过
+/// 路由层枚举适配器（`BackendOrderAdminStore` / `AppAfterSalesState`）提供，
+/// 无需额外的同步 trait 抽象层。
 pub const ORDER_REPOSITORY_PORT: &str = "order.repository";
 pub const IDEMPOTENCY_REPOSITORY_PORT: &str = "idempotency.repository";

@@ -1,0 +1,642 @@
+{
+  "openapi": "3.1.2",
+  "info": {
+    "title": "SDKWork Order Backend API",
+    "version": "1.0.0",
+    "description": "Backend/admin contract for SDKWork commerce order governance, lifecycle operations, and points-recharge fulfillment.",
+    "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+    "x-sdkwork-sdk-family": "sdkwork-order-backend-sdk",
+    "x-sdkwork-owner": "sdkwork-order"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Gateway-mounted backend API"
+    }
+  ],
+  "tags": [
+    {
+      "name": "orders",
+      "description": "Order admin read and lifecycle commands."
+    },
+    {
+      "name": "fulfillments",
+      "description": "Points recharge fulfillment commands."
+    }
+  ],
+  "paths": {
+    "/backend/v3/api/orders": {
+      "get": {
+        "operationId": "orders.admin.list",
+        "summary": "List orders for operator review",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Free-text search across order identifiers and subject."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int64", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int64", "minimum": 1, "maximum": 200, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "type": "object",
+                      "required": ["data"],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["items", "pageInfo"],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/OrderSummary" }
+                            },
+                            "pageInfo": { "$ref": "#/components/schemas/PageInfo" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/cancellations": {
+      "get": {
+        "operationId": "orders.admin.cancellations.list",
+        "summary": "List order cancellation audit records",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int64", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int64", "minimum": 1, "maximum": 200, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "type": "object",
+                      "required": ["data"],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["items", "pageInfo"],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/OrderCancellation" }
+                            },
+                            "pageInfo": { "$ref": "#/components/schemas/PageInfo" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/{orderId}": {
+      "get": {
+        "operationId": "orders.admin.retrieve",
+        "summary": "Retrieve order detail for operator review",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "type": "object",
+                      "required": ["data"],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["item"],
+                          "properties": {
+                            "item": { "$ref": "#/components/schemas/OrderDetail" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/cancel": {
+      "post": {
+        "operationId": "orders.admin.cancel",
+        "summary": "Cancel an order from the admin surface",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CancelOrderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancel accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/close": {
+      "post": {
+        "operationId": "orders.admin.close",
+        "summary": "Close an order from the admin surface",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CloseOrderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Close accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/events": {
+      "get": {
+        "operationId": "orders.admin.events.list",
+        "summary": "List order lifecycle events",
+        "tags": ["orders"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int64", "minimum": 1, "default": 1 }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int64", "minimum": 1, "maximum": 200, "default": 20 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order event list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "type": "object",
+                      "required": ["data"],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["items", "pageInfo"],
+                          "properties": {
+                            "items": {
+                              "type": "array",
+                              "items": { "$ref": "#/components/schemas/OrderEvent" }
+                            },
+                            "pageInfo": { "$ref": "#/components/schemas/PageInfo" }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    },
+    "/backend/v3/api/orders/{orderId}/points_recharge/fulfillments": {
+      "post": {
+        "operationId": "orders.pointsRecharge.fulfillments.create",
+        "summary": "Mark payment succeeded (optional) and fulfill a points recharge order",
+        "tags": ["fulfillments"],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreatePointsRechargeFulfillmentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fulfillment accepted",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+              }
+            }
+          }
+        },
+        "security": [{ "AuthToken": [], "AccessToken": [] }]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "AuthToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "SDKWork auth token carried as Authorization: Bearer <auth_token>."
+      },
+      "AccessToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Access-Token",
+        "description": "SDKWork access isolation token."
+      }
+    },
+    "schemas": {
+      "SdkWorkApiResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "data", "traceId"],
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "enum": [0],
+            "default": 0,
+            "minimum": 0,
+            "maximum": 0
+          },
+          "data": {
+            "description": "Operation-specific payload typed per response schema."
+          },
+          "traceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Server-owned request correlation id."
+          }
+        }
+      },
+      "SdkWorkCommandData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accepted"],
+        "properties": {
+          "accepted": { "type": "boolean", "const": true },
+          "resourceId": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      },
+      "SdkWorkCommandResponse": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+          {
+            "type": "object",
+            "required": ["data"],
+            "properties": {
+              "data": { "$ref": "#/components/schemas/SdkWorkCommandData" }
+            }
+          }
+        ]
+      },
+      "PageInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mode"],
+        "properties": {
+          "mode": { "type": "string", "enum": ["offset", "cursor"] },
+          "page": { "type": "integer", "minimum": 1 },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 200 },
+          "totalItems": { "type": "string", "pattern": "^[0-9]+$" },
+          "totalPages": { "type": "integer", "minimum": 0 },
+          "nextCursor": { "type": ["string", "null"] },
+          "hasMore": { "type": "boolean" }
+        }
+      },
+      "SdkWorkPlatformErrorCode": {
+        "type": "integer",
+        "format": "int32",
+        "minimum": 40001,
+        "maximum": 79999,
+        "description": "Platform or domain error code per API_SPEC.md section 15.3."
+      },
+      "ProblemDetail": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["type", "title", "status", "code", "traceId"],
+        "properties": {
+          "type": { "type": "string", "format": "uri-reference" },
+          "title": { "type": "string" },
+          "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+          "detail": { "type": "string" },
+          "instance": { "type": "string" },
+          "code": { "$ref": "#/components/schemas/SdkWorkPlatformErrorCode" },
+          "traceId": { "type": "string", "format": "uuid" },
+          "errors": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FieldError" }
+          }
+        }
+      },
+      "FieldError": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "message"],
+        "properties": {
+          "field": { "type": "string" },
+          "message": { "type": "string" },
+          "code": { "type": "integer", "format": "int32", "minimum": 40011, "maximum": 40099 }
+        }
+      },
+      "OrderSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "orderSn",
+          "status",
+          "statusName",
+          "subject",
+          "totalAmount",
+          "quantity",
+          "createdAt"
+        ],
+        "properties": {
+          "orderId": { "type": "string" },
+          "orderSn": { "type": "string" },
+          "status": { "type": "string" },
+          "statusName": { "type": "string" },
+          "subject": { "type": "string" },
+          "totalAmount": { "type": "string" },
+          "paidAmount": { "type": "string" },
+          "discountAmount": { "type": "string" },
+          "quantity": { "type": "integer", "format": "int64" },
+          "createdAt": { "type": "string" },
+          "payTime": { "type": "string" },
+          "expireTime": { "type": "string" },
+          "paymentMethod": { "type": "string" }
+        }
+      },
+      "OrderItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "productName", "quantity", "unitPrice", "totalAmount"],
+        "properties": {
+          "id": { "type": "string" },
+          "productName": { "type": "string" },
+          "quantity": { "type": "integer", "format": "int64" },
+          "unitPrice": { "type": "string" },
+          "totalAmount": { "type": "string" }
+        }
+      },
+      "OrderDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/OrderSummary" },
+          {
+            "type": "object",
+            "required": ["items"],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/OrderItem" }
+              },
+              "outTradeNo": { "type": "string" },
+              "transactionId": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "OrderEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "eventType", "toStatus", "actorType", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "eventType": { "type": "string" },
+          "fromStatus": { "type": "string" },
+          "toStatus": { "type": "string" },
+          "actorType": { "type": "string" },
+          "actorId": { "type": "string" },
+          "message": { "type": "string" },
+          "createdAt": { "type": "string" }
+        }
+      },
+      "OrderCancellation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "orderId", "status", "reasonCode", "createdAt"],
+        "properties": {
+          "id": { "type": "string" },
+          "orderId": { "type": "string" },
+          "status": { "type": "string" },
+          "reasonCode": { "type": "string" },
+          "reasonMessage": { "type": "string" },
+          "createdAt": { "type": "string" }
+        }
+      },
+      "CancelOrderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": { "type": "string" },
+          "cancelType": { "type": "string" }
+        }
+      },
+      "CloseOrderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": { "type": "string" },
+          "closeType": { "type": "string" }
+        }
+      },
+      "CreatePointsRechargeFulfillmentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requestNo"],
+        "properties": {
+          "requestNo": { "type": "string" },
+          "idempotencyKey": { "type": "string" },
+          "paidAt": { "type": "string" },
+          "ownerUserId": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, Query, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
@@ -11,14 +10,21 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
-    OrderCancellationView, OrderManagementDetailQuery, OrderManagementEventListQuery,
-    OrderManagementEventView, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
+    OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
+    OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
+    OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
 };
 use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
-use crate::subject::{app_runtime_subject_from_extension, app_runtime_subject_from_iam};
+use crate::api_response::{
+    conflict as api_conflict, forbidden as api_forbidden, map_service_error, not_found as api_not_found,
+    offset_list_page_params_from_query, success_command, success_item, success_items,
+    unauthorized as api_unauthorized, validation,
+};
+use crate::subject::backend_operator_scope_from_iam;
 
 /// Permission codes enforced on the backend order admin API surface.
 ///
@@ -68,22 +74,21 @@ struct CancellationListParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CancelOrderBody {
     reason: Option<String>,
+    /// 取消类型，例如 `user_request`、`admin_operation`、`system_timeout`。
+    /// 透传到 `CancelManagementOrderCommand::with_cancel_type` 用于审计与事件溯源。
+    cancel_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CloseOrderBody {
     reason: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct BackendOrderApiResult<T: Serialize> {
-    code: String,
-    msg: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<T>,
+    /// 关闭类型，例如 `timeout`、`manual`、`risk_control`。
+    /// 透传到 `CloseManagementOrderCommand::with_close_type` 用于审计与事件溯源。
+    close_type: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -187,7 +192,7 @@ impl BackendOrderAdminStore {
     async fn list_management_orders(
         &self,
         query: OrderManagementListQuery,
-    ) -> Result<Vec<OrderOwnerSummary>, CommerceServiceError> {
+    ) -> Result<OrderManagementListPage, CommerceServiceError> {
         match self {
             Self::Postgres(store) => store.list_management_orders(query).await,
             Self::Sqlite(store) => store.list_management_orders(query).await,
@@ -227,7 +232,7 @@ impl BackendOrderAdminStore {
     async fn list_management_order_events(
         &self,
         query: OrderManagementEventListQuery,
-    ) -> Result<Vec<OrderManagementEventView>, CommerceServiceError> {
+    ) -> Result<OrderManagementEventPage, CommerceServiceError> {
         match self {
             Self::Postgres(store) => store.list_management_order_events(query).await,
             Self::Sqlite(store) => store.list_management_order_events(query).await,
@@ -237,7 +242,7 @@ impl BackendOrderAdminStore {
     async fn list_order_cancellations(
         &self,
         query: OrderCancellationListQuery,
-    ) -> Result<Vec<OrderCancellationView>, CommerceServiceError> {
+    ) -> Result<OrderCancellationPage, CommerceServiceError> {
         match self {
             Self::Postgres(store) => store.list_order_cancellations(query).await,
             Self::Sqlite(store) => store.list_order_cancellations(query).await,
@@ -248,9 +253,11 @@ impl BackendOrderAdminStore {
 async fn list_orders(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
     Query(params): Query<OrderListParams>,
 ) -> Response {
-    let subject = match require_backend_subject(runtime_context, permissions::READ) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -263,26 +270,31 @@ async fn list_orders(
         params.page_size,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_error(error.message()),
+        Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.list_management_orders(query).await {
-        Ok(items) => ok_json(
-            items
-                .into_iter()
-                .map(map_order_summary)
-                .collect::<Vec<_>>(),
-        ),
-        Err(error) => storage_error(error),
+    match state.store.list_management_orders(query.clone()).await {
+        Ok(page) => {
+            let page_params = offset_list_page_params_from_query(query.page, query.page_size);
+            success_items(
+                ctx,
+                page.items.into_iter().map(map_order_summary).collect(),
+                page.total,
+                page_params,
+            )
+        }
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn retrieve_order(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
     Path(order_id): Path<String>,
 ) -> Response {
-    let subject = match require_backend_subject(runtime_context, permissions::READ) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -292,77 +304,85 @@ async fn retrieve_order(
         &order_id,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_error(error.message()),
+        Err(error) => return validation(ctx, error.message()),
     };
 
     match state.store.retrieve_management_order(query).await {
-        Ok(Some(detail)) => ok_json(map_order_detail(detail)),
-        Ok(None) => not_found("order not found"),
-        Err(error) => storage_error(error),
+        Ok(Some(detail)) => success_item(ctx, map_order_detail(detail)),
+        Ok(None) => api_not_found(ctx, "order not found"),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn cancel_order(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
     Path(order_id): Path<String>,
     Json(body): Json<CancelOrderBody>,
 ) -> Response {
-    let subject = match require_backend_subject(runtime_context, permissions::MANAGE) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_subject(ctx, runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
-    let command = match CancelManagementOrderCommand::new(
+    let command = match CancelManagementOrderCommand::with_cancel_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &order_id,
         body.reason.as_deref(),
+        body.cancel_type.as_deref(),
     ) {
         Ok(command) => command,
-        Err(error) => return validation_error(error.message()),
+        Err(error) => return validation(ctx, error.message()),
     };
 
     match state.store.cancel_management_order(command).await {
-        Ok(()) => ok_json(serde_json::json!({ "orderId": order_id, "status": "cancelled" })),
-        Err(error) if error.code() == "conflict" => conflict(error.message().to_owned()),
-        Err(error) => storage_error(error),
+        Ok(()) => success_command(ctx, Some(order_id), Some("cancelled".to_owned())),
+        Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn close_order(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
     Path(order_id): Path<String>,
     Json(body): Json<CloseOrderBody>,
 ) -> Response {
-    let subject = match require_backend_subject(runtime_context, permissions::MANAGE) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_subject(ctx, runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
-    let command = match CloseManagementOrderCommand::new(
+    let command = match CloseManagementOrderCommand::with_close_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &order_id,
         body.reason.as_deref(),
+        body.close_type.as_deref(),
     ) {
         Ok(command) => command,
-        Err(error) => return validation_error(error.message()),
+        Err(error) => return validation(ctx, error.message()),
     };
 
     match state.store.close_management_order(command).await {
-        Ok(()) => ok_json(serde_json::json!({ "orderId": order_id, "status": "closed" })),
-        Err(error) if error.code() == "conflict" => conflict(error.message().to_owned()),
-        Err(error) => storage_error(error),
+        Ok(()) => success_command(ctx, Some(order_id), Some("closed".to_owned())),
+        Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn list_order_events(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
     Path(order_id): Path<String>,
     Query(params): Query<OrderEventListParams>,
 ) -> Response {
-    let subject = match require_backend_subject(runtime_context, permissions::READ) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -374,21 +394,31 @@ async fn list_order_events(
         params.page_size,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_error(error.message()),
+        Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.list_management_order_events(query).await {
-        Ok(items) => ok_json(items.into_iter().map(map_order_event).collect::<Vec<_>>()),
-        Err(error) => storage_error(error),
+    match state.store.list_management_order_events(query.clone()).await {
+        Ok(page) => {
+            let page_params = offset_list_page_params_from_query(query.page, query.page_size);
+            success_items(
+                ctx,
+                page.items.into_iter().map(map_order_event).collect(),
+                page.total,
+                page_params,
+            )
+        }
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
 async fn list_cancellations(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
+    request_context: Extension<WebRequestContext>,
     Query(params): Query<CancellationListParams>,
 ) -> Response {
-    let subject = match require_backend_subject(runtime_context, permissions::READ) {
+    let ctx = Some(&request_context.0);
+    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -400,36 +430,31 @@ async fn list_cancellations(
         params.page_size,
     ) {
         Ok(query) => query,
-        Err(error) => return validation_error(error.message()),
+        Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.list_order_cancellations(query).await {
-        Ok(items) => ok_json(
-            items
-                .into_iter()
-                .map(map_order_cancellation)
-                .collect::<Vec<_>>(),
-        ),
-        Err(error) => storage_error(error),
+    match state.store.list_order_cancellations(query.clone()).await {
+        Ok(page) => {
+            let page_params = offset_list_page_params_from_query(query.page, query.page_size);
+            success_items(
+                ctx,
+                page.items.into_iter().map(map_order_cancellation).collect(),
+                page.total,
+                page_params,
+            )
+        }
+        Err(error) => map_service_error(ctx, error),
     }
 }
 
-/// Authorizes the caller against the backend order admin API surface.
-///
-/// The caller must:
-/// 1. Be a member of an organization (`can_access_backend_api()`), since the
-///    backend API is gated to organization- scoped sessions, not personal app
-///    sessions.
-/// 2. Hold the required permission code in their `permission_scope`.
-///
-/// Returns the resolved [`AppRuntimeSubject`] on success, or an HTTP error
-/// response ready to be returned from the handler.
 fn require_backend_subject(
+    ctx: Option<&WebRequestContext>,
     context: IamAppContext,
     required_permission: &str,
-) -> Result<crate::subject::AppRuntimeSubject, Response> {
+) -> Result<crate::subject::BackendOperatorScope, Response> {
     if !context.can_access_backend_api() {
-        return Err(forbidden(
+        return Err(api_forbidden(
+            ctx,
             "backend api access requires an organization-scoped session",
         ));
     }
@@ -441,98 +466,15 @@ fn require_backend_subject(
             required_permission,
             "backend order admin permission denied"
         );
-        return Err(forbidden(&format!(
-            "missing required permission: {required_permission}"
-        )));
+        return Err(api_forbidden(
+            ctx,
+            format!("missing required permission: {required_permission}"),
+        ));
     }
-    match app_runtime_subject_from_iam(&context) {
+    match backend_operator_scope_from_iam(&context) {
         Ok(subject) => Ok(subject),
-        Err(message) => Err(unauthorized(message)),
+        Err(message) => Err(api_unauthorized(ctx, message)),
     }
-}
-
-fn ok_json<T: Serialize>(data: T) -> Response {
-    (
-        StatusCode::OK,
-        Json(BackendOrderApiResult {
-            code: "0".to_owned(),
-            msg: "ok".to_owned(),
-            data: Some(data),
-        }),
-    )
-        .into_response()
-}
-
-fn unauthorized(message: String) -> Response {
-    (
-        StatusCode::UNAUTHORIZED,
-        Json(BackendOrderApiResult::<()> {
-            code: "4010".to_owned(),
-            msg: message.into(),
-            data: None,
-        }),
-    )
-        .into_response()
-}
-
-fn forbidden(message: impl Into<String>) -> Response {
-    (
-        StatusCode::FORBIDDEN,
-        Json(BackendOrderApiResult::<()> {
-            code: "4030".to_owned(),
-            msg: message.into(),
-            data: None,
-        }),
-    )
-        .into_response()
-}
-
-fn not_found(message: &str) -> Response {
-    (
-        StatusCode::NOT_FOUND,
-        Json(BackendOrderApiResult::<()> {
-            code: "4040".to_owned(),
-            msg: message.to_owned(),
-            data: None,
-        }),
-    )
-        .into_response()
-}
-
-fn validation_error(message: impl Into<String>) -> Response {
-    (
-        StatusCode::BAD_REQUEST,
-        Json(BackendOrderApiResult::<()> {
-            code: "4000".to_owned(),
-            msg: message.into(),
-            data: None,
-        }),
-    )
-        .into_response()
-}
-
-fn conflict(message: String) -> Response {
-    (
-        StatusCode::CONFLICT,
-        Json(BackendOrderApiResult::<()> {
-            code: "4090".to_owned(),
-            msg: message.into(),
-            data: None,
-        }),
-    )
-        .into_response()
-}
-
-fn storage_error(error: CommerceServiceError) -> Response {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        Json(BackendOrderApiResult::<()> {
-            code: "5000".to_owned(),
-            msg: error.message().to_owned(),
-            data: None,
-        }),
-    )
-        .into_response()
 }
 
 fn map_order_summary(value: OrderOwnerSummary) -> OrderSummaryResponse {

@@ -9,7 +9,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::Router;
 use sdkwork_order_gateway_assembly::assemble_application_router;
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_web_bootstrap::{

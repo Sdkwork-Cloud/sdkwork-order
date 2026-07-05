@@ -31,6 +31,21 @@ const problemResponses = {
 
 const security = [{ AuthToken: [], AccessToken: [] }];
 
+const offsetPaginationParameters = [
+  {
+    name: "page",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 1, default: 1 },
+  },
+  {
+    name: "page_size",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 1, maximum: 200, default: 20 },
+  },
+];
+
 const extension = (resource) => ({
   "x-sdkwork-owner": "sdkwork-order",
   "x-sdkwork-api-authority": "sdkwork-order-app-api",
@@ -38,7 +53,6 @@ const extension = (resource) => ({
   "x-sdkwork-resource": resource,
   "x-sdkwork-request-context": "WebRequestContext",
   "x-sdkwork-api-surface": "app-api",
-  "x-sdkwork-server-request-id": true,
 });
 
 function problemResponse(description) {
@@ -52,13 +66,13 @@ function problemResponse(description) {
   };
 }
 
-function successResponse() {
+function envelopeResponse(schemaRef) {
   return {
     200: {
       description: "Success",
       content: {
         "application/json": {
-          schema: { $ref: "#/components/schemas/CommerceApiResult" },
+          schema: { $ref: schemaRef },
         },
       },
     },
@@ -66,12 +80,31 @@ function successResponse() {
   };
 }
 
-function getOperation(summary, operationId, resource, extra = {}) {
+function listResponses() {
+  return envelopeResponse("#/components/schemas/SdkWorkListResponse");
+}
+
+function resourceResponses() {
+  return envelopeResponse("#/components/schemas/SdkWorkResourceResponse");
+}
+
+function commandResponses() {
+  return envelopeResponse("#/components/schemas/SdkWorkCommandResponse");
+}
+
+function getOperation(summary, operationId, resource, extra = {}, envelope = "resource") {
+  const responses =
+    envelope === "list"
+      ? listResponses()
+      : envelope === "command"
+        ? commandResponses()
+        : resourceResponses();
+
   return {
     tags: ["recharges"],
     summary,
     operationId,
-    responses: successResponse(),
+    responses,
     security,
     ...extension(resource),
     ...extra,
@@ -84,7 +117,8 @@ const rechargePaths = {
       "Recharges packages list.",
       "recharges.packages.list",
       "recharges.packages",
-      { parameters: [] },
+      { parameters: offsetPaginationParameters },
+      "list",
     ),
   },
   "/app/v3/api/recharges/settings": {
@@ -93,74 +127,88 @@ const rechargePaths = {
       "recharges.settings.retrieve",
       "recharges.settings",
       { parameters: [] },
+      "resource",
     ),
   },
   "/app/v3/api/recharges/orders": {
-    get: getOperation("Recharges orders list.", "recharges.orders.list", "recharges.orders", {
-      parameters: [
-        {
-          name: "status",
-          in: "query",
-          required: false,
-          schema: { type: "string" },
-        },
-        {
-          name: "page",
-          in: "query",
-          required: false,
-          schema: { type: "integer", minimum: 1, default: 1 },
-        },
-        {
-          name: "page_size",
-          in: "query",
-          required: false,
-          schema: { type: "integer", minimum: 1, maximum: 200, default: 20 },
-        },
-      ],
-    }),
-    post: getOperation("Recharges orders create.", "recharges.orders.create", "recharges.orders", {
-      parameters: [],
-      requestBody: {
-        required: true,
-        content: {
-          "application/json": {
-            schema: { $ref: "#/components/schemas/RechargeOrderCreateCommand" },
+    get: getOperation(
+      "Recharges orders list.",
+      "recharges.orders.list",
+      "recharges.orders",
+      {
+        parameters: [
+          {
+            name: "status",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+          },
+          ...offsetPaginationParameters,
+        ],
+      },
+      "list",
+    ),
+    post: getOperation(
+      "Recharges orders create.",
+      "recharges.orders.create",
+      "recharges.orders",
+      {
+        parameters: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/RechargeOrderCreateCommand" },
+            },
           },
         },
       },
-    }),
+      "resource",
+    ),
   },
   "/app/v3/api/recharges/orders/{orderId}": {
-    get: getOperation("Recharges orders retrieve.", "recharges.orders.retrieve", "recharges.orders", {
-      parameters: [
-        {
-          name: "orderId",
-          in: "path",
-          required: true,
-          schema: { type: "string" },
-        },
-      ],
-    }),
+    get: getOperation(
+      "Recharges orders retrieve.",
+      "recharges.orders.retrieve",
+      "recharges.orders",
+      {
+        parameters: [
+          {
+            name: "orderId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+      },
+      "resource",
+    ),
   },
   "/app/v3/api/recharges/orders/{orderId}/cancel": {
-    post: getOperation("Recharges orders cancel.", "recharges.orders.cancel", "recharges.orders", {
-      parameters: [
-        {
-          name: "orderId",
-          in: "path",
-          required: true,
-          schema: { type: "string" },
-        },
-      ],
-      requestBody: {
-        required: false,
-        content: {
-          "application/json": {
-            schema: { $ref: "#/components/schemas/CommerceOperationCommand" },
+    post: getOperation(
+      "Recharges orders cancel.",
+      "recharges.orders.cancel",
+      "recharges.orders",
+      {
+        parameters: [
+          {
+            name: "orderId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/CommerceOperationCommand" },
+            },
           },
         },
       },
-    }),
+      "command",
+    ),
   },
 };
 
@@ -184,6 +232,8 @@ function patchSpec(spec) {
       currencyCode: { type: "string" },
       packageId: { type: "string" },
       source: { type: "string" },
+      paymentMethod: { type: "string" },
+      paymentPassword: { type: "string" },
     },
   };
 
