@@ -57,10 +57,18 @@ mod tests {
     #[test]
     fn builds_app_runtime_subject_from_web_request_context() {
         let context = WebRequestContext {
-            request_id: ServerRequestId::new("test-request"),
+            request_id: ServerRequestId("test-request".to_owned()),
             api_surface: WebApiSurface::AppApi,
             auth_mode: WebAuthMode::DualToken,
-            transport: WebTransportFacts::default(),
+            transport: WebTransportFacts {
+                path: "/app/v3/api/memberships/orders".to_owned(),
+                method: "POST".to_owned(),
+                auth_token_present: true,
+                access_token_present: true,
+                api_key_present: false,
+                oauth_bearer_present: false,
+                agent_token_present: false,
+            },
             principal: Some(
                 WebRequestPrincipal::builder()
                     .tenant_id("100001")
