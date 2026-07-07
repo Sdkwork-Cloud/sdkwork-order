@@ -348,11 +348,19 @@ CREATE TABLE IF NOT EXISTS commerce_payment_method (
     tenant_id TEXT NOT NULL,
     organization_id TEXT,
     method_key TEXT NOT NULL,
-    provider TEXT,
+    display_name TEXT NOT NULL,
+    provider_code TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
-    sort_weight INTEGER DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    scope TEXT NOT NULL DEFAULT 'tenant',
+    currency_code TEXT NOT NULL DEFAULT 'CNY',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    request_no TEXT,
+    idempotency_key TEXT NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT
 );
 
 INSERT OR IGNORE INTO commerce_product_spu (
@@ -380,7 +388,11 @@ INSERT OR IGNORE INTO membership_package (
 );
 
 INSERT OR IGNORE INTO commerce_payment_method (
-    id, tenant_id, organization_id, method_key, provider, status, sort_weight, created_at, updated_at
+    id, tenant_id, organization_id, method_key, display_name, provider_code, status,
+    sort_order, scope, currency_code, metadata, request_no, idempotency_key, version,
+    created_at, updated_at
 ) VALUES (
-    'pm-wechat', '100001', '0', 'wechat_pay', 'wechat_pay', 'active', 1, datetime('now'), datetime('now')
+    'pm-wechat', '100001', '0', 'wechat_pay', 'WeChat Pay', 'wechat_pay', 'active',
+    1, 'tenant', 'CNY', '{}', 'seed-payment-method-wechat-pay',
+    'seed-payment-method-wechat-pay', 0, datetime('now'), datetime('now')
 );

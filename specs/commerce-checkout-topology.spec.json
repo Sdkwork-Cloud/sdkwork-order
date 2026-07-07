@@ -13,8 +13,17 @@
         "commerce_order_event",
         "commerce_order_cancellation",
         "commerce_recharge_package",
+        "commerce_account_value_package",
+        "commerce_token_bank_plan",
+        "commerce_order_refund_request",
+        "commerce_order_withdrawal_request",
         "checkout sessions and product checkout",
-        "PSP payment webhook ingestion and payment settlement orchestration"
+        "PSP payment webhook ingestion and payment settlement orchestration",
+        "Token Bank recharge and plan purchase orchestration",
+        "account value package orders",
+        "coupon redemption orders",
+        "refund requests",
+        "withdrawal requests"
       ],
       "appApiPrefixes": [
         "/app/v3/api/orders",
@@ -34,6 +43,7 @@
         "commerce_payment_attempt",
         "commerce_payment_record",
         "commerce_refund",
+        "commerce_payout",
         "commerce_payment_provider_account",
         "commerce_payment_channel",
         "commerce_payment_webhook_event"
@@ -46,7 +56,7 @@
       ]
     }
   },
-  "dependencyDirection": "order -> payment (in-process OwnerOrderPaymentStore and PaymentWebhookStore); order -> account (AccountPointsCreditPort for points_recharge); order -> membership (MembershipPurchaseFulfillmentPort wired at OrderServiceHost); payment MUST NOT depend on order; membership MUST NOT depend on order service crates or insert commerce_order in production",
+  "dependencyDirection": "order -> payment (OwnerOrderPaymentStore, PaymentWebhookStore, provider refund executor, provider payout executor); order -> account (AccountValueLedgerPort for points, token_bank, cash holds, settlement, release, and reversal); order -> membership (MembershipPurchaseFulfillmentPort wired at OrderServiceHost); payment MUST NOT depend on order service crates; payment MUST NOT depend on account; membership MUST NOT depend on order service crates or insert commerce_order in production",
   "paymentSettlement": {
     "webhookOwner": "order",
     "webhookRoute": "POST /app/v3/api/orders/payments/webhooks/{providerCode}",
@@ -59,6 +69,41 @@
       "subject": "points_recharge",
       "handler": "PointsRechargeFulfillmentStore + AccountPointsCreditPort",
       "status": "complete"
+    },
+    {
+      "subject": "token_bank_recharge",
+      "handler": "AccountValueLedgerPort credit asset_code=token_bank",
+      "status": "active-contract"
+    },
+    {
+      "subject": "token_bank_plan_purchase",
+      "handler": "TokenBankPlanOrderStore + AccountValueLedgerPort first-cycle grant asset_code=token_bank",
+      "status": "active-contract"
+    },
+    {
+      "subject": "token_bank_plan_renewal",
+      "handler": "TokenBankPlanOrderStore + AccountValueLedgerPort renewal grant asset_code=token_bank",
+      "status": "active-contract"
+    },
+    {
+      "subject": "account_recharge_package",
+      "handler": "AccountValuePackageStore + AccountValueLedgerPort target asset credit",
+      "status": "active-contract"
+    },
+    {
+      "subject": "coupon_recharge",
+      "handler": "CouponRedemptionPort + AccountValueLedgerPort target asset credit",
+      "status": "active-contract"
+    },
+    {
+      "subject": "refund_request",
+      "handler": "OrderRefundRequestStore + AccountValueLedgerPort reversal hold + PaymentRefundExecutorPort",
+      "status": "active-contract"
+    },
+    {
+      "subject": "cash_withdrawal",
+      "handler": "OrderWithdrawalRequestStore + AccountValueLedgerPort cash hold + PaymentPayoutExecutorPort",
+      "status": "active-contract"
     },
     {
       "subject": "product",
@@ -126,6 +171,52 @@
       "PSP webhook -> order payments webhooks",
       "order in-process settlement -> account ledger credit"
     ],
+    "tokenBankRecharge": [
+      "recharges.orders.create subject=token_bank_recharge",
+      "orders.pay",
+      "paymentParams.cashierUrl -> cashier UI",
+      "PSP webhook -> order payments webhooks",
+      "order in-process settlement -> account ledger credit asset_code=token_bank"
+    ],
+    "tokenBankPlanPurchase": [
+      "recharges.plans.list",
+      "recharges.orders.create subject=token_bank_plan_purchase",
+      "orders.pay",
+      "PSP webhook -> order payments webhooks",
+      "order settlement -> Token Bank first-cycle grant"
+    ],
+    "tokenBankPlanRenewal": [
+      "renewal scheduler creates subject=token_bank_plan_renewal",
+      "orders.pay or provider agreement charge",
+      "provider callback -> order payment settlement",
+      "order settlement -> Token Bank renewal grant"
+    ],
+    "accountRechargePackage": [
+      "recharges.packages.list",
+      "recharges.orders.create subject=account_recharge_package",
+      "orders.pay",
+      "order settlement -> account target asset credit"
+    ],
+    "couponRecharge": [
+      "recharges.orders.create subject=coupon_recharge",
+      "coupon validation and redemption evidence snapshot",
+      "optional mixed-payment orders.pay",
+      "order settlement -> account target asset credit"
+    ],
+    "refundRequest": [
+      "orders.refundRequests.create references original order",
+      "order -> account reversal hold",
+      "order -> payment provider refund execution",
+      "provider refund success -> account reversal commit",
+      "provider refund failure -> account hold release"
+    ],
+    "cashWithdrawal": [
+      "withdrawals.requests.create",
+      "order -> account cash hold",
+      "order -> payment provider payout execution",
+      "provider payout success -> account hold settlement",
+      "provider payout failure -> account hold release"
+    ],
     "membershipPurchase": [
       "memberships.orders.create",
       "orders.pay",
@@ -140,6 +231,11 @@
     "insert commerce_order in payment repository",
     "insert commerce_order in membership repository (production; standalone demo exception only)",
     "membership Rust crate dependency on sdkwork-order-service",
-    "raw HTTP to order/payment APIs from app packages (use composed SDKs)"
+    "raw HTTP to order/payment APIs from app packages (use composed SDKs)",
+    "direct account SQL writes",
+    "payment-owned recharge routes",
+    "payment-to-account ledger writes",
+    "account-owned recharge/refund/withdrawal orchestration",
+    "naked token account naming"
   ]
 }
