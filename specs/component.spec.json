@@ -9,6 +9,11 @@
   },
   "localExtensionSpecs": [
     {
+      "file": "ACCOUNT_VALUE_ORDER_SPEC.md",
+      "path": "specs/ACCOUNT_VALUE_ORDER_SPEC.md",
+      "purpose": "Order-owned recharge, Token Bank plan, coupon redemption, refund, and withdrawal orchestration."
+    },
+    {
       "file": "RECHARGE_ORDER_SPEC.md",
       "path": "specs/RECHARGE_ORDER_SPEC.md",
       "purpose": "Unified orders and recharge domain ownership."

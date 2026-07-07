@@ -136,3 +136,83 @@ test("payment webhook spec declares order ownership", () => {
   );
   assert.ok(spec.forbidden.some((entry) => entry.includes("sdkwork-payment")));
 });
+
+test("account value order specs define order orchestration boundary", () => {
+  const accountValueSpecPath = path.join(
+    repoRoot,
+    "specs/ACCOUNT_VALUE_ORDER_SPEC.md",
+  );
+  assert.ok(
+    fs.existsSync(accountValueSpecPath),
+    "ACCOUNT_VALUE_ORDER_SPEC.md must define account-value order ownership",
+  );
+
+  const accountValueSpec = fs.readFileSync(accountValueSpecPath, "utf8");
+  const rechargeSpec = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, "specs/commerce-recharge.spec.json"), "utf8"),
+  );
+  const topology = JSON.parse(
+    fs.readFileSync(
+      path.join(repoRoot, "specs/commerce-checkout-topology.spec.json"),
+      "utf8",
+    ),
+  );
+
+  assert.match(
+    accountValueSpec,
+    /Recharge, coupon redemption, refund, and withdrawal orchestration belong to `sdkwork-order`/,
+  );
+  assert.match(
+    accountValueSpec,
+    /`sdkwork-payment` executes provider payment, refund, and payout channels only/,
+  );
+  assert.match(
+    accountValueSpec,
+    /`sdkwork-account` is the ledger truth source/,
+  );
+
+  assert.deepEqual(rechargeSpec.accountValueOrder, {
+    owner: "sdkwork-order",
+    paymentExecutor: "sdkwork-payment",
+    ledgerExecutor: "sdkwork-account",
+    directPaymentToAccountDependencyAllowed: false,
+    subjects: [
+      "points_recharge",
+      "token_bank_recharge",
+      "token_bank_plan_purchase",
+      "token_bank_plan_renewal",
+      "account_recharge_package",
+      "coupon_recharge",
+      "refund_request",
+      "cash_withdrawal",
+    ],
+  });
+
+  for (const forbidden of [
+    "direct account SQL writes",
+    "payment-owned recharge routes",
+    "payment-to-account ledger writes",
+    "naked token account naming",
+  ]) {
+    assert.ok(
+      rechargeSpec.forbidden.includes(forbidden) ||
+        topology.forbidden.includes(forbidden),
+      `${forbidden} must be forbidden by order specs`,
+    );
+  }
+
+  for (const subject of [
+    "token_bank_recharge",
+    "token_bank_plan_purchase",
+    "token_bank_plan_renewal",
+    "account_recharge_package",
+    "coupon_recharge",
+    "refund_request",
+    "cash_withdrawal",
+  ]) {
+    assert.ok(
+      topology.subjectFulfillment.some((entry) => entry.subject === subject),
+      `${subject} must declare an order-owned fulfillment path`,
+    );
+  }
+});

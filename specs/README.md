@@ -1,12 +1,13 @@
 # sdkwork-order Component Specs
 
-Local specification index for the order capability (unified `commerce_order`, including recharge).
+Local specification index for the order capability (unified `commerce_order`, including account value orders).
 
 ## Spec map
 
 | Document | Purpose |
 | --- | --- |
 | [component.spec.json](./component.spec.json) | Workspace manifest |
+| [ACCOUNT_VALUE_ORDER_SPEC.md](./ACCOUNT_VALUE_ORDER_SPEC.md) | Order-owned Token Bank recharge, plans, coupon redemption, refund, and withdrawal orchestration |
 | [RECHARGE_ORDER_SPEC.md](./RECHARGE_ORDER_SPEC.md) | Recharge packages, recharge orders, unified order center |
 | [commerce-recharge.spec.json](./commerce-recharge.spec.json) | Machine-readable recharge contract + migration from payment |
 | [commerce-checkout-topology.spec.json](./commerce-checkout-topology.spec.json) | Order ↔ payment dependency and checkout flows |

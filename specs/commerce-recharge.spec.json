@@ -10,12 +10,50 @@
     "commerce_order_amount_breakdown",
     "commerce_order_event",
     "commerce_order_cancellation",
-    "commerce_recharge_package"
+    "commerce_recharge_package",
+    "commerce_account_value_package",
+    "commerce_token_bank_plan",
+    "commerce_order_refund_request",
+    "commerce_order_withdrawal_request"
   ],
   "orderSubjects": {
     "points_recharge": {
       "fulfillment": "account-backend-adjustment",
       "paymentRequired": true
+    },
+    "token_bank_recharge": {
+      "fulfillment": "account-token-bank-credit",
+      "targetAsset": "token_bank",
+      "paymentRequired": true
+    },
+    "token_bank_plan_purchase": {
+      "fulfillment": "account-token-bank-plan-grant",
+      "targetAsset": "token_bank",
+      "paymentRequired": true
+    },
+    "token_bank_plan_renewal": {
+      "fulfillment": "account-token-bank-plan-renewal-grant",
+      "targetAsset": "token_bank",
+      "paymentRequired": true
+    },
+    "account_recharge_package": {
+      "fulfillment": "account-target-asset-credit",
+      "paymentRequired": true
+    },
+    "coupon_recharge": {
+      "fulfillment": "coupon-redemption-plus-account-credit",
+      "paymentRequired": "optional"
+    },
+    "refund_request": {
+      "fulfillment": "account-reversal-plus-provider-refund",
+      "paymentRequired": false,
+      "providerRefundRequired": true
+    },
+    "cash_withdrawal": {
+      "fulfillment": "account-cash-hold-plus-provider-payout",
+      "targetAsset": "cash",
+      "paymentRequired": false,
+      "providerPayoutRequired": true
     },
     "product": {
       "fulfillment": "shipment",
@@ -25,6 +63,22 @@
       "fulfillment": "account-or-entitlement",
       "paymentRequired": true
     }
+  },
+  "accountValueOrder": {
+    "owner": "sdkwork-order",
+    "paymentExecutor": "sdkwork-payment",
+    "ledgerExecutor": "sdkwork-account",
+    "directPaymentToAccountDependencyAllowed": false,
+    "subjects": [
+      "points_recharge",
+      "token_bank_recharge",
+      "token_bank_plan_purchase",
+      "token_bank_plan_renewal",
+      "account_recharge_package",
+      "coupon_recharge",
+      "refund_request",
+      "cash_withdrawal"
+    ]
   },
   "ownedApiPrefixes": {
     "app": [
@@ -43,7 +97,12 @@
       "recharges.orders.create",
       "recharges.orders.retrieve",
       "recharges.orders.list",
-      "recharges.orders.cancel"
+      "recharges.orders.cancel",
+      "recharges.plans.list",
+      "orders.refundRequests.create",
+      "orders.refundRequests.list",
+      "withdrawals.requests.create",
+      "withdrawals.requests.retrieve"
     ],
     "orders": [
       "orders.list",
@@ -56,13 +115,13 @@
   "upstreamDependencies": [
     {
       "capability": "payment",
-      "purpose": "Payment intent and refund execution for existing orderId"
+      "purpose": "Payment intent, provider refund, and provider payout execution for existing order-owned records"
     }
   ],
   "downstreamConsumers": [
     {
       "capability": "account",
-      "purpose": "Ledger adjustments on virtual fulfillment"
+      "purpose": "Idempotent ledger credit, debit, hold, settlement, release, and reversal commands"
     },
     {
       "capability": "account-pc-wallet",
@@ -96,7 +155,12 @@
   "forbidden": [
     "payment provider HTTP in order routes",
     "direct writes to commerce_account ledger",
-    "recharge order creation in payment repository (target state)"
+    "recharge order creation in payment repository (target state)",
+    "direct account SQL writes",
+    "payment-owned recharge routes",
+    "payment-to-account ledger writes",
+    "account-owned recharge/refund/withdrawal orchestration",
+    "naked token account naming"
   ],
   "sdkPortsExtension": {
     "file": "apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports/src/index.ts",
@@ -238,6 +302,19 @@
       "deliverables": [
         "removed POST /backend/v3/api/orders/{orderId}/points_recharge/fulfillments",
         "OrderSubjectKind dispatch in settle_owner_order_after_payment_success"
+      ]
+    },
+    {
+      "id": "O15",
+      "title": "Account value orders for Token Bank, package, coupon, refund, and withdrawal",
+      "status": "active-contract",
+      "blockedBy": ["O14"],
+      "deliverables": [
+        "specs/ACCOUNT_VALUE_ORDER_SPEC.md",
+        "commerce_account_value_package",
+        "commerce_token_bank_plan",
+        "commerce_order_refund_request",
+        "commerce_order_withdrawal_request"
       ]
     }
   ],
