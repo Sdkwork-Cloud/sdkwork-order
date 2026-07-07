@@ -203,6 +203,7 @@ describe("sdkwork-order-pc-order service", () => {
       expect.objectContaining({
         idempotencyKey: expect.any(String),
         sdkworkRequestHash: expect.any(String),
+        xIdempotencyFingerprint: expect.any(String),
       }),
       expect.objectContaining({ cancelReason: "Switched plan" }),
     );
@@ -212,6 +213,7 @@ describe("sdkwork-order-pc-order service", () => {
       expect.objectContaining({
         idempotencyKey: expect.any(String),
         sdkworkRequestHash: expect.any(String),
+        xIdempotencyFingerprint: expect.any(String),
       }),
     );
   });

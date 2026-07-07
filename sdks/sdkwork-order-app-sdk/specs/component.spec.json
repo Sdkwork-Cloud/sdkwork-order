@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-app-sdk",
+    "displayName": "SDKWork Order App SDK",
+    "version": "0.1.0",
+    "type": "sdk-family",
+    "root": "sdks/sdkwork-order-app-sdk",
+    "domain": "commerce",
+    "capability": "order-app-sdk",
+    "surface": "app-api",
+    "status": "standardized",
+    "languages": [
+      "typescript"
+    ],
+    "generated": true,
+    "private": false,
+    "manifests": [
+      ".sdkwork-assembly.json",
+      "sdk-manifest.json"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "SDK_SPEC.md",
+      "path": "../../../sdkwork-specs/SDK_SPEC.md",
+      "purpose": "SDK family naming, generation, dependency, and consumer integration rules."
+    },
+    {
+      "file": "SDK_WORKSPACE_GENERATION_SPEC.md",
+      "path": "../../../sdkwork-specs/SDK_WORKSPACE_GENERATION_SPEC.md",
+      "purpose": "SDK workspace layout, authority OpenAPI, derived input, and generated output rules."
+    },
+    {
+      "file": "APP_SDK_INTEGRATION_SPEC.md",
+      "path": "../../../sdkwork-specs/APP_SDK_INTEGRATION_SPEC.md",
+      "purpose": "App SDK consumer facade and dependency SDK integration rules."
+    },
+    {
+      "file": "API_SPEC.md",
+      "path": "../../../sdkwork-specs/API_SPEC.md",
+      "purpose": "OpenAPI authority, API surface, schema, and SDK-generation contract rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "SDK generation, contract, and workspace verification rules."
+    }
+  ],
+  "sdk": {
+    "family": "sdkwork-order-app-sdk",
+    "authority": "sdkwork-order-app-api",
+    "sdkOwner": "sdkwork-order",
+    "apiPrefix": "/app/v3/api",
+    "packageName": "@sdkwork/order-app-sdk",
+    "sdkName": "sdkwork-order-app-sdk",
+    "sdkType": "app",
+    "sdkSurface": "app",
+    "generatedOutput": "sdkwork-order-app-sdk-typescript/generated/server-openapi",
+    "standardProfile": "sdkwork-v3"
+  },
+  "contracts": {
+    "apiAuthority": {
+      "name": "sdkwork-order-app-api",
+      "owner": "sdkwork-order",
+      "prefix": "/app/v3/api",
+      "authorityOpenApi": "openapi/sdkwork-order-app-api.openapi.json",
+      "derivedOpenApi": [
+        "openapi/sdkwork-order-app-api.sdkgen.json"
+      ],
+      "standard": "../../../sdkwork-specs/SDK_SPEC.md"
+    },
+    "publicExports": [],
+    "runtimeEntrypoints": [
+      ".sdkwork-assembly.json",
+      "sdk-manifest.json"
+    ],
+    "routeManifest": null,
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "sdkClients": [
+      "SdkworkAppClient"
+    ],
+    "events": [],
+    "configKeys": [
+      ".sdkwork-assembly.json",
+      "sdk-manifest.json"
+    ]
+  },
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardVersion": "2026-07-07"
+  }
+}

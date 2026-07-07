@@ -7,6 +7,7 @@ import type { MembershipOrderCreateCommand } from '../types';
 export interface MembershipsOrdersCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class MembershipsOrdersApi {
@@ -23,6 +24,7 @@ export class MembershipsOrdersApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );

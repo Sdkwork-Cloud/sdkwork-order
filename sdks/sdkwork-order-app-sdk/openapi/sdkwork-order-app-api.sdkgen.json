@@ -71,6 +71,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -294,6 +297,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -414,6 +420,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -650,6 +659,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -873,6 +885,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -1115,6 +1130,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -1359,6 +1377,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -1958,6 +1979,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -2228,6 +2252,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -2504,6 +2531,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -3760,6 +3790,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -3983,6 +4016,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -4095,6 +4131,9 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -5080,6 +5119,16 @@
           "minLength": 1
         },
         "description": "Stable digest of the canonical command payload; must match the request body and route params where applicable."
+      },
+      "WriteCommandIdempotencyFingerprint": {
+        "name": "X-Idempotency-Fingerprint",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": "Stable request-body fingerprint required by the SDKWork idempotency framework for write commands with a payload."
       }
     }
   },

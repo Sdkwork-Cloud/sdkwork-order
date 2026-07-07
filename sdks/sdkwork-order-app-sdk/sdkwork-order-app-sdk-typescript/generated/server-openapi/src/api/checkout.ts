@@ -7,6 +7,7 @@ import type { CommerceOperationCommand } from '../types';
 export interface CheckoutSessionsOrdersCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class CheckoutSessionsOrdersApi {
@@ -23,6 +24,7 @@ export class CheckoutSessionsOrdersApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -33,6 +35,7 @@ export class CheckoutSessionsOrdersApi {
 export interface CheckoutSessionsQuotesCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class CheckoutSessionsQuotesApi {
@@ -49,6 +52,7 @@ export class CheckoutSessionsQuotesApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -59,6 +63,7 @@ export class CheckoutSessionsQuotesApi {
 export interface CheckoutSessionsCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class CheckoutSessionsApi {
@@ -79,6 +84,7 @@ export class CheckoutSessionsApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );

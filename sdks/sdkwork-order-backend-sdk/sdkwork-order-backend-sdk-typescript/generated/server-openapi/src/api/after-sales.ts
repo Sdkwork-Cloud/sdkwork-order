@@ -7,6 +7,7 @@ import type { AfterSalesRequestSummary, PageInfo, ReviewAfterSalesRequest } from
 export interface AfterSalesReviewsCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class AfterSalesReviewsApi {
@@ -23,6 +24,7 @@ export class AfterSalesReviewsApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );

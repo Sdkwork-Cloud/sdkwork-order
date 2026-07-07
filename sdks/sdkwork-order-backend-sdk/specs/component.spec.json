@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-backend-sdk",
+    "displayName": "SDKWork Order Backend SDK",
+    "version": "0.1.0",
+    "type": "sdk-family",
+    "root": "sdks/sdkwork-order-backend-sdk",
+    "domain": "commerce",
+    "capability": "order-backend-sdk",
+    "surface": "backend-api",
+    "status": "standardized",
+    "languages": [
+      "typescript"
+    ],
+    "generated": true,
+    "private": false,
+    "manifests": [
+      ".sdkwork-assembly.json",
+      "sdk-manifest.json"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "SDK_SPEC.md",
+      "path": "../../../sdkwork-specs/SDK_SPEC.md",
+      "purpose": "SDK family naming, generation, dependency, and consumer integration rules."
+    },
+    {
+      "file": "SDK_WORKSPACE_GENERATION_SPEC.md",
+      "path": "../../../sdkwork-specs/SDK_WORKSPACE_GENERATION_SPEC.md",
+      "purpose": "SDK workspace layout, authority OpenAPI, derived input, and generated output rules."
+    },
+    {
+      "file": "APP_SDK_INTEGRATION_SPEC.md",
+      "path": "../../../sdkwork-specs/APP_SDK_INTEGRATION_SPEC.md",
+      "purpose": "Backend-admin SDK consumer facade and dependency SDK integration rules."
+    },
+    {
+      "file": "API_SPEC.md",
+      "path": "../../../sdkwork-specs/API_SPEC.md",
+      "purpose": "OpenAPI authority, API surface, schema, and SDK-generation contract rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "SDK generation, contract, and workspace verification rules."
+    }
+  ],
+  "sdk": {
+    "family": "sdkwork-order-backend-sdk",
+    "authority": "sdkwork-order-backend-api",
+    "sdkOwner": "sdkwork-order",
+    "apiPrefix": "/backend/v3/api",
+    "packageName": "@sdkwork/order-backend-sdk",
+    "sdkName": "sdkwork-order-backend-sdk",
+    "sdkType": "backend",
+    "sdkSurface": "backend-admin",
+    "generatedOutput": "sdkwork-order-backend-sdk-typescript/generated/server-openapi",
+    "standardProfile": "sdkwork-v3"
+  },
+  "contracts": {
+    "apiAuthority": {
+      "name": "sdkwork-order-backend-api",
+      "owner": "sdkwork-order",
+      "prefix": "/backend/v3/api",
+      "authorityOpenApi": "openapi/sdkwork-order-backend-api.openapi.json",
+      "derivedOpenApi": [
+        "openapi/sdkwork-order-backend-api.openapi.json"
+      ],
+      "standard": "../../../sdkwork-specs/SDK_SPEC.md"
+    },
+    "publicExports": [],
+    "runtimeEntrypoints": [
+      ".sdkwork-assembly.json",
+      "sdk-manifest.json"
+    ],
+    "routeManifest": null,
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "sdkClients": [
+      "SdkworkOrderBackendClient"
+    ],
+    "events": [],
+    "configKeys": [
+      ".sdkwork-assembly.json",
+      "sdk-manifest.json"
+    ]
+  },
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardVersion": "2026-07-07"
+  }
+}

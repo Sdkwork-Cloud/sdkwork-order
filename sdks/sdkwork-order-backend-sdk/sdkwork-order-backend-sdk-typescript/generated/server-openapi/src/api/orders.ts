@@ -7,6 +7,7 @@ import type { CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest,
 export interface OrdersPaymentConfirmationsCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class OrdersPaymentConfirmationsApi {
@@ -23,6 +24,7 @@ export class OrdersPaymentConfirmationsApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -88,11 +90,13 @@ export interface OrdersAdminListParams {
 export interface OrdersAdminCancelParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export interface OrdersAdminCloseParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class OrdersAdminApi {
@@ -129,6 +133,7 @@ export class OrdersAdminApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -141,6 +146,7 @@ export class OrdersAdminApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );

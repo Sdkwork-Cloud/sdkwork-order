@@ -175,6 +175,7 @@ fn build_cors_layer() -> CorsLayer {
             HeaderName::from_static("sdkwork-request-no"),
             HeaderName::from_static("traceparent"),
             HeaderName::from_static("tracestate"),
+            HeaderName::from_static("x-idempotency-fingerprint"),
             HeaderName::from_static("x-sdkwork-locale"),
         ])
         .allow_credentials(true)

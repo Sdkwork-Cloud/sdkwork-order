@@ -74,6 +74,7 @@ export class OrdersPaymentSuccessApi {
 export interface OrdersCancellationsCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class OrdersCancellationsApi {
@@ -90,6 +91,7 @@ export class OrdersCancellationsApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -129,16 +131,19 @@ export interface OrdersListParams {
 export interface OrdersCreateParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export interface OrdersPayParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export interface OrdersCancelParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 export class OrdersApi {
@@ -177,6 +182,7 @@ export class OrdersApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -194,6 +200,7 @@ export class OrdersApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -206,6 +213,7 @@ export class OrdersApi {
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
         'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );

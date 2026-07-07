@@ -63,8 +63,13 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
             entry?.$ref === "#/components/parameters/WriteCommandRequestHash" ||
             entry?.name === "Sdkwork-Request-Hash",
         );
+        const hasBodyFingerprint = params.some(
+          (entry) =>
+            entry?.$ref === "#/components/parameters/WriteCommandIdempotencyFingerprint" ||
+            entry?.name === "X-Idempotency-Fingerprint",
+        );
         assert.ok(
-          hasIdempotency && hasRequestHash,
+          hasIdempotency && hasRequestHash && hasBodyFingerprint,
           `${method.toUpperCase()} ${path} (${operation.operationId}) must declare write-command headers`,
         );
       }
@@ -101,6 +106,21 @@ test("order route manifests are exported from gateway assembly", () => {
     "utf8",
   );
   assert.match(assemblyLib, /order_contract_fallback_config/);
+});
+
+test("standalone gateway CORS allows SDK write-command headers", () => {
+  const mainRs = fs.readFileSync(
+    path.join(repoRoot, "crates/sdkwork-order-standalone-gateway/src/main.rs"),
+    "utf8",
+  );
+
+  for (const header of [
+    "idempotency-key",
+    "sdkwork-request-hash",
+    "x-idempotency-fingerprint",
+  ]) {
+    assert.match(mainRs, new RegExp(`from_static\\("${header}"\\)`));
+  }
 });
 
 test("payment webhook spec declares order ownership", () => {

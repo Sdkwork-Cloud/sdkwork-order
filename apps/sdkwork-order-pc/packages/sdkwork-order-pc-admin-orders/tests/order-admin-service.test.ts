@@ -51,6 +51,7 @@ describe("createOrderAdminService", () => {
     expect(headers).toMatchObject({
       idempotencyKey: expect.any(String),
       sdkworkRequestHash: expect.any(String),
+      xIdempotencyFingerprint: expect.any(String),
     });
     expect(body).toEqual({ reason: "operator cancel" });
   });

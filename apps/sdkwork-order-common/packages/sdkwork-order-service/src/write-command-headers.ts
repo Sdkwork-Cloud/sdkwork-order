@@ -3,6 +3,7 @@ import { uuid } from "@sdkwork/utils";
 export interface SdkworkWriteCommandHeaders {
   idempotencyKey: string;
   sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
 }
 
 function normalizeRequestHashPart(part: string): string {
@@ -70,9 +71,11 @@ export function createSdkworkWriteCommandHeaders(
   payload: unknown,
   idempotencyKey?: string,
 ): SdkworkWriteCommandHeaders {
+  const requestHash = stableJsonRequestHash(scope, payload);
   return {
     idempotencyKey: idempotencyKey ?? uuid(),
-    sdkworkRequestHash: stableJsonRequestHash(scope, payload),
+    sdkworkRequestHash: requestHash,
+    xIdempotencyFingerprint: requestHash,
   };
 }
 
@@ -137,9 +140,11 @@ export function createCheckoutSessionWriteHeaders(
   input: CheckoutSessionHashInput,
   idempotencyKey?: string,
 ): SdkworkWriteCommandHeaders {
+  const requestHash = checkoutSessionRequestHash(input);
   return {
     idempotencyKey: idempotencyKey ?? uuid(),
-    sdkworkRequestHash: checkoutSessionRequestHash(input),
+    sdkworkRequestHash: requestHash,
+    xIdempotencyFingerprint: requestHash,
   };
 }
 
@@ -147,9 +152,11 @@ export function createCheckoutQuoteWriteHeaders(
   input: CheckoutQuoteHashInput,
   idempotencyKey?: string,
 ): SdkworkWriteCommandHeaders {
+  const requestHash = checkoutQuoteRequestHash(input);
   return {
     idempotencyKey: idempotencyKey ?? uuid(),
-    sdkworkRequestHash: checkoutQuoteRequestHash(input),
+    sdkworkRequestHash: requestHash,
+    xIdempotencyFingerprint: requestHash,
   };
 }
 
@@ -157,8 +164,10 @@ export function createCheckoutOwnerOrderWriteHeaders(
   input: CheckoutOwnerOrderHashInput,
   idempotencyKey?: string,
 ): SdkworkWriteCommandHeaders {
+  const requestHash = checkoutOwnerOrderRequestHash(input);
   return {
     idempotencyKey: idempotencyKey ?? uuid(),
-    sdkworkRequestHash: checkoutOwnerOrderRequestHash(input),
+    sdkworkRequestHash: requestHash,
+    xIdempotencyFingerprint: requestHash,
   };
 }

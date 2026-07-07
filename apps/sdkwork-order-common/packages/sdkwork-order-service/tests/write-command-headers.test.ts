@@ -37,5 +37,6 @@ describe("write-command-headers", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
     expect(headers.sdkworkRequestHash.startsWith("orders.cancel-")).toBe(true);
+    expect(headers.xIdempotencyFingerprint).toBe(headers.sdkworkRequestHash);
   });
 });

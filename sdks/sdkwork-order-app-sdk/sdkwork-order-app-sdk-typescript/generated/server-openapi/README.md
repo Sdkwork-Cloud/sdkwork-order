@@ -144,9 +144,11 @@ const body = {
 };
 const idempotencyKey = 'Idempotency-Key';
 const sdkworkRequestHash = 'Sdkwork-Request-Hash';
+const xIdempotencyFingerprint = 'X-Idempotency-Fingerprint';
 const params = {
   idempotencyKey,
   sdkworkRequestHash,
+  xIdempotencyFingerprint,
 };
 const result = await client.memberships.orders.create(body, params);
 ```
