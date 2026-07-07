@@ -108,12 +108,7 @@ pub async fn insert_order_cancellation_postgres(
     .bind(&cancellation_id)
     .bind(&input.tenant_id)
     .bind(&input.order_id)
-    .bind(
-        input
-            .reason_code
-            .as_deref()
-            .unwrap_or("user_cancel"),
-    )
+    .bind(input.reason_code.as_deref().unwrap_or("user_cancel"))
     .bind(input.reason_message.as_deref())
     .bind(&input.now)
     .execute(&mut **tx)
@@ -186,12 +181,7 @@ pub async fn insert_order_cancellation_sqlite(
     .bind(&cancellation_id)
     .bind(&input.tenant_id)
     .bind(&input.order_id)
-    .bind(
-        input
-            .reason_code
-            .as_deref()
-            .unwrap_or("user_cancel"),
-    )
+    .bind(input.reason_code.as_deref().unwrap_or("user_cancel"))
     .bind(input.reason_message.as_deref())
     .bind(&input.now)
     .execute(&mut **tx)

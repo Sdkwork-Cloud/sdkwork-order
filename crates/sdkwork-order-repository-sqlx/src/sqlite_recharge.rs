@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sdkwork_contract_service::{
-    CommerceMoney, CommercePaymentStatus, CommerceServiceError,
-};
+use sdkwork_contract_service::{CommerceMoney, CommercePaymentStatus, CommerceServiceError};
 use sdkwork_order_service::{
     CheckoutStatusQuery, CheckoutStatusSnapshot, CreatePointsRechargeOrderCommand,
     CreatePointsRechargeOrderOutcome, FulfillPointsRechargeOrderCommand,
@@ -709,9 +707,13 @@ impl SqliteCommerceRechargeStore {
             .bind(&command.order_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|error| store_error("failed to load points recharge fulfillment context", error))?;
+            .map_err(|error| {
+                store_error("failed to load points recharge fulfillment context", error)
+            })?;
 
-        row.as_ref().map(map_points_recharge_fulfillment_context).transpose()
+        row.as_ref()
+            .map(map_points_recharge_fulfillment_context)
+            .transpose()
     }
 
     pub async fn resolve_points_recharge_order_owner(
@@ -756,7 +758,12 @@ impl SqliteCommerceRechargeStore {
             .pool
             .begin_with("BEGIN IMMEDIATE")
             .await
-            .map_err(|error| store_error("failed to begin points recharge reservation transaction", error))?;
+            .map_err(|error| {
+                store_error(
+                    "failed to begin points recharge reservation transaction",
+                    error,
+                )
+            })?;
 
         let updated = sqlx::query(
             r#"
@@ -783,7 +790,10 @@ impl SqliteCommerceRechargeStore {
 
         if updated.rows_affected() == 0 {
             tx.rollback().await.map_err(|error| {
-                store_error("failed to rollback points recharge reservation transaction", error)
+                store_error(
+                    "failed to rollback points recharge reservation transaction",
+                    error,
+                )
             })?;
             let reloaded = self
                 .load_points_recharge_fulfillment_context(command)
@@ -801,7 +811,10 @@ impl SqliteCommerceRechargeStore {
         }
 
         tx.commit().await.map_err(|error| {
-            store_error("failed to commit points recharge reservation transaction", error)
+            store_error(
+                "failed to commit points recharge reservation transaction",
+                error,
+            )
         })?;
         Ok(())
     }
@@ -835,7 +848,10 @@ impl SqliteCommerceRechargeStore {
         .execute(&self.pool)
         .await
         .map_err(|error| {
-            store_error("failed to release points recharge fulfillment reservation", error)
+            store_error(
+                "failed to release points recharge fulfillment reservation",
+                error,
+            )
         })?;
         Ok(())
     }
@@ -859,7 +875,12 @@ impl SqliteCommerceRechargeStore {
             .pool
             .begin_with("BEGIN IMMEDIATE")
             .await
-            .map_err(|error| store_error("failed to begin points recharge fulfillment transaction", error))?;
+            .map_err(|error| {
+                store_error(
+                    "failed to begin points recharge fulfillment transaction",
+                    error,
+                )
+            })?;
 
         let updated = sqlx::query(
             r#"
@@ -890,7 +911,10 @@ impl SqliteCommerceRechargeStore {
 
         if updated.rows_affected() == 0 {
             tx.rollback().await.map_err(|error| {
-                store_error("failed to rollback points recharge fulfillment transaction", error)
+                store_error(
+                    "failed to rollback points recharge fulfillment transaction",
+                    error,
+                )
             })?;
             let reloaded = self
                 .load_points_recharge_fulfillment_context(&command)
@@ -910,7 +934,10 @@ impl SqliteCommerceRechargeStore {
         }
 
         tx.commit().await.map_err(|error| {
-            store_error("failed to commit points recharge fulfillment transaction", error)
+            store_error(
+                "failed to commit points recharge fulfillment transaction",
+                error,
+            )
         })?;
 
         Ok(FulfillPointsRechargeOrderOutcome::fulfilled(
@@ -964,7 +991,10 @@ impl SqliteCommerceRechargeStore {
             .begin_with("BEGIN IMMEDIATE")
             .await
             .map_err(|error| {
-                store_error("failed to begin points recharge payment success transaction", error)
+                store_error(
+                    "failed to begin points recharge payment success transaction",
+                    error,
+                )
             })?;
 
         sqlx::query(
@@ -1035,7 +1065,10 @@ impl SqliteCommerceRechargeStore {
         .map_err(|error| store_error("failed to mark recharge order payment success", error))?;
 
         tx.commit().await.map_err(|error| {
-            store_error("failed to commit points recharge payment success transaction", error)
+            store_error(
+                "failed to commit points recharge payment success transaction",
+                error,
+            )
         })?;
         Ok(())
     }
@@ -2080,7 +2113,10 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
     fn load_points_recharge_fulfillment_context<'a>(
         &'a self,
         command: &'a FulfillPointsRechargeOrderCommand,
-    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, Option<PointsRechargeFulfillmentContext>> {
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<
+        'a,
+        Option<PointsRechargeFulfillmentContext>,
+    > {
         Box::pin(async move { self.load_points_recharge_fulfillment_context(command).await })
     }
 
@@ -2090,7 +2126,8 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
         context: &'a PointsRechargeFulfillmentContext,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
         Box::pin(async move {
-            self.reserve_points_recharge_fulfillment(command, context).await
+            self.reserve_points_recharge_fulfillment(command, context)
+                .await
         })
     }
 
@@ -2109,9 +2146,11 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
         &'a self,
         command: FulfillPointsRechargeOrderCommand,
         context: &'a PointsRechargeFulfillmentContext,
-    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome> {
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome>
+    {
         Box::pin(async move {
-            self.commit_points_recharge_fulfillment(command, context).await
+            self.commit_points_recharge_fulfillment(command, context)
+                .await
         })
     }
 
@@ -2121,7 +2160,8 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
         context: &'a PointsRechargeFulfillmentContext,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
         Box::pin(async move {
-            self.rollback_points_recharge_fulfillment(command, context).await
+            self.rollback_points_recharge_fulfillment(command, context)
+                .await
         })
     }
 

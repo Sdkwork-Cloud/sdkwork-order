@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sdkwork_contract_service::{
-    CommerceMoney, CommercePaymentStatus, CommerceServiceError,
-};
+use sdkwork_contract_service::{CommerceMoney, CommercePaymentStatus, CommerceServiceError};
 use sdkwork_order_service::{
     CheckoutStatusQuery, CheckoutStatusSnapshot, CreatePointsRechargeOrderCommand,
     CreatePointsRechargeOrderOutcome, FulfillPointsRechargeOrderCommand,
@@ -707,9 +705,13 @@ impl PostgresCommerceRechargeStore {
             .bind(&command.order_id)
             .fetch_optional(&self.pool)
             .await
-            .map_err(|error| store_error("failed to load points recharge fulfillment context", error))?;
+            .map_err(|error| {
+                store_error("failed to load points recharge fulfillment context", error)
+            })?;
 
-        row.as_ref().map(map_points_recharge_fulfillment_context).transpose()
+        row.as_ref()
+            .map(map_points_recharge_fulfillment_context)
+            .transpose()
     }
 
     pub async fn resolve_points_recharge_order_owner(
@@ -818,7 +820,10 @@ impl PostgresCommerceRechargeStore {
         .execute(&self.pool)
         .await
         .map_err(|error| {
-            store_error("failed to release points recharge fulfillment reservation", error)
+            store_error(
+                "failed to release points recharge fulfillment reservation",
+                error,
+            )
         })?;
         Ok(())
     }
@@ -837,11 +842,12 @@ impl PostgresCommerceRechargeStore {
         }
 
         let now = current_query_timestamp();
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| store_error("failed to begin points recharge fulfillment transaction", error))?;
+        let mut tx = self.pool.begin().await.map_err(|error| {
+            store_error(
+                "failed to begin points recharge fulfillment transaction",
+                error,
+            )
+        })?;
 
         let updated = sqlx::query(
             r#"
@@ -861,7 +867,9 @@ impl PostgresCommerceRechargeStore {
         )
         .bind(&now)
         .bind(&command.tenant_id)
-        .bind(normalize_organization_scope(command.organization_id.as_deref()))
+        .bind(normalize_organization_scope(
+            command.organization_id.as_deref(),
+        ))
         .bind(&command.owner_user_id)
         .bind(&command.order_id)
         .execute(&mut *tx)
@@ -870,7 +878,10 @@ impl PostgresCommerceRechargeStore {
 
         if updated.rows_affected() == 0 {
             tx.rollback().await.map_err(|error| {
-                store_error("failed to rollback points recharge fulfillment transaction", error)
+                store_error(
+                    "failed to rollback points recharge fulfillment transaction",
+                    error,
+                )
             })?;
             let reloaded = self
                 .load_points_recharge_fulfillment_context(&command)
@@ -890,7 +901,10 @@ impl PostgresCommerceRechargeStore {
         }
 
         tx.commit().await.map_err(|error| {
-            store_error("failed to commit points recharge fulfillment transaction", error)
+            store_error(
+                "failed to commit points recharge fulfillment transaction",
+                error,
+            )
         })?;
 
         Ok(FulfillPointsRechargeOrderOutcome::fulfilled(
@@ -929,9 +943,7 @@ impl PostgresCommerceRechargeStore {
         .bind(&command.order_id)
         .execute(&self.pool)
         .await
-        .map_err(|error| {
-            store_error("failed to rollback points recharge fulfillment", error)
-        })?;
+        .map_err(|error| store_error("failed to rollback points recharge fulfillment", error))?;
         Ok(())
     }
 
@@ -939,13 +951,12 @@ impl PostgresCommerceRechargeStore {
         &self,
         command: MarkPointsRechargePaymentSucceededCommand,
     ) -> Result<(), CommerceServiceError> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| {
-                store_error("failed to begin points recharge payment success transaction", error)
-            })?;
+        let mut tx = self.pool.begin().await.map_err(|error| {
+            store_error(
+                "failed to begin points recharge payment success transaction",
+                error,
+            )
+        })?;
 
         sqlx::query(
             r#"
@@ -1011,7 +1022,10 @@ impl PostgresCommerceRechargeStore {
         .map_err(|error| store_error("failed to mark recharge order payment success", error))?;
 
         tx.commit().await.map_err(|error| {
-            store_error("failed to commit points recharge payment success transaction", error)
+            store_error(
+                "failed to commit points recharge payment success transaction",
+                error,
+            )
         })?;
         Ok(())
     }
@@ -2033,7 +2047,10 @@ impl PointsRechargeFulfillmentStore for PostgresCommerceRechargeStore {
     fn load_points_recharge_fulfillment_context<'a>(
         &'a self,
         command: &'a FulfillPointsRechargeOrderCommand,
-    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, Option<PointsRechargeFulfillmentContext>> {
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<
+        'a,
+        Option<PointsRechargeFulfillmentContext>,
+    > {
         Box::pin(async move { self.load_points_recharge_fulfillment_context(command).await })
     }
 
@@ -2043,7 +2060,8 @@ impl PointsRechargeFulfillmentStore for PostgresCommerceRechargeStore {
         context: &'a PointsRechargeFulfillmentContext,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
         Box::pin(async move {
-            self.reserve_points_recharge_fulfillment(command, context).await
+            self.reserve_points_recharge_fulfillment(command, context)
+                .await
         })
     }
 
@@ -2062,9 +2080,11 @@ impl PointsRechargeFulfillmentStore for PostgresCommerceRechargeStore {
         &'a self,
         command: FulfillPointsRechargeOrderCommand,
         context: &'a PointsRechargeFulfillmentContext,
-    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome> {
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome>
+    {
         Box::pin(async move {
-            self.commit_points_recharge_fulfillment(command, context).await
+            self.commit_points_recharge_fulfillment(command, context)
+                .await
         })
     }
 
@@ -2074,7 +2094,8 @@ impl PointsRechargeFulfillmentStore for PostgresCommerceRechargeStore {
         context: &'a PointsRechargeFulfillmentContext,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
         Box::pin(async move {
-            self.rollback_points_recharge_fulfillment(command, context).await
+            self.rollback_points_recharge_fulfillment(command, context)
+                .await
         })
     }
 

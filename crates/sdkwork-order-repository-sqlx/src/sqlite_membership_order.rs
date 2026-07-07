@@ -144,7 +144,11 @@ impl SqliteCommerceMembershipOrderStore {
             .await
             .map_err(|error| store_error("failed to commit membership order transaction", error))?;
 
-        Ok(build_membership_order_outcome(&command, &package, &method_key))
+        Ok(build_membership_order_outcome(
+            &command,
+            &package,
+            &method_key,
+        ))
     }
 
     async fn load_membership_order_by_idempotency_key(
@@ -473,7 +477,7 @@ fn commerce_money_cell(
     let value = string_cell(row, column);
     let cents = money_cents(&value)
         .map_err(|_| CommerceServiceError::storage(format!("invalid {field_name}: {value}")))?;
-    CommerceMoney::new(&format_money_minor(cents))
+    CommerceMoney::new(&cents.to_string())
         .map_err(|message| CommerceServiceError::storage(format!("{message}: {value}")))
 }
 
@@ -510,12 +514,6 @@ fn money_cents(amount: &str) -> Result<i64, CommerceServiceError> {
         .ok_or_else(|| {
             CommerceServiceError::storage(format!("invalid commerce money amount: {value}"))
         })
-}
-
-fn format_money_minor(cents: i64) -> String {
-    let sign = if cents < 0 { "-" } else { "" };
-    let abs = cents.abs();
-    format!("{sign}{}.{:02}", abs / 100, abs % 100)
 }
 
 fn optional_string_cell(row: &sqlx::sqlite::SqliteRow, column: &str) -> Option<String> {

@@ -31,7 +31,9 @@ pub(crate) fn empty_rows_when_read_model_is_missing<T>(
     }
 }
 
-pub(crate) fn none_when_read_model_is_missing<T>(error: sqlx::Error) -> Result<Option<T>, sqlx::Error> {
+pub(crate) fn none_when_read_model_is_missing<T>(
+    error: sqlx::Error,
+) -> Result<Option<T>, sqlx::Error> {
     if tolerate_missing_read_model_tables() && read_model_table_is_missing(&error) {
         Ok(None)
     } else {

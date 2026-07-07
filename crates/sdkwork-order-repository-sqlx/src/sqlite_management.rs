@@ -249,11 +249,9 @@ impl SqliteCommerceOrderStore {
         let idempotency_key = order_cancel_idempotency_key(&command.order_id);
         let request_no = format!("admin-cancel-{}", command.order_id);
 
-        let mut tx = self
-            .pool()
-            .begin()
-            .await
-            .map_err(|error| store_error("failed to begin cancel management order transaction", error))?;
+        let mut tx = self.pool().begin().await.map_err(|error| {
+            store_error("failed to begin cancel management order transaction", error)
+        })?;
 
         let from_status = sqlx::query_scalar::<_, String>(
             r#"
@@ -273,16 +271,22 @@ impl SqliteCommerceOrderStore {
         .map_err(|error| store_error("failed to load order status before cancel", error))?;
 
         let Some(from_status) = from_status else {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback cancel management order transaction",
+                    error,
+                )
+            })?;
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
         if from_status.eq_ignore_ascii_case("cancelled") {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback cancel management order transaction",
+                    error,
+                )
+            })?;
             return Ok(());
         }
 
@@ -327,9 +331,12 @@ impl SqliteCommerceOrderStore {
             .await
             .map_err(|error| store_error("failed to reload order status after cancel", error))?;
 
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback cancel management order transaction",
+                    error,
+                )
+            })?;
 
             if current_status
                 .as_deref()
@@ -363,9 +370,12 @@ impl SqliteCommerceOrderStore {
         insert_order_event_sqlite(&mut tx, &audit).await?;
         insert_order_cancellation_sqlite(&mut tx, &audit).await?;
 
-        tx.commit()
-            .await
-            .map_err(|error| store_error("failed to commit cancel management order transaction", error))?;
+        tx.commit().await.map_err(|error| {
+            store_error(
+                "failed to commit cancel management order transaction",
+                error,
+            )
+        })?;
         Ok(())
     }
 
@@ -381,11 +391,9 @@ impl SqliteCommerceOrderStore {
         let idempotency_key = order_close_idempotency_key(&command.order_id);
         let request_no = format!("admin-close-{}", command.order_id);
 
-        let mut tx = self
-            .pool()
-            .begin()
-            .await
-            .map_err(|error| store_error("failed to begin close management order transaction", error))?;
+        let mut tx = self.pool().begin().await.map_err(|error| {
+            store_error("failed to begin close management order transaction", error)
+        })?;
 
         let from_status = sqlx::query_scalar::<_, String>(
             r#"
@@ -405,16 +413,22 @@ impl SqliteCommerceOrderStore {
         .map_err(|error| store_error("failed to load order status before close", error))?;
 
         let Some(from_status) = from_status else {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback close management order transaction",
+                    error,
+                )
+            })?;
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
         if from_status.eq_ignore_ascii_case("closed") {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback close management order transaction",
+                    error,
+                )
+            })?;
             return Ok(());
         }
 
@@ -456,9 +470,12 @@ impl SqliteCommerceOrderStore {
             .await
             .map_err(|error| store_error("failed to reload order status after close", error))?;
 
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback close management order transaction",
+                    error,
+                )
+            })?;
 
             if current_status
                 .as_deref()
@@ -491,9 +508,9 @@ impl SqliteCommerceOrderStore {
         };
         insert_order_event_sqlite(&mut tx, &audit).await?;
 
-        tx.commit()
-            .await
-            .map_err(|error| store_error("failed to commit close management order transaction", error))?;
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit close management order transaction", error)
+        })?;
         Ok(())
     }
 

@@ -418,7 +418,9 @@ impl PostgresCommerceOrderStore {
             .await?
             .is_none()
         {
-            return Err(CommerceServiceError::not_found("shipment package was not found"));
+            return Err(CommerceServiceError::not_found(
+                "shipment package was not found",
+            ));
         }
 
         sqlx::query(

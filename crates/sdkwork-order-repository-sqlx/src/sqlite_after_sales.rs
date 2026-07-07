@@ -2,12 +2,12 @@
 
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
-    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView, AfterSalesManagementDetailQuery,
-    AfterSalesManagementListQuery, AfterSalesRequestDetailQuery, AfterSalesRequestListQuery,
-    AfterSalesRequestPage, AfterSalesRequestView, AfterSalesReturnShipmentListQuery,
-    AfterSalesReturnShipmentPage, AfterSalesReturnShipmentView, CreateAfterSalesRequestCommand,
-    CreateAfterSalesReturnShipmentCommand, OrderOwnerDetailQuery, ReviewAfterSalesRequestCommand,
-    UpdateAfterSalesRequestCommand,
+    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView,
+    AfterSalesManagementDetailQuery, AfterSalesManagementListQuery, AfterSalesRequestDetailQuery,
+    AfterSalesRequestListQuery, AfterSalesRequestPage, AfterSalesRequestView,
+    AfterSalesReturnShipmentListQuery, AfterSalesReturnShipmentPage, AfterSalesReturnShipmentView,
+    CreateAfterSalesRequestCommand, CreateAfterSalesReturnShipmentCommand, OrderOwnerDetailQuery,
+    ReviewAfterSalesRequestCommand, UpdateAfterSalesRequestCommand,
 };
 use sqlx::{Row, Sqlite, Transaction};
 
@@ -423,7 +423,9 @@ impl SqliteCommerceOrderStore {
             .pool()
             .begin_with("BEGIN IMMEDIATE")
             .await
-            .map_err(|error| store_error("failed to begin after sales review transaction", error))?;
+            .map_err(|error| {
+                store_error("failed to begin after sales review transaction", error)
+            })?;
         let now = current_timestamp_string();
 
         sqlx::query(
@@ -471,9 +473,9 @@ impl SqliteCommerceOrderStore {
         )
         .await?;
 
-        tx.commit()
-            .await
-            .map_err(|error| store_error("failed to commit after sales review transaction", error))?;
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit after sales review transaction", error)
+        })?;
 
         self.retrieve_management_after_sales_request(AfterSalesManagementDetailQuery {
             after_sales_request_id: command.after_sales_request_id,

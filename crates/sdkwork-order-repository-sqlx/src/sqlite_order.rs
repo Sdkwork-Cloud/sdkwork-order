@@ -7,11 +7,10 @@ use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,
     OrderOwnerDetailQuery, OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView,
-    OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics, OrderOwnerSummary,
+    OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics,
+    OrderOwnerSummary,
 };
-use sdkwork_payment_service::{
-    parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery,
-};
+use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -697,11 +696,9 @@ impl SqliteCommerceOrderStore {
         let idempotency_key = order_cancel_idempotency_key(&command.order_id);
         let request_no = format!("cancel-{}", command.order_id);
 
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| store_error("failed to begin cancel owner order transaction", error))?;
+        let mut tx = self.pool.begin().await.map_err(|error| {
+            store_error("failed to begin cancel owner order transaction", error)
+        })?;
 
         let from_status = sqlx::query_scalar::<_, String>(
             r#"
@@ -723,16 +720,16 @@ impl SqliteCommerceOrderStore {
         .map_err(|error| store_error("failed to load order status before cancel", error))?;
 
         let Some(from_status) = from_status else {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback cancel owner order transaction", error)
+            })?;
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
         if from_status.eq_ignore_ascii_case("cancelled") {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback cancel owner order transaction", error)
+            })?;
             return Ok(());
         }
 
@@ -781,9 +778,9 @@ impl SqliteCommerceOrderStore {
             .await
             .map_err(|error| store_error("failed to reload order status after cancel", error))?;
 
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback cancel owner order transaction", error)
+            })?;
 
             if current_status
                 .as_deref()
@@ -817,9 +814,9 @@ impl SqliteCommerceOrderStore {
         insert_order_event_sqlite(&mut tx, &audit).await?;
         insert_order_cancellation_sqlite(&mut tx, &audit).await?;
 
-        tx.commit()
-            .await
-            .map_err(|error| store_error("failed to commit cancel owner order transaction", error))?;
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit cancel owner order transaction", error)
+        })?;
         Ok(())
     }
 }
@@ -905,7 +902,9 @@ fn map_order_summary_row(
 }
 
 fn positive_i64_cell(row: &sqlx::sqlite::SqliteRow, column: &str) -> Option<i64> {
-    row.try_get::<i64, _>(column).ok().filter(|value| *value > 0)
+    row.try_get::<i64, _>(column)
+        .ok()
+        .filter(|value| *value > 0)
 }
 
 fn optional_string_cell(row: &sqlx::sqlite::SqliteRow, column: &str) -> Option<String> {

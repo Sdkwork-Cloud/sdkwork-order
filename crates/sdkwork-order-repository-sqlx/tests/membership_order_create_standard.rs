@@ -37,20 +37,19 @@ async fn sqlite_membership_order_create_persists_order_without_payment_intent() 
 
     assert_eq!(outcome.order_id, command.order_id);
     assert_eq!(outcome.package_id, PACKAGE_EXTERNAL_ID);
-    assert_eq!(outcome.amount.as_str(), "68.00");
+    assert_eq!(outcome.amount.as_str(), "6800");
     assert_eq!(outcome.currency_code, "CNY");
     assert_eq!(outcome.duration_days, 30);
     assert_eq!(outcome.payment_method, "wechat_pay");
     assert_eq!(outcome.status, "pending_payment");
     assert!(outcome.cashier_url.contains("scene=virtual"));
 
-    let payment_intent_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM commerce_payment_intent WHERE order_id = ?",
-    )
-    .bind(&command.order_id)
-    .fetch_one(&pool)
-    .await
-    .expect("count payment intents");
+    let payment_intent_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM commerce_payment_intent WHERE order_id = ?")
+            .bind(&command.order_id)
+            .fetch_one(&pool)
+            .await
+            .expect("count payment intents");
     assert_eq!(payment_intent_count, 0);
 
     let replay = store

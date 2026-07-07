@@ -1,5 +1,7 @@
 use sdkwork_contract_service::CommerceServiceError;
-use sdkwork_order_service::{FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView};
+use sdkwork_order_service::{
+    FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView,
+};
 use sqlx::Row;
 
 use crate::postgres_order::PostgresCommerceOrderStore;

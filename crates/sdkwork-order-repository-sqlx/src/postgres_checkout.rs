@@ -906,8 +906,7 @@ fn multiply_money_amount(amount: &str, quantity: i64) -> String {
 fn commerce_money(
     amount: &str,
 ) -> Result<sdkwork_contract_service::CommerceMoney, CommerceServiceError> {
-    sdkwork_contract_service::CommerceMoney::new(amount)
-        .map_err(CommerceServiceError::storage)
+    sdkwork_contract_service::CommerceMoney::new(amount).map_err(CommerceServiceError::storage)
 }
 
 fn json_string(value: &serde_json::Value, field: &str) -> Result<String, CommerceServiceError> {

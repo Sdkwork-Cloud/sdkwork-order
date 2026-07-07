@@ -86,10 +86,7 @@ impl PostgresCommerceOrderStore {
         &self,
         query: OrderManagementListQuery,
     ) -> Result<OrderManagementListPage, CommerceServiceError> {
-        let search = query
-            .q
-            .as_deref()
-            .map(|value| format!("%{value}%"));
+        let search = query.q.as_deref().map(|value| format!("%{value}%"));
         let rows = sqlx::query(LIST_MANAGEMENT_ORDERS)
             .bind(&query.tenant_id)
             .bind(query.organization_id.as_deref())
@@ -198,7 +195,8 @@ impl PostgresCommerceOrderStore {
         };
 
         let summary = map_management_summary_row(&row)?;
-        let items = load_management_order_items(self.pool(), &query.tenant_id, &query.order_id).await?;
+        let items =
+            load_management_order_items(self.pool(), &query.tenant_id, &query.order_id).await?;
         Ok(Some(OrderOwnerDetail {
             summary,
             items,
@@ -243,11 +241,9 @@ impl PostgresCommerceOrderStore {
         let idempotency_key = order_cancel_idempotency_key(&command.order_id);
         let request_no = format!("admin-cancel-{}", command.order_id);
 
-        let mut tx = self
-            .pool()
-            .begin()
-            .await
-            .map_err(|error| store_error("failed to begin cancel management order transaction", error))?;
+        let mut tx = self.pool().begin().await.map_err(|error| {
+            store_error("failed to begin cancel management order transaction", error)
+        })?;
 
         let from_status = sqlx::query_scalar::<_, String>(
             r#"
@@ -266,16 +262,22 @@ impl PostgresCommerceOrderStore {
         .map_err(|error| store_error("failed to load order status before cancel", error))?;
 
         let Some(from_status) = from_status else {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback cancel management order transaction",
+                    error,
+                )
+            })?;
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
         if from_status.eq_ignore_ascii_case("cancelled") {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback cancel management order transaction",
+                    error,
+                )
+            })?;
             return Ok(());
         }
 
@@ -318,9 +320,12 @@ impl PostgresCommerceOrderStore {
             .await
             .map_err(|error| store_error("failed to reload order status after cancel", error))?;
 
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback cancel management order transaction",
+                    error,
+                )
+            })?;
 
             if current_status
                 .as_deref()
@@ -354,9 +359,12 @@ impl PostgresCommerceOrderStore {
         insert_order_event_postgres(&mut tx, &audit).await?;
         insert_order_cancellation_postgres(&mut tx, &audit).await?;
 
-        tx.commit()
-            .await
-            .map_err(|error| store_error("failed to commit cancel management order transaction", error))?;
+        tx.commit().await.map_err(|error| {
+            store_error(
+                "failed to commit cancel management order transaction",
+                error,
+            )
+        })?;
         Ok(())
     }
 
@@ -372,11 +380,9 @@ impl PostgresCommerceOrderStore {
         let idempotency_key = order_close_idempotency_key(&command.order_id);
         let request_no = format!("admin-close-{}", command.order_id);
 
-        let mut tx = self
-            .pool()
-            .begin()
-            .await
-            .map_err(|error| store_error("failed to begin close management order transaction", error))?;
+        let mut tx = self.pool().begin().await.map_err(|error| {
+            store_error("failed to begin close management order transaction", error)
+        })?;
 
         let from_status = sqlx::query_scalar::<_, String>(
             r#"
@@ -395,16 +401,22 @@ impl PostgresCommerceOrderStore {
         .map_err(|error| store_error("failed to load order status before close", error))?;
 
         let Some(from_status) = from_status else {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback close management order transaction",
+                    error,
+                )
+            })?;
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
         if from_status.eq_ignore_ascii_case("closed") {
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback close management order transaction",
+                    error,
+                )
+            })?;
             return Ok(());
         }
 
@@ -444,9 +456,12 @@ impl PostgresCommerceOrderStore {
             .await
             .map_err(|error| store_error("failed to reload order status after close", error))?;
 
-            tx.rollback()
-                .await
-                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback close management order transaction",
+                    error,
+                )
+            })?;
 
             if current_status
                 .as_deref()
@@ -479,9 +494,9 @@ impl PostgresCommerceOrderStore {
         };
         insert_order_event_postgres(&mut tx, &audit).await?;
 
-        tx.commit()
-            .await
-            .map_err(|error| store_error("failed to commit close management order transaction", error))?;
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit close management order transaction", error)
+        })?;
         Ok(())
     }
 
