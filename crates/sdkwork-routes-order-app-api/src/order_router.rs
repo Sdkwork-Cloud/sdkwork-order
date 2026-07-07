@@ -8,21 +8,21 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
     checkout_owner_order_request_hash, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
     CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
     OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
     OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderOutcome,
 };
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, SqliteCommerceOrderStore,
-};
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
     PostgresCommercePaymentRecordStore, SqliteCommercePaymentRecordStore,
 };
-use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
-use sdkwork_payment_service::{PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery};
-use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_payment_service::{
+    PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery,
+};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
@@ -36,7 +36,7 @@ use crate::command_headers::{
     write_payload_with_route_param,
 };
 use crate::owner_order_cancel::cancel_owner_order_with_payments;
-use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
+use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 /// 允许的支付方式白名单，避免硬编码单一渠道。
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
@@ -241,11 +241,17 @@ struct PayOrderRequest {
 
 impl PayOrderRequest {
     fn payment_method(&self) -> Option<&str> {
-        self.payment_method.as_deref().map(str::trim).filter(|v| !v.is_empty())
+        self.payment_method
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
     }
 
     fn payment_password(&self) -> Option<&str> {
-        self.payment_password.as_deref().map(str::trim).filter(|v| !v.is_empty())
+        self.payment_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
     }
 }
 
@@ -255,7 +261,10 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
     if method.is_empty() {
         return Err("payment method must be provided".to_string());
     }
-    if !ALLOWED_PAYMENT_METHODS.iter().any(|allowed| *allowed == method) {
+    if !ALLOWED_PAYMENT_METHODS
+        .iter()
+        .any(|allowed| *allowed == method)
+    {
         return Err(format!(
             "payment method must be one of: {}",
             ALLOWED_PAYMENT_METHODS.join(", ")
@@ -335,38 +344,38 @@ pub fn build_app_order_router(
     payment_records: Arc<dyn OrderPaymentRecordStore>,
 ) -> Router {
     Router::new()
-            .route("/app/v3/api/orders", get(list_orders).post(create_order))
-            .route("/app/v3/api/orders/statistics", get(fetch_order_statistics))
-            .route(
-                "/app/v3/api/orders/{orderId}",
-                get(fetch_order),
-            )
-            .route(
-                "/app/v3/api/orders/{orderId}/payments",
-                get(list_order_payments).post(pay_order),
-            )
-            .route("/app/v3/api/orders/{orderId}/cancel", post(cancel_order_legacy))
-            .route(
-                "/app/v3/api/orders/{orderId}/status",
-                get(fetch_order_status),
-            )
-            .route(
-                "/app/v3/api/orders/{orderId}/payment_success",
-                get(fetch_order_payment_success),
-            )
-            .route(
-                "/app/v3/api/orders/{orderId}/events",
-                get(fetch_order_events),
-            )
-            .route(
-                "/app/v3/api/orders/{orderId}/cancellations",
-                post(create_order_cancellation),
-            )
-            .with_state(AppOrderState {
-                store,
-                payments,
-                payment_records,
-            })
+        .route("/app/v3/api/orders", get(list_orders).post(create_order))
+        .route("/app/v3/api/orders/statistics", get(fetch_order_statistics))
+        .route("/app/v3/api/orders/{orderId}", get(fetch_order))
+        .route(
+            "/app/v3/api/orders/{orderId}/payments",
+            get(list_order_payments).post(pay_order),
+        )
+        .route(
+            "/app/v3/api/orders/{orderId}/cancel",
+            post(cancel_order_legacy),
+        )
+        .route(
+            "/app/v3/api/orders/{orderId}/status",
+            get(fetch_order_status),
+        )
+        .route(
+            "/app/v3/api/orders/{orderId}/payment_success",
+            get(fetch_order_payment_success),
+        )
+        .route(
+            "/app/v3/api/orders/{orderId}/events",
+            get(fetch_order_events),
+        )
+        .route(
+            "/app/v3/api/orders/{orderId}/cancellations",
+            post(create_order_cancellation),
+        )
+        .with_state(AppOrderState {
+            store,
+            payments,
+            payment_records,
+        })
 }
 
 async fn list_orders(
@@ -376,7 +385,7 @@ async fn list_orders(
     Query(params): Query<OrderListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -409,7 +418,7 @@ async fn fetch_order_statistics(
     request_context: Option<Extension<WebRequestContext>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -435,7 +444,7 @@ async fn fetch_order(
     Path(order_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -463,7 +472,7 @@ async fn fetch_order_status(
     Path(order_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -480,10 +489,13 @@ async fn fetch_order_status(
     match state.store.retrieve_owner_order(query).await {
         Ok(Some(detail)) => {
             let summary = map_order_summary(detail.summary);
-            success_item(ctx, OrderStatusResponse {
-                status: summary.status,
-                status_name: summary.status_name,
-            })
+            success_item(
+                ctx,
+                OrderStatusResponse {
+                    status: summary.status,
+                    status_name: summary.status_name,
+                },
+            )
         }
         Ok(None) => not_found(ctx, "order was not found"),
         Err(error) => map_service_error(ctx, error),
@@ -497,7 +509,7 @@ async fn fetch_order_payment_success(
     Path(order_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -517,15 +529,19 @@ async fn fetch_order_payment_success(
             let paid = matches!(
                 summary.status.to_ascii_lowercase().as_str(),
                 "paid" | "completed" | "fulfilled" | "awaiting_external_fulfillment"
-            ) || summary
-                .paid_amount
-                .as_ref()
-                .is_some_and(|amount| !amount.as_str().trim().is_empty() && amount.as_str() != "0" && amount.as_str() != "0.00");
-            success_item(ctx, OrderPaymentSuccessResponse {
-                paid,
-                status: summary.status,
-                status_name: summary.status_name,
-            })
+            ) || summary.paid_amount.as_ref().is_some_and(|amount| {
+                !amount.as_str().trim().is_empty()
+                    && amount.as_str() != "0"
+                    && amount.as_str() != "0.00"
+            });
+            success_item(
+                ctx,
+                OrderPaymentSuccessResponse {
+                    paid,
+                    status: summary.status,
+                    status_name: summary.status_name,
+                },
+            )
         }
         Ok(None) => not_found(ctx, "order was not found"),
         Err(error) => map_service_error(ctx, error),
@@ -540,7 +556,7 @@ async fn fetch_order_events(
     Query(params): Query<OrderEventListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -616,7 +632,7 @@ async fn cancel_order_impl(
     hash_scope: &'static str,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -625,16 +641,13 @@ async fn cancel_order_impl(
         cancel_type: None,
     });
     let payload = write_payload_with_route_param("orderId", &order_id, &body);
-    let _write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        hash_scope,
-        &payload,
-        |idempotency_key| format!("order-cancel-{order_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return response,
-    };
+    let _write_headers =
+        match validate_app_write_payload(ctx, &headers, hash_scope, &payload, |idempotency_key| {
+            format!("order-cancel-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
     let cancel_reason = body.cancel_reason.clone();
     let cancel_type = body.cancel_type.clone();
     let command = match CancelOwnerOrderCommand::with_cancel_type(
@@ -650,11 +663,7 @@ async fn cancel_order_impl(
     };
 
     match cancel_owner_order_with_payments(&*state.store, &*state.payments, command).await {
-        Ok(()) => success_command(
-            ctx,
-            Some(order_id.clone()),
-            Some("cancelled".to_string()),
-        ),
+        Ok(()) => success_command(ctx, Some(order_id.clone()), Some("cancelled".to_string())),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -667,7 +676,7 @@ async fn list_order_payments(
     Query(params): Query<OrderPaymentListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -688,7 +697,11 @@ async fn list_order_payments(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.payment_records.list_payment_records_by_order(query).await {
+    match state
+        .payment_records
+        .list_payment_records_by_order(query)
+        .await
+    {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(page_number, page_size);
             let items = page
@@ -711,7 +724,7 @@ async fn pay_order(
     body: Option<Json<PayOrderRequest>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -723,19 +736,16 @@ async fn pay_order(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "orders.pay",
-        &body,
-        |idempotency_key| format!("pay-{order_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return response,
-    };
-    let callback_payload = body.payment_password().map(|password| {
-        serde_json::json!({ "paymentPassword": password }).to_string()
-    });
+    let write_headers =
+        match validate_app_write_payload(ctx, &headers, "orders.pay", &body, |idempotency_key| {
+            format!("pay-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return response,
+        };
+    let callback_payload = body
+        .payment_password()
+        .map(|password| serde_json::json!({ "paymentPassword": password }).to_string());
     let command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -765,7 +775,7 @@ async fn create_order(
     body: Json<CreateOrderRequest>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };

@@ -11,33 +11,34 @@ use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use std::collections::BTreeMap;
 
-use sdkwork_order_service::{
-    CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
-    CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome, OrderOwnerListQuery,
-    PayOwnerOrderCommand, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
-    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery, RechargeSettingsSnapshot,
-};
+use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
     SqliteCommerceRechargeStore,
 };
+use sdkwork_order_service::{
+    CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
+    CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome, OrderOwnerListQuery,
+    PayOwnerOrderCommand, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
+    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
+    RechargeSettingsSnapshot,
+};
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
-use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    map_service_error, not_found, offset_list_page_params_from_query, success_command, success_item,
-    success_items, unauthorized, validation,
+    map_service_error, not_found, offset_list_page_params_from_query, success_command,
+    success_item, success_items, unauthorized, validation,
 };
+use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
+use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
+use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
 use crate::owner_order_payment_enrich::{
     enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
 };
-use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
-use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
-use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
-use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
+use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
@@ -330,31 +331,31 @@ pub fn build_app_recharge_checkout_router(
     payments: Arc<dyn OwnerOrderPaymentStore>,
 ) -> Router {
     Router::new()
-            .route(
-                "/app/v3/api/recharges/packages",
-                get(fetch_recharge_packages),
-            )
-            .route(
-                "/app/v3/api/recharges/settings",
-                get(fetch_recharge_settings),
-            )
-            .route(
-                "/app/v3/api/recharges/orders",
-                get(list_recharge_orders).post(submit_recharge),
-            )
-            .route(
-                "/app/v3/api/recharges/orders/{orderId}",
-                get(fetch_checkout_status),
-            )
-            .route(
-                "/app/v3/api/recharges/orders/{orderId}/cancel",
-                post(cancel_recharge_order),
-            )
-            .with_state(AppRechargeCheckoutState {
-                store,
-                orders,
-                payments,
-            })
+        .route(
+            "/app/v3/api/recharges/packages",
+            get(fetch_recharge_packages),
+        )
+        .route(
+            "/app/v3/api/recharges/settings",
+            get(fetch_recharge_settings),
+        )
+        .route(
+            "/app/v3/api/recharges/orders",
+            get(list_recharge_orders).post(submit_recharge),
+        )
+        .route(
+            "/app/v3/api/recharges/orders/{orderId}",
+            get(fetch_checkout_status),
+        )
+        .route(
+            "/app/v3/api/recharges/orders/{orderId}/cancel",
+            post(cancel_recharge_order),
+        )
+        .with_state(AppRechargeCheckoutState {
+            store,
+            orders,
+            payments,
+        })
 }
 
 async fn fetch_recharge_packages(
@@ -364,7 +365,7 @@ async fn fetch_recharge_packages(
     Query(params): Query<RechargePackageListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -398,15 +399,15 @@ async fn fetch_recharge_settings(
     request_context: Option<Extension<WebRequestContext>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let query = match RechargeSettingsQuery::new(&subject.tenant_id, subject.organization_id.as_deref())
-    {
-        Ok(query) => query,
-        Err(error) => return map_service_error(ctx, error),
-    };
+    let query =
+        match RechargeSettingsQuery::new(&subject.tenant_id, subject.organization_id.as_deref()) {
+            Ok(query) => query,
+            Err(error) => return map_service_error(ctx, error),
+        };
 
     match state.store.load_recharge_settings(query).await {
         Ok(settings) => success_item(ctx, map_recharge_settings(settings)),
@@ -421,7 +422,7 @@ async fn list_recharge_orders(
     Query(params): Query<RechargeOrderListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -443,8 +444,7 @@ async fn list_recharge_orders(
             let page_params = offset_list_page_params_from_query(page.page, page.page_size);
             success_items(
                 ctx,
-                page
-                    .items
+                page.items
                     .into_iter()
                     .map(|item| RechargeOrderSummaryResponse {
                         order_id: item.order_id,
@@ -473,7 +473,7 @@ async fn cancel_recharge_order(
     body: Option<Json<RechargeCancelRequest>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -506,11 +506,7 @@ async fn cancel_recharge_order(
     };
 
     match cancel_owner_order_with_payments(&*state.orders, &*state.payments, command).await {
-        Ok(()) => success_command(
-            ctx,
-            Some(order_id.clone()),
-            Some("cancelled".to_string()),
-        ),
+        Ok(()) => success_command(ctx, Some(order_id.clone()), Some("cancelled".to_string())),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -523,7 +519,7 @@ async fn submit_recharge(
     Json(request): Json<SubmitRechargeRequest>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -539,13 +535,16 @@ async fn submit_recharge(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let write_headers =
-        match validate_app_write_payload(ctx, &headers, "recharges.orders.create", &request, |idempotency_key| {
-            fallback_request_no(&subject, amount.as_str(), &method, idempotency_key)
-        }) {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
+    let write_headers = match validate_app_write_payload(
+        ctx,
+        &headers,
+        "recharges.orders.create",
+        &request,
+        |idempotency_key| fallback_request_no(&subject, amount.as_str(), &method, idempotency_key),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     let command = match build_create_recharge_command(CreateRechargeCommandInput {
         subject: &subject,
         amount,
@@ -561,7 +560,11 @@ async fn submit_recharge(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.store.create_points_recharge_order(command.clone()).await {
+    match state
+        .store
+        .create_points_recharge_order(command.clone())
+        .await
+    {
         Ok(mut outcome) => {
             let callback_payload = serde_json::json!({
                 "points": outcome.points,
@@ -621,7 +624,7 @@ async fn fetch_checkout_status(
     Path(order_lookup): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -682,7 +685,10 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
     if method.is_empty() {
         return Err("payment method must be provided".to_string());
     }
-    if !ALLOWED_PAYMENT_METHODS.iter().any(|allowed| *allowed == method) {
+    if !ALLOWED_PAYMENT_METHODS
+        .iter()
+        .any(|allowed| *allowed == method)
+    {
         return Err(format!(
             "payment method must be one of: {}",
             ALLOWED_PAYMENT_METHODS.join(", ")

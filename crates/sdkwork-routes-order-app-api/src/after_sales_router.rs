@@ -8,17 +8,15 @@ use axum::response::Response;
 use axum::routing::get;
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
-    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView, AfterSalesRequestDetailQuery,
-    AfterSalesRequestListQuery, AfterSalesRequestPage, AfterSalesRequestView,
-    AfterSalesReturnShipmentListQuery, AfterSalesReturnShipmentPage,
+    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView,
+    AfterSalesRequestDetailQuery, AfterSalesRequestListQuery, AfterSalesRequestPage,
+    AfterSalesRequestView, AfterSalesReturnShipmentListQuery, AfterSalesReturnShipmentPage,
     AfterSalesReturnShipmentView, CreateAfterSalesRequestCommand, CreateAfterSalesRequestItemInput,
     CreateAfterSalesReturnShipmentCommand, UpdateAfterSalesRequestCommand,
 };
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, SqliteCommerceOrderStore,
-};
-use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
@@ -28,7 +26,7 @@ use crate::api_response::{
     unauthorized, validation,
 };
 use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
-use crate::subject::app_runtime_subject_from_extension;
+use crate::subject::app_runtime_subject_from_contexts;
 
 pub type CommerceAfterSalesFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -261,23 +259,23 @@ pub fn app_after_sales_router_with_postgres_pool(pool: PgPool) -> Router {
 
 pub fn build_app_after_sales_router(store: Arc<dyn CommerceAfterSalesStore>) -> Router {
     Router::new()
-            .route(
-                "/app/v3/api/after_sales/requests",
-                get(list_after_sales_requests).post(create_after_sales_request),
-            )
-            .route(
-                "/app/v3/api/after_sales/requests/{afterSalesRequestId}",
-                get(retrieve_after_sales_request).patch(update_after_sales_request),
-            )
-            .route(
-                "/app/v3/api/after_sales/requests/{afterSalesRequestId}/events",
-                get(list_after_sales_events),
-            )
-            .route(
-                "/app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments",
-                get(list_after_sales_return_shipments).post(create_after_sales_return_shipment),
-            )
-            .with_state(AppAfterSalesState { store })
+        .route(
+            "/app/v3/api/after_sales/requests",
+            get(list_after_sales_requests).post(create_after_sales_request),
+        )
+        .route(
+            "/app/v3/api/after_sales/requests/{afterSalesRequestId}",
+            get(retrieve_after_sales_request).patch(update_after_sales_request),
+        )
+        .route(
+            "/app/v3/api/after_sales/requests/{afterSalesRequestId}/events",
+            get(list_after_sales_events),
+        )
+        .route(
+            "/app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments",
+            get(list_after_sales_return_shipments).post(create_after_sales_return_shipment),
+        )
+        .with_state(AppAfterSalesState { store })
 }
 
 async fn create_after_sales_request(
@@ -288,7 +286,7 @@ async fn create_after_sales_request(
     Json(body): Json<CreateAfterSalesRequestBody>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -338,7 +336,7 @@ async fn retrieve_after_sales_request(
     Path(after_sales_request_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -368,7 +366,7 @@ async fn update_after_sales_request(
     Json(body): Json<UpdateAfterSalesRequestBody>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -439,7 +437,7 @@ async fn list_after_sales_requests(
     Query(params): Query<AfterSalesRequestListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -480,7 +478,7 @@ async fn list_after_sales_events(
     Query(params): Query<AfterSalesEventListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -526,7 +524,7 @@ async fn list_after_sales_return_shipments(
     Query(params): Query<AfterSalesReturnShipmentListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -543,7 +541,11 @@ async fn list_after_sales_return_shipments(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.store.list_after_sales_return_shipments(query.clone()).await {
+    match state
+        .store
+        .list_after_sales_return_shipments(query.clone())
+        .await
+    {
         Ok(page) => {
             let mapped = page
                 .items
@@ -566,7 +568,7 @@ async fn create_after_sales_return_shipment(
     body: Json<CreateReturnShipmentBody>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };

@@ -1,5 +1,6 @@
 use axum::Extension;
 use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_web_core::WebRequestContext;
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppRuntimeSubject {
@@ -17,6 +18,16 @@ pub(crate) fn app_runtime_subject_from_extension(
     app_runtime_subject_from_iam(&context)
 }
 
+pub(crate) fn app_runtime_subject_from_contexts(
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<&WebRequestContext>,
+) -> Result<AppRuntimeSubject, String> {
+    if let Some(context) = runtime_context {
+        return app_runtime_subject_from_extension(Some(context));
+    }
+    app_runtime_subject_from_web_context(request_context)
+}
+
 pub(crate) fn app_runtime_subject_from_iam(
     context: &IamAppContext,
 ) -> Result<AppRuntimeSubject, String> {
@@ -25,6 +36,27 @@ pub(crate) fn app_runtime_subject_from_iam(
     let organization_id = context
         .organization_id
         .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+
+    Ok(AppRuntimeSubject {
+        tenant_id,
+        organization_id,
+        user_id,
+    })
+}
+
+pub(crate) fn app_runtime_subject_from_web_context(
+    context: Option<&WebRequestContext>,
+) -> Result<AppRuntimeSubject, String> {
+    let Some(context) = context else {
+        return Err("authenticated request context is required".to_owned());
+    };
+    let tenant_id = required_context_text(context.tenant_id().unwrap_or_default(), "tenant_id")?;
+    let user_id = required_context_text(context.user_id().unwrap_or_default(), "user_id")?;
+    let organization_id = context
+        .organization_id()
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_owned);
@@ -56,7 +88,28 @@ mod tests {
 
     #[test]
     fn builds_app_runtime_subject_from_web_request_context() {
-        let context = WebRequestContext {
+        let context = web_request_context();
+
+        let subject = app_runtime_subject_from_web_context(Some(&context)).expect("subject");
+
+        assert_eq!("100001", subject.tenant_id);
+        assert_eq!(Some("0"), subject.organization_id.as_deref());
+        assert_eq!("user-1", subject.user_id);
+    }
+
+    #[test]
+    fn builds_app_runtime_subject_from_available_web_request_context() {
+        let context = web_request_context();
+
+        let subject = app_runtime_subject_from_contexts(None, Some(&context)).expect("subject");
+
+        assert_eq!("100001", subject.tenant_id);
+        assert_eq!(Some("0"), subject.organization_id.as_deref());
+        assert_eq!("user-1", subject.user_id);
+    }
+
+    fn web_request_context() -> WebRequestContext {
+        WebRequestContext {
             request_id: ServerRequestId("test-request".to_owned()),
             api_surface: WebApiSurface::AppApi,
             auth_mode: WebAuthMode::DualToken,
@@ -81,12 +134,6 @@ mod tests {
             client_kind: None,
             operation: None,
             trace_id: None,
-        };
-
-        let subject = app_runtime_subject_from_web_context(Some(&context)).expect("subject");
-
-        assert_eq!("100001", subject.tenant_id);
-        assert_eq!(Some("0"), subject.organization_id.as_deref());
-        assert_eq!("user-1", subject.user_id);
+        }
     }
 }

@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use crate::api_response::{map_service_error, success_item, unauthorized, validation};
 use crate::command_headers::validate_app_write_payload;
-use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
+use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
@@ -137,7 +137,7 @@ async fn create_membership_order(
     Json(request): Json<CreateMembershipOrderRequest>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -154,9 +154,7 @@ async fn create_membership_order(
         &headers,
         "memberships.orders.create",
         &request,
-        |idempotency_key| {
-            fallback_request_no(&subject, &package_id, &method, idempotency_key)
-        },
+        |idempotency_key| fallback_request_no(&subject, &package_id, &method, idempotency_key),
     ) {
         Ok(value) => value,
         Err(response) => return response,
@@ -193,7 +191,10 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
     if method.is_empty() {
         return Err("payment method must be provided".to_string());
     }
-    if !ALLOWED_PAYMENT_METHODS.iter().any(|allowed| *allowed == method) {
+    if !ALLOWED_PAYMENT_METHODS
+        .iter()
+        .any(|allowed| *allowed == method)
+    {
         return Err(format!(
             "payment method must be one of: {}",
             ALLOWED_PAYMENT_METHODS.join(", ")
@@ -240,7 +241,9 @@ fn build_create_membership_command(
     )
 }
 
-fn map_membership_order_outcome(value: CreateMembershipOrderOutcome) -> CreateMembershipOrderResponse {
+fn map_membership_order_outcome(
+    value: CreateMembershipOrderOutcome,
+) -> CreateMembershipOrderResponse {
     CreateMembershipOrderResponse {
         order_id: value.order_id,
         order_no: value.order_no,

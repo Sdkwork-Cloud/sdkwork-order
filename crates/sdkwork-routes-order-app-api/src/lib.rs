@@ -1,15 +1,15 @@
 pub mod after_sales_router;
 pub mod api_response;
-pub mod owner_order_cancel;
-pub mod owner_order_payment_enrich;
 pub mod checkout_router;
 pub mod command_headers;
 pub mod fulfillment_router;
 pub mod http_route_manifest;
+pub mod membership_router;
 pub mod openapi_contract;
 pub mod order_router;
+pub mod owner_order_cancel;
+pub mod owner_order_payment_enrich;
 pub mod payment_webhook_router;
-pub mod membership_router;
 pub mod recharge_router;
 pub mod routes;
 pub mod shipment_router;
@@ -19,37 +19,36 @@ pub mod web_bootstrap;
 pub use routes::build_order_app_router_with_framework;
 
 pub use after_sales_router::{
-    build_app_after_sales_router, app_after_sales_router_with_postgres_pool,
-    app_after_sales_router_with_sqlite_pool, CommerceAfterSalesFuture, CommerceAfterSalesStore,
+    app_after_sales_router_with_postgres_pool, app_after_sales_router_with_sqlite_pool,
+    build_app_after_sales_router, CommerceAfterSalesFuture, CommerceAfterSalesStore,
 };
 pub use checkout_router::{
-    build_app_checkout_router, app_checkout_router_with_postgres_pool,
-    app_checkout_router_with_sqlite_pool, CommerceCheckoutFuture, CommerceCheckoutStore,
+    app_checkout_router_with_postgres_pool, app_checkout_router_with_sqlite_pool,
+    build_app_checkout_router, CommerceCheckoutFuture, CommerceCheckoutStore,
 };
 pub use fulfillment_router::{
-    build_app_fulfillment_router, app_fulfillment_router_with_postgres_pool,
-    app_fulfillment_router_with_sqlite_pool, CommerceFulfillmentFuture, CommerceFulfillmentStore,
+    app_fulfillment_router_with_postgres_pool, app_fulfillment_router_with_sqlite_pool,
+    build_app_fulfillment_router, CommerceFulfillmentFuture, CommerceFulfillmentStore,
+};
+pub use membership_router::{
+    app_membership_order_router_with_postgres_pool, app_membership_order_router_with_sqlite_pool,
+    build_app_membership_order_router, CommerceMembershipOrderFuture, CommerceMembershipOrderStore,
 };
 pub use order_router::{
-    build_app_order_router, app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool,
+    app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool, build_app_order_router,
     CommerceOrderFuture, CommerceOrderStore, OwnerOrderPaymentStore,
 };
 pub use payment_webhook_router::{
     app_payment_webhook_router_with_postgres_pool, app_payment_webhook_router_with_sqlite_pool,
 };
-pub use membership_router::{
-    build_app_membership_order_router, app_membership_order_router_with_postgres_pool,
-    app_membership_order_router_with_sqlite_pool, CommerceMembershipOrderFuture,
-    CommerceMembershipOrderStore,
-};
 pub use recharge_router::{
-    build_app_recharge_checkout_router, app_recharge_checkout_router_with_postgres_pool,
-    app_recharge_checkout_router_with_sqlite_pool, CommerceRechargeCheckoutFuture,
+    app_recharge_checkout_router_with_postgres_pool, app_recharge_checkout_router_with_sqlite_pool,
+    build_app_recharge_checkout_router, CommerceRechargeCheckoutFuture,
     CommerceRechargeCheckoutStore,
 };
 pub use shipment_router::{
-    build_app_shipment_router, app_shipment_router_with_postgres_pool,
-    app_shipment_router_with_sqlite_pool, CommerceShipmentFuture, CommerceShipmentStore,
+    app_shipment_router_with_postgres_pool, app_shipment_router_with_sqlite_pool,
+    build_app_shipment_router, CommerceShipmentFuture, CommerceShipmentStore,
 };
 
 use axum::Router;

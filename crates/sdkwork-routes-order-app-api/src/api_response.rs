@@ -17,10 +17,7 @@ pub fn resolve_trace_id(context: Option<&WebRequestContext>) -> String {
 }
 
 /// 单资源响应：`{ code: 0, data: { item }, traceId }`。
-pub fn success_item<T: serde::Serialize>(
-    context: Option<&WebRequestContext>,
-    item: T,
-) -> Response {
+pub fn success_item<T: serde::Serialize>(context: Option<&WebRequestContext>, item: T) -> Response {
     let trace_id = resolve_trace_id(context);
     let envelope = SdkWorkApiResponse::success(SdkWorkResourceData { item }, trace_id.clone());
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
@@ -84,9 +81,7 @@ pub fn parse_offset_list_params_validated(
     validated_offset_list_params(page, page_size).map_err(|_| {
         validation(
             context,
-            format!(
-                "page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"
-            ),
+            format!("page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"),
         )
     })
 }
@@ -158,7 +153,10 @@ pub fn unauthorized(context: Option<&WebRequestContext>, detail: impl Into<Strin
         detail,
         trace_id.clone(),
     );
-    attach_trace_header((StatusCode::UNAUTHORIZED, Json(problem)).into_response(), &trace_id)
+    attach_trace_header(
+        (StatusCode::UNAUTHORIZED, Json(problem)).into_response(),
+        &trace_id,
+    )
 }
 
 pub fn forbidden(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
@@ -168,7 +166,10 @@ pub fn forbidden(context: Option<&WebRequestContext>, detail: impl Into<String>)
         detail,
         trace_id.clone(),
     );
-    attach_trace_header((StatusCode::FORBIDDEN, Json(problem)).into_response(), &trace_id)
+    attach_trace_header(
+        (StatusCode::FORBIDDEN, Json(problem)).into_response(),
+        &trace_id,
+    )
 }
 
 pub fn validation(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
@@ -178,27 +179,30 @@ pub fn validation(context: Option<&WebRequestContext>, detail: impl Into<String>
         detail,
         trace_id.clone(),
     );
-    attach_trace_header((StatusCode::BAD_REQUEST, Json(problem)).into_response(), &trace_id)
+    attach_trace_header(
+        (StatusCode::BAD_REQUEST, Json(problem)).into_response(),
+        &trace_id,
+    )
 }
 
 pub fn conflict(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
-        SdkWorkResultCode::Conflict,
-        detail,
-        trace_id.clone(),
-    );
-    attach_trace_header((StatusCode::CONFLICT, Json(problem)).into_response(), &trace_id)
+    let problem =
+        SdkWorkProblemDetail::platform(SdkWorkResultCode::Conflict, detail, trace_id.clone());
+    attach_trace_header(
+        (StatusCode::CONFLICT, Json(problem)).into_response(),
+        &trace_id,
+    )
 }
 
 pub fn not_found(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
-        SdkWorkResultCode::NotFound,
-        detail,
-        trace_id.clone(),
-    );
-    attach_trace_header((StatusCode::NOT_FOUND, Json(problem)).into_response(), &trace_id)
+    let problem =
+        SdkWorkProblemDetail::platform(SdkWorkResultCode::NotFound, detail, trace_id.clone());
+    attach_trace_header(
+        (StatusCode::NOT_FOUND, Json(problem)).into_response(),
+        &trace_id,
+    )
 }
 
 pub fn unprocessable_entity(
@@ -219,11 +223,8 @@ pub fn unprocessable_entity(
 
 pub fn not_implemented(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
-        SdkWorkResultCode::InternalError,
-        detail,
-        trace_id.clone(),
-    );
+    let problem =
+        SdkWorkProblemDetail::platform(SdkWorkResultCode::InternalError, detail, trace_id.clone());
     attach_trace_header(
         (StatusCode::NOT_IMPLEMENTED, Json(problem)).into_response(),
         &trace_id,
@@ -233,10 +234,9 @@ pub fn not_implemented(context: Option<&WebRequestContext>, detail: impl Into<St
 fn attach_trace_header(response: Response, trace_id: &str) -> Response {
     let mut response = response;
     if let Ok(value) = HeaderValue::from_str(trace_id) {
-        response.headers_mut().insert(
-            HeaderName::from_static("x-sdkwork-trace-id"),
-            value,
-        );
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static("x-sdkwork-trace-id"), value);
     }
     response
 }
@@ -274,7 +274,11 @@ mod tests {
 
     #[test]
     fn success_command_returns_accepted_payload() {
-        let response = success_command(None, Some("order-1".to_string()), Some("cancelled".to_string()));
+        let response = success_command(
+            None,
+            Some("order-1".to_string()),
+            Some("cancelled".to_string()),
+        );
         assert_eq!(response.status(), StatusCode::OK);
     }
 }

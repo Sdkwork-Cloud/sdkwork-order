@@ -19,17 +19,16 @@ use sdkwork_order_service::{
 };
 use sdkwork_payment_providers::{
     normalize_provider_code, peek_webhook_routing_fields, provider_registry_for_account,
-    PaymentNormalizeWebhookRequest, PaymentProviderRegistry, ProviderAccountBinding,
-    ProviderCredentialBundle, PaymentVerifyWebhookRequest,
+    PaymentNormalizeWebhookRequest, PaymentProviderRegistry, PaymentVerifyWebhookRequest,
+    ProviderAccountBinding, ProviderCredentialBundle,
 };
 use sdkwork_payment_repository_sqlx::{
-    ingest_provider_webhook_sqlite, IngestProviderWebhookCommand,
-    load_active_provider_account_by_merchant_id_postgres,
+    ingest_provider_webhook_sqlite, load_active_provider_account_by_merchant_id_postgres,
     load_active_provider_account_by_merchant_id_sqlite, load_active_provider_account_postgres,
     load_active_provider_account_sqlite, load_webhook_attempt_context_by_out_trade_no_postgres,
-    load_webhook_attempt_context_by_out_trade_no_sqlite, PaymentProviderAccountRecord,
-    PaymentWebhookAttemptContext, PostgresCommerceOwnerOrderPaymentStore,
-    SqliteCommerceOwnerOrderPaymentStore,
+    load_webhook_attempt_context_by_out_trade_no_sqlite, IngestProviderWebhookCommand,
+    PaymentProviderAccountRecord, PaymentWebhookAttemptContext,
+    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_web_core::WebRequestContext;
 use sqlx::{PgPool, SqlitePool};
@@ -66,7 +65,9 @@ pub fn app_payment_webhook_router_with_sqlite_pool(
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
-    let registry = Arc::new(PaymentProviderRegistry::from_credentials(credentials.clone()));
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+        credentials.clone(),
+    ));
     Router::new()
         .route(
             "/app/v3/api/orders/payments/webhooks/{providerCode}",
@@ -90,7 +91,9 @@ pub fn app_payment_webhook_router_with_postgres_pool(
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
-    let registry = Arc::new(PaymentProviderRegistry::from_credentials(credentials.clone()));
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+        credentials.clone(),
+    ));
     Router::new()
         .route(
             "/app/v3/api/orders/payments/webhooks/{providerCode}",
@@ -196,12 +199,7 @@ where
 {
     let provider_code = normalize_provider_code(&provider_code);
     let registry = match pool
-        .resolve_webhook_registry(
-            &deployment_registry,
-            &credentials,
-            &provider_code,
-            &body,
-        )
+        .resolve_webhook_registry(&deployment_registry, &credentials, &provider_code, &body)
         .await
     {
         Ok(registry) => registry,
@@ -221,10 +219,7 @@ where
     let header_pairs = headers
         .iter()
         .filter_map(|(name, value)| {
-            Some((
-                name.as_str().to_owned(),
-                value.to_str().ok()?.to_owned(),
-            ))
+            Some((name.as_str().to_owned(), value.to_str().ok()?.to_owned()))
         })
         .collect::<Vec<_>>();
 
@@ -324,9 +319,7 @@ where
 
     success_command(
         ctx,
-        ingest
-            .payment_attempt_id
-            .or(Some(ingest.webhook_event_id)),
+        ingest.payment_attempt_id.or(Some(ingest.webhook_event_id)),
         ingest.applied_status.or_else(|| {
             if ingest.replayed {
                 Some("replayed".to_owned())
@@ -357,7 +350,11 @@ trait OrderSubjectLoader: Send + Sync {
         organization_id: Option<&'a str>,
         order_id: &'a str,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>>
+                + Send
+                + 'a,
+        >,
     >;
 }
 
@@ -368,7 +365,11 @@ impl OrderSubjectLoader for SqliteCommerceOrderStore {
         organization_id: Option<&'a str>,
         order_id: &'a str,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>>
+                + Send
+                + 'a,
+        >,
     > {
         Box::pin(async move {
             self.load_order_subject(tenant_id, organization_id, order_id)
@@ -384,7 +385,11 @@ impl OrderSubjectLoader for PostgresCommerceOrderStore {
         organization_id: Option<&'a str>,
         order_id: &'a str,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>> + Send + 'a>,
+        Box<
+            dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>>
+                + Send
+                + 'a,
+        >,
     > {
         Box::pin(async move {
             self.load_order_subject(tenant_id, organization_id, order_id)
@@ -400,8 +405,7 @@ trait WebhookCredentialPool {
         credentials: &ProviderCredentialBundle,
         provider_code: &str,
         body: &[u8],
-    ) -> impl std::future::Future<Output = Result<PaymentProviderRegistry, CommerceServiceError>>
-           + Send;
+    ) -> impl std::future::Future<Output = Result<PaymentProviderRegistry, CommerceServiceError>> + Send;
 }
 
 trait WebhookIngestPool {
@@ -473,7 +477,8 @@ async fn resolve_webhook_provider_account_postgres(
             None
         }
     } else if let Some(merchant_id) = peek.merchant_id.as_deref() {
-        load_active_provider_account_by_merchant_id_postgres(pool, provider_code, merchant_id).await?
+        load_active_provider_account_by_merchant_id_postgres(pool, provider_code, merchant_id)
+            .await?
     } else {
         None
     };
@@ -490,10 +495,9 @@ fn registry_for_webhook_account(
     account: Option<PaymentProviderAccountRecord>,
 ) -> PaymentProviderRegistry {
     match account {
-        Some(record) => provider_registry_for_account(
-            credentials,
-            Some(provider_account_binding(&record)),
-        ),
+        Some(record) => {
+            provider_registry_for_account(credentials, Some(provider_account_binding(&record)))
+        }
         None => deployment_registry.clone(),
     }
 }
@@ -552,10 +556,8 @@ impl WebhookIngestPool for SqlitePool {
     async fn ingest_provider_webhook(
         &self,
         command: IngestProviderWebhookCommand,
-    ) -> Result<
-        sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome,
-        CommerceServiceError,
-    > {
+    ) -> Result<sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome, CommerceServiceError>
+    {
         ingest_provider_webhook_sqlite(self, command).await
     }
 }
@@ -564,10 +566,8 @@ impl WebhookIngestPool for PgPool {
     async fn ingest_provider_webhook(
         &self,
         command: IngestProviderWebhookCommand,
-    ) -> Result<
-        sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome,
-        CommerceServiceError,
-    > {
+    ) -> Result<sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome, CommerceServiceError>
+    {
         sdkwork_payment_repository_sqlx::ingest_provider_webhook_postgres(self, command).await
     }
 }

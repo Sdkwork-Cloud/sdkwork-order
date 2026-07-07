@@ -7,7 +7,9 @@ use sdkwork_payment_repository_sqlx::{
     enrich_owner_order_payment_postgres, enrich_owner_order_payment_sqlite,
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
 };
-use sdkwork_payment_service::{CancelOrderPaymentsCommand, PayOwnerOrderCommand, PayOwnerOrderOutcome};
+use sdkwork_payment_service::{
+    CancelOrderPaymentsCommand, PayOwnerOrderCommand, PayOwnerOrderOutcome,
+};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::order_router::{CommerceOrderFuture, OwnerOrderPaymentStore};

@@ -8,25 +8,21 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
     checkout_owner_order_request_hash, checkout_quote_request_hash, checkout_session_request_hash,
     CheckoutLineInput, CheckoutQuoteView, CheckoutSessionDetailQuery, CheckoutSessionView,
     CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand,
     CreateOwnerOrderOutcome,
 };
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, SqliteCommerceOrderStore,
-};
-use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
-use crate::api_response::{
-    map_service_error, not_found, success_item, unauthorized, validation,
-};
+use crate::api_response::{map_service_error, not_found, success_item, unauthorized, validation};
 use crate::command_headers::{ensure_request_hash_matches, required_app_write_command_headers};
-use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
+use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 pub type CommerceCheckoutFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -177,23 +173,23 @@ pub fn app_checkout_router_with_postgres_pool(pool: PgPool) -> Router {
 
 pub fn build_app_checkout_router(store: Arc<dyn CommerceCheckoutStore>) -> Router {
     Router::new()
-            .route(
-                "/app/v3/api/checkout/sessions",
-                post(create_checkout_session),
-            )
-            .route(
-                "/app/v3/api/checkout/sessions/{checkoutSessionId}",
-                get(retrieve_checkout_session),
-            )
-            .route(
-                "/app/v3/api/checkout/sessions/{checkoutSessionId}/quotes",
-                post(create_checkout_quote),
-            )
-            .route(
-                "/app/v3/api/checkout/sessions/{checkoutSessionId}/orders",
-                post(create_checkout_order),
-            )
-            .with_state(AppCheckoutState { store })
+        .route(
+            "/app/v3/api/checkout/sessions",
+            post(create_checkout_session),
+        )
+        .route(
+            "/app/v3/api/checkout/sessions/{checkoutSessionId}",
+            get(retrieve_checkout_session),
+        )
+        .route(
+            "/app/v3/api/checkout/sessions/{checkoutSessionId}/quotes",
+            post(create_checkout_quote),
+        )
+        .route(
+            "/app/v3/api/checkout/sessions/{checkoutSessionId}/orders",
+            post(create_checkout_order),
+        )
+        .with_state(AppCheckoutState { store })
 }
 
 async fn create_checkout_session(
@@ -204,7 +200,7 @@ async fn create_checkout_session(
     body: Json<CreateCheckoutSessionRequest>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -258,7 +254,7 @@ async fn retrieve_checkout_session(
     Path(checkout_session_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -287,7 +283,7 @@ async fn create_checkout_quote(
     Path(checkout_session_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -330,7 +326,7 @@ async fn create_checkout_order(
     Path(checkout_session_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };

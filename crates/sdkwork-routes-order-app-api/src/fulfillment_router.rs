@@ -7,13 +7,11 @@ use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
     FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView,
 };
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, SqliteCommerceOrderStore,
-};
-use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
@@ -22,7 +20,7 @@ use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_item, success_items,
     unauthorized, validation,
 };
-use crate::subject::app_runtime_subject_from_extension;
+use crate::subject::app_runtime_subject_from_contexts;
 
 pub type CommerceFulfillmentFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -120,7 +118,7 @@ async fn list_fulfillments(
     Query(params): Query<FulfillmentListParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -140,7 +138,11 @@ async fn list_fulfillments(
     match state.store.list_owner_fulfillments(query).await {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(page.page, page.page_size);
-            let mapped = page.items.into_iter().map(map_fulfillment).collect::<Vec<_>>();
+            let mapped = page
+                .items
+                .into_iter()
+                .map(map_fulfillment)
+                .collect::<Vec<_>>();
             success_items(ctx, mapped, page.total, page_params)
         }
         Err(error) => map_service_error(ctx, error),
@@ -154,7 +156,7 @@ async fn retrieve_fulfillment(
     Path(fulfillment_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };

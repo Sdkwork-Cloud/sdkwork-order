@@ -38,7 +38,12 @@ const HTTP_ROUTES: &[HttpRoute] = &[
     )
     .with_idempotent(true),
     // === Orders ===
-    HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/orders", "orders", "orders.list"),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/orders",
+        "orders",
+        "orders.list",
+    ),
     HttpRoute::dual_token(
         HttpMethod::Post,
         "/app/v3/api/orders",
@@ -302,14 +307,12 @@ mod tests {
 
         for route in manifest.routes() {
             let wire_method = manifest_method_wire(route.method);
-            let methods = openapi["paths"][route.path]
-                .as_object()
-                .unwrap_or_else(|| {
-                    panic!(
-                        "manifest route {:?} {} missing from OpenAPI paths",
-                        route.method, route.path
-                    )
-                });
+            let methods = openapi["paths"][route.path].as_object().unwrap_or_else(|| {
+                panic!(
+                    "manifest route {:?} {} missing from OpenAPI paths",
+                    route.method, route.path
+                )
+            });
             assert!(
                 methods.contains_key(wire_method),
                 "manifest route {:?} {} must declare {wire_method} in OpenAPI",

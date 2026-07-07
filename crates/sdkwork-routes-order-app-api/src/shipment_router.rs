@@ -7,15 +7,13 @@ use axum::response::Response;
 use axum::routing::get;
 use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
     ShipmentDetailQuery, ShipmentPackageListQuery, ShipmentPackagePage, ShipmentPackageView,
     ShipmentTrackingEventListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
     ShipmentView,
 };
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, SqliteCommerceOrderStore,
-};
-use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::Serialize;
 use sqlx::{PgPool, SqlitePool};
@@ -24,7 +22,7 @@ use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_item, success_items,
     unauthorized, validation,
 };
-use crate::subject::app_runtime_subject_from_extension;
+use crate::subject::app_runtime_subject_from_contexts;
 
 pub type CommerceShipmentFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -172,7 +170,7 @@ async fn retrieve_shipment(
     Path(shipment_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -201,7 +199,7 @@ async fn list_shipment_packages(
     Query(list_params): Query<ShipmentListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -220,7 +218,11 @@ async fn list_shipment_packages(
     match state.store.list_owner_shipment_packages(query).await {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(page.page, page.page_size);
-            let mapped = page.items.into_iter().map(map_shipment_package).collect::<Vec<_>>();
+            let mapped = page
+                .items
+                .into_iter()
+                .map(map_shipment_package)
+                .collect::<Vec<_>>();
             success_items(ctx, mapped, page.total, page_params)
         }
         Err(error) => map_service_error(ctx, error),
@@ -235,7 +237,7 @@ async fn list_shipment_tracking_events(
     Query(list_params): Query<ShipmentListQueryParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_extension(runtime_context) {
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
@@ -254,7 +256,11 @@ async fn list_shipment_tracking_events(
     match state.store.list_owner_shipment_tracking_events(query).await {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(page.page, page.page_size);
-            let mapped = page.items.into_iter().map(map_tracking_event).collect::<Vec<_>>();
+            let mapped = page
+                .items
+                .into_iter()
+                .map(map_tracking_event)
+                .collect::<Vec<_>>();
             success_items(ctx, mapped, page.total, page_params)
         }
         Err(error) => map_service_error(ctx, error),

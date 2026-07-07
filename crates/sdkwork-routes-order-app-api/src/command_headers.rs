@@ -246,8 +246,8 @@ mod tests {
 
     #[test]
     fn ensure_request_hash_matches_rejects_mismatch_with_problem_detail() {
-        let error =
-            ensure_request_hash_matches(ctx().as_ref(), "expected", "provided").expect_err("mismatch");
+        let error = ensure_request_hash_matches(ctx().as_ref(), "expected", "provided")
+            .expect_err("mismatch");
         assert_eq!(error.status(), StatusCode::BAD_REQUEST);
     }
 
