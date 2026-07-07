@@ -44,7 +44,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "f145d08d2cbf1c17a8957963c971252ecc864139e260ce66e3874d7ec428bbc7"
+      "sha256": "aa03e9b3c4283c053055a50c4b315124650bd0241d29c5e3f8d31d4142e24ceb"
     },
     {
       "path": "sdkwork-sdk.json",
@@ -52,7 +52,7 @@
     },
     {
       "path": "src/api/after-sales.ts",
-      "sha256": "f72b868c6fbaa8266bdfdd8fd3748b8be355226fbcaf45354a59727f61e02902"
+      "sha256": "50335bd1de2a128e7d34548dadcb58e051caf07d012bf77a263e881de573582b"
     },
     {
       "path": "src/api/base.ts",
@@ -60,7 +60,7 @@
     },
     {
       "path": "src/api/checkout.ts",
-      "sha256": "049917c87dee902b75bac781229c15cbb1c545da64974c2b147943c2e0dcc361"
+      "sha256": "ce6902ebb40ca364cd824ea2d23849217b6adf3c56a5b3ec8fd7c04b023d3608"
     },
     {
       "path": "src/api/fulfillments.ts",
@@ -68,11 +68,15 @@
     },
     {
       "path": "src/api/index.ts",
-      "sha256": "01a8e19a44daa4a8d5974b180b3d622db84cb547ff950e892ec7218b3286af33"
+      "sha256": "1e214191f9bfc2a76b6fa7ad23a023b38ae64027c2f59064c16cae984e31cad7"
+    },
+    {
+      "path": "src/api/memberships.ts",
+      "sha256": "fee20369e91eba3a28167346c710c6168404d3e9ee0b191b5a1a90c8fd66839f"
     },
     {
       "path": "src/api/orders.ts",
-      "sha256": "20164d6e2d06b8959c45c0cd0c2c8aee9fe04aebd8e4865b050c61324f90ec5b"
+      "sha256": "dbab96dae380a454420d88917aae24b139ce298f5fc3516bcd844160ac32e9c3"
     },
     {
       "path": "src/api/paths.ts",
@@ -84,7 +88,7 @@
     },
     {
       "path": "src/api/recharges.ts",
-      "sha256": "df87dda1db5899fe798db7b43d633b24691a62136433890d7d92f932abea4f23"
+      "sha256": "ad4700bbb8fc8fa0f5aeeabcb794f63c636481bb039b11f5ba5efa79cd9981e9"
     },
     {
       "path": "src/api/shipments.ts",
@@ -108,7 +112,7 @@
     },
     {
       "path": "src/sdk.ts",
-      "sha256": "e1594bc65a5fa72c87f0eb01902c526ef3e4a01db04ae0e2064bd0ef85d3d7a8"
+      "sha256": "2273fa1165b385d8b0fff5373b129bbdcdb9bdca253c0f166ab05f9b0c6985a7"
     },
     {
       "path": "src/types/after-sales-item.ts",
@@ -172,7 +176,15 @@
     },
     {
       "path": "src/types/index.ts",
-      "sha256": "b2da7fcccf2c46cb7af586c1a5f78c9082dc243080317a3e2fff32be8f6ac6ce"
+      "sha256": "6cef6592d812e92f6c6293df395a3809ba35a3bf9ed7d08e1603600c06c27aa6"
+    },
+    {
+      "path": "src/types/membership-order-create-command.ts",
+      "sha256": "6525f1971b6ab9d176d651e85f1fdde26b22596a9b8ae2fee52c635a1ec02c77"
+    },
+    {
+      "path": "src/types/orders-payments-webhooks-receive-request.ts",
+      "sha256": "f897128a54af973fe8c7e39fda5c90e2e6a7d4155b9caf038a8d762394c5eb02"
     },
     {
       "path": "src/types/page-info.ts",

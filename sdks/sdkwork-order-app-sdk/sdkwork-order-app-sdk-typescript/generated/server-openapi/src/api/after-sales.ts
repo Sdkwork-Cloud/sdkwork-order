@@ -35,6 +35,7 @@ export interface AfterSalesReturnShipmentsListParams {
 
 export interface AfterSalesReturnShipmentsCreateParams {
   idempotencyKey: string;
+  sdkworkRequestHash: string;
 }
 
 export class AfterSalesReturnShipmentsApi {
@@ -60,6 +61,7 @@ export class AfterSalesReturnShipmentsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
       },
       {}
     );
@@ -76,6 +78,12 @@ export interface AfterSalesRequestsListParams {
 
 export interface AfterSalesRequestsCreateParams {
   idempotencyKey: string;
+  sdkworkRequestHash: string;
+}
+
+export interface AfterSalesRequestsUpdateParams {
+  idempotencyKey: string;
+  sdkworkRequestHash: string;
 }
 
 export class AfterSalesRequestsApi {
@@ -102,6 +110,7 @@ export class AfterSalesRequestsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
       },
       {}
     );
@@ -114,8 +123,15 @@ export class AfterSalesRequestsApi {
   }
 
 /** After Sales requests update. */
-  async update(afterSalesRequestId: string, body: UpdateAfterSalesRequest): Promise<AfterSalesRequestResponse> {
-    return this.client.patch<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), body, undefined, undefined, 'application/json');
+  async update(afterSalesRequestId: string, body: UpdateAfterSalesRequest, params: AfterSalesRequestsUpdateParams): Promise<AfterSalesRequestResponse> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.patch<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), body, undefined, requestHeaders, 'application/json');
   }
 }
 

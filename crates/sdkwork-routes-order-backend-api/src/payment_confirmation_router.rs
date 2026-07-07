@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, State};
+use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::post;
 use axum::{Json, Router};
@@ -12,7 +13,8 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort,
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort,
+    MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationPort,
 };
 use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
@@ -21,9 +23,13 @@ use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
+use crate::backend_command_headers::{
+    validate_backend_write_payload, write_payload_with_route_param,
+};
 use crate::api_response::{
     forbidden, map_service_error, not_found, success_item, unauthorized, validation,
 };
+
 use crate::subject::{backend_operator_scope_from_iam, BackendOperatorScope};
 
 mod permissions {
@@ -48,9 +54,10 @@ enum PaymentConfirmationStoreKind {
 struct PaymentConfirmationState {
     store: PaymentConfirmationStoreKind,
     credit_port: Arc<dyn AccountPointsCreditPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ConfirmOrderPaymentRequest {
     request_no: String,
@@ -71,6 +78,7 @@ struct ConfirmOrderPaymentResponse {
 pub fn payment_confirmation_router_with_sqlite_pool(
     pool: SqlitePool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Sqlite {
@@ -79,12 +87,14 @@ pub fn payment_confirmation_router_with_sqlite_pool(
             orders: Arc::new(SqliteCommerceOrderStore::new(pool)),
         },
         credit_port,
+        membership_port,
     })
 }
 
 pub fn payment_confirmation_router_with_postgres_pool(
     pool: PgPool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Postgres {
@@ -93,6 +103,7 @@ pub fn payment_confirmation_router_with_postgres_pool(
             orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
         },
         credit_port,
+        membership_port,
     })
 }
 
@@ -109,6 +120,7 @@ async fn confirm_order_payment(
     State(state): State<PaymentConfirmationState>,
     Extension(runtime_context): Extension<IamAppContext>,
     request_context: Extension<WebRequestContext>,
+    headers: HeaderMap,
     Path(order_id): Path<String>,
     Json(body): Json<ConfirmOrderPaymentRequest>,
 ) -> Response {
@@ -122,7 +134,20 @@ async fn confirm_order_payment(
         return validation(ctx, "request_no is required");
     }
 
+    let payload = write_payload_with_route_param("orderId", &order_id, &body);
+    let _write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "orders.paymentConfirmations.create",
+        &payload,
+        |idempotency_key| format!("pay-confirm-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+
     let credit_port = state.credit_port.clone();
+    let membership_port = state.membership_port.clone();
     match state.store {
         PaymentConfirmationStoreKind::Sqlite {
             ref payments,
@@ -138,6 +163,7 @@ async fn confirm_order_payment(
                 recharge.as_ref(),
                 orders.as_ref(),
                 credit_port.as_ref(),
+                membership_port.as_ref(),
             )
             .await
         }
@@ -155,6 +181,7 @@ async fn confirm_order_payment(
                 recharge.as_ref(),
                 orders.as_ref(),
                 credit_port.as_ref(),
+                membership_port.as_ref(),
             )
             .await
         }
@@ -170,6 +197,7 @@ async fn confirm_order_payment_inner(
     recharge_store: &impl sdkwork_order_service::PointsRechargeFulfillmentStore,
     order_store: &impl OrderSettlementContextLoader,
     credit_port: &dyn AccountPointsCreditPort,
+    membership_port: &dyn MembershipPurchaseFulfillmentPort,
 ) -> Response {
     let order_context = match order_store
         .load_order_payment_settlement_context(
@@ -195,6 +223,7 @@ async fn confirm_order_payment_inner(
         payment_store,
         recharge_store,
         credit_port,
+        membership_port,
         &attempt,
         Some(order_context.subject.as_str()),
         request_no,

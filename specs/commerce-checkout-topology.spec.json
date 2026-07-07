@@ -19,7 +19,8 @@
       "appApiPrefixes": [
         "/app/v3/api/orders",
         "/app/v3/api/recharges",
-        "/app/v3/api/checkout"
+        "/app/v3/api/checkout",
+        "/app/v3/api/memberships"
       ],
       "backendApiPrefixes": [
         "/backend/v3/api/orders"
@@ -45,7 +46,7 @@
       ]
     }
   },
-  "dependencyDirection": "order -> payment (in-process OwnerOrderPaymentStore and PaymentWebhookStore); payment MUST NOT depend on order",
+  "dependencyDirection": "order -> payment (in-process OwnerOrderPaymentStore and PaymentWebhookStore); order -> account (AccountPointsCreditPort for points_recharge); order -> membership (MembershipPurchaseFulfillmentPort wired at OrderServiceHost); payment MUST NOT depend on order; membership MUST NOT depend on order service crates or insert commerce_order in production",
   "paymentSettlement": {
     "webhookOwner": "order",
     "webhookRoute": "POST /app/v3/api/orders/payments/webhooks/{providerCode}",
@@ -71,8 +72,8 @@
     },
     {
       "subject": "membership",
-      "handler": "membership activation port",
-      "status": "planned"
+      "handler": "MembershipPurchaseFulfillmentPort (sdkwork-order-integration-membership)",
+      "status": "complete"
     },
     {
       "subject": "coupon_package",
@@ -124,12 +125,21 @@
       "paymentParams.cashierUrl -> cashier UI",
       "PSP webhook -> order payments webhooks",
       "order in-process settlement -> account ledger credit"
+    ],
+    "membershipPurchase": [
+      "memberships.orders.create",
+      "orders.pay",
+      "paymentParams.cashierUrl -> cashier UI",
+      "PSP webhook -> order payments webhooks",
+      "order in-process settlement -> MembershipPurchaseFulfillmentPort"
     ]
   },
   "forbidden": [
     "payment provider HTTP settlement orchestration in sdkwork-payment routes",
     "payment HTTP callback to order backend",
     "insert commerce_order in payment repository",
+    "insert commerce_order in membership repository (production; standalone demo exception only)",
+    "membership Rust crate dependency on sdkwork-order-service",
     "raw HTTP to order/payment APIs from app packages (use composed SDKs)"
   ]
 }

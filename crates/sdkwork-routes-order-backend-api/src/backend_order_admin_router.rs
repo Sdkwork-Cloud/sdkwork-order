@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, Query, State};
+use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, SqliteCommerceOrderStore,
+};
+use sdkwork_payment_repository_sqlx::{
+    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_order_service::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
@@ -20,11 +24,18 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    conflict as api_conflict, forbidden as api_forbidden, map_service_error, not_found as api_not_found,
+    conflict as api_conflict, map_service_error, not_found as api_not_found,
     offset_list_page_params_from_query, success_command, success_item, success_items,
-    unauthorized as api_unauthorized, validation,
+    validation,
 };
-use crate::subject::backend_operator_scope_from_iam;
+use crate::backend_acl::require_backend_operator;
+use crate::backend_management_lifecycle::{
+    cancel_management_order_with_payments, close_management_order_with_payments,
+    BackendManagementOrderStore, BackendManagementPaymentStore,
+};
+use crate::backend_command_headers::{
+    validate_backend_write_payload, write_payload_with_route_param,
+};
 
 /// Permission codes enforced on the backend order admin API surface.
 ///
@@ -39,14 +50,9 @@ mod permissions {
 }
 
 #[derive(Clone)]
-enum BackendOrderAdminStore {
-    Postgres(Arc<PostgresCommerceOrderStore>),
-    Sqlite(Arc<SqliteCommerceOrderStore>),
-}
-
-#[derive(Clone)]
 struct BackendOrderAdminState {
-    store: BackendOrderAdminStore,
+    orders: BackendManagementOrderStore,
+    payments: BackendManagementPaymentStore,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,7 +79,7 @@ struct CancellationListParams {
     page_size: Option<i64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CancelOrderBody {
     reason: Option<String>,
@@ -82,7 +88,7 @@ struct CancelOrderBody {
     cancel_type: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CloseOrderBody {
     reason: Option<String>,
@@ -165,19 +171,32 @@ struct OrderCancellationResponse {
 }
 
 pub fn backend_order_admin_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_backend_order_admin_router(BackendOrderAdminStore::Sqlite(Arc::new(
-        SqliteCommerceOrderStore::new(pool),
-    )))
+    build_backend_order_admin_router(
+        BackendManagementOrderStore::Sqlite(Arc::new(SqliteCommerceOrderStore::new(
+            pool.clone(),
+        ))),
+        BackendManagementPaymentStore::Sqlite(Arc::new(
+            SqliteCommerceOwnerOrderPaymentStore::new(pool),
+        )),
+    )
 }
 
 pub fn backend_order_admin_router_with_postgres_pool(pool: PgPool) -> Router {
-    build_backend_order_admin_router(BackendOrderAdminStore::Postgres(Arc::new(
-        PostgresCommerceOrderStore::new(pool),
-    )))
+    build_backend_order_admin_router(
+        BackendManagementOrderStore::Postgres(Arc::new(PostgresCommerceOrderStore::new(
+            pool.clone(),
+        ))),
+        BackendManagementPaymentStore::Postgres(Arc::new(
+            PostgresCommerceOwnerOrderPaymentStore::new(pool),
+        )),
+    )
 }
 
-fn build_backend_order_admin_router(store: BackendOrderAdminStore) -> Router {
-    let state = BackendOrderAdminState { store };
+fn build_backend_order_admin_router(
+    orders: BackendManagementOrderStore,
+    payments: BackendManagementPaymentStore,
+) -> Router {
+    let state = BackendOrderAdminState { orders, payments };
     Router::new()
         .route("/backend/v3/api/orders", get(list_orders))
         .route("/backend/v3/api/orders/cancellations", get(list_cancellations))
@@ -188,7 +207,7 @@ fn build_backend_order_admin_router(store: BackendOrderAdminStore) -> Router {
         .with_state(state)
 }
 
-impl BackendOrderAdminStore {
+impl BackendManagementOrderStore {
     async fn list_management_orders(
         &self,
         query: OrderManagementListQuery,
@@ -206,26 +225,6 @@ impl BackendOrderAdminStore {
         match self {
             Self::Postgres(store) => store.retrieve_management_order(query).await,
             Self::Sqlite(store) => store.retrieve_management_order(query).await,
-        }
-    }
-
-    async fn cancel_management_order(
-        &self,
-        command: CancelManagementOrderCommand,
-    ) -> Result<(), CommerceServiceError> {
-        match self {
-            Self::Postgres(store) => store.cancel_management_order(command).await,
-            Self::Sqlite(store) => store.cancel_management_order(command).await,
-        }
-    }
-
-    async fn close_management_order(
-        &self,
-        command: CloseManagementOrderCommand,
-    ) -> Result<(), CommerceServiceError> {
-        match self {
-            Self::Postgres(store) => store.close_management_order(command).await,
-            Self::Sqlite(store) => store.close_management_order(command).await,
         }
     }
 
@@ -257,7 +256,7 @@ async fn list_orders(
     Query(params): Query<OrderListParams>,
 ) -> Response {
     let ctx = Some(&request_context.0);
-    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -273,7 +272,7 @@ async fn list_orders(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.list_management_orders(query.clone()).await {
+    match state.orders.list_management_orders(query.clone()).await {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(query.page, query.page_size);
             success_items(
@@ -294,7 +293,7 @@ async fn retrieve_order(
     Path(order_id): Path<String>,
 ) -> Response {
     let ctx = Some(&request_context.0);
-    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -307,7 +306,7 @@ async fn retrieve_order(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.retrieve_management_order(query).await {
+    match state.orders.retrieve_management_order(query).await {
         Ok(Some(detail)) => success_item(ctx, map_order_detail(detail)),
         Ok(None) => api_not_found(ctx, "order not found"),
         Err(error) => map_service_error(ctx, error),
@@ -318,12 +317,28 @@ async fn cancel_order(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
     request_context: Extension<WebRequestContext>,
+    headers: HeaderMap,
     Path(order_id): Path<String>,
-    Json(body): Json<CancelOrderBody>,
+    body: Option<Json<CancelOrderBody>>,
 ) -> Response {
     let ctx = Some(&request_context.0);
-    let subject = match require_backend_subject(ctx, runtime_context, permissions::MANAGE) {
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
+        Err(response) => return response,
+    };
+    let body = body.map(|Json(value)| value).unwrap_or(CancelOrderBody {
+        reason: None,
+        cancel_type: None,
+    });
+    let payload = write_payload_with_route_param("orderId", &order_id, &body);
+    let _write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "orders.admin.cancel",
+        &payload,
+        |idempotency_key| format!("admin-cancel-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
         Err(response) => return response,
     };
     let command = match CancelManagementOrderCommand::with_cancel_type(
@@ -337,7 +352,7 @@ async fn cancel_order(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.cancel_management_order(command).await {
+    match cancel_management_order_with_payments(&state.orders, &state.payments, command).await {
         Ok(()) => success_command(ctx, Some(order_id), Some("cancelled".to_owned())),
         Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
         Err(error) => map_service_error(ctx, error),
@@ -348,12 +363,28 @@ async fn close_order(
     State(state): State<BackendOrderAdminState>,
     Extension(runtime_context): Extension<IamAppContext>,
     request_context: Extension<WebRequestContext>,
+    headers: HeaderMap,
     Path(order_id): Path<String>,
-    Json(body): Json<CloseOrderBody>,
+    body: Option<Json<CloseOrderBody>>,
 ) -> Response {
     let ctx = Some(&request_context.0);
-    let subject = match require_backend_subject(ctx, runtime_context, permissions::MANAGE) {
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
+        Err(response) => return response,
+    };
+    let body = body.map(|Json(value)| value).unwrap_or(CloseOrderBody {
+        reason: None,
+        close_type: None,
+    });
+    let payload = write_payload_with_route_param("orderId", &order_id, &body);
+    let _write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "orders.admin.close",
+        &payload,
+        |idempotency_key| format!("admin-close-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
         Err(response) => return response,
     };
     let command = match CloseManagementOrderCommand::with_close_type(
@@ -367,7 +398,7 @@ async fn close_order(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.close_management_order(command).await {
+    match close_management_order_with_payments(&state.orders, &state.payments, command).await {
         Ok(()) => success_command(ctx, Some(order_id), Some("closed".to_owned())),
         Err(error) if error.code() == "conflict" => api_conflict(ctx, error.message()),
         Err(error) => map_service_error(ctx, error),
@@ -382,7 +413,7 @@ async fn list_order_events(
     Query(params): Query<OrderEventListParams>,
 ) -> Response {
     let ctx = Some(&request_context.0);
-    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -397,7 +428,7 @@ async fn list_order_events(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.list_management_order_events(query.clone()).await {
+    match state.orders.list_management_order_events(query.clone()).await {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(query.page, query.page_size);
             success_items(
@@ -418,7 +449,7 @@ async fn list_cancellations(
     Query(params): Query<CancellationListParams>,
 ) -> Response {
     let ctx = Some(&request_context.0);
-    let subject = match require_backend_subject(ctx, runtime_context, permissions::READ) {
+    let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
         Err(response) => return response,
     };
@@ -433,7 +464,7 @@ async fn list_cancellations(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.store.list_order_cancellations(query.clone()).await {
+    match state.orders.list_order_cancellations(query.clone()).await {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(query.page, query.page_size);
             success_items(
@@ -444,36 +475,6 @@ async fn list_cancellations(
             )
         }
         Err(error) => map_service_error(ctx, error),
-    }
-}
-
-fn require_backend_subject(
-    ctx: Option<&WebRequestContext>,
-    context: IamAppContext,
-    required_permission: &str,
-) -> Result<crate::subject::BackendOperatorScope, Response> {
-    if !context.can_access_backend_api() {
-        return Err(api_forbidden(
-            ctx,
-            "backend api access requires an organization-scoped session",
-        ));
-    }
-    if !context.has_permission(required_permission) {
-        tracing::warn!(
-            target = "order.acl",
-            user_id = %context.user_id,
-            tenant_id = %context.tenant_id,
-            required_permission,
-            "backend order admin permission denied"
-        );
-        return Err(api_forbidden(
-            ctx,
-            format!("missing required permission: {required_permission}"),
-        ));
-    }
-    match backend_operator_scope_from_iam(&context) {
-        Ok(subject) => Ok(subject),
-        Err(message) => Err(api_unauthorized(ctx, message)),
     }
 }
 

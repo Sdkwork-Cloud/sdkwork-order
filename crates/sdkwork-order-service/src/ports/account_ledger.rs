@@ -30,6 +30,19 @@ pub trait AccountPointsCreditPort: Send + Sync {
         &'a self,
         request: PointsRechargeCreditRequest,
     ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome>;
+
+    fn reverse_points_recharge_credit<'a>(
+        &'a self,
+        request: PointsRechargeCreditRequest,
+    ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome>;
+}
+
+pub fn points_recharge_compensation_idempotency_key(order_id: &str) -> String {
+    format!("points-recharge:compensate:{order_id}")
+}
+
+pub fn points_recharge_compensation_transaction_no(order_id: &str) -> String {
+    format!("points-recharge:compensate:{order_id}")
 }
 
 pub const ACCOUNT_POINTS_CREDIT_PORT: &str = "account.points.credit";

@@ -4,7 +4,9 @@ use sdkwork_order_service_host::OrderServiceHost;
 use std::sync::Arc;
 
 use crate::{
-    backend_order_admin_router_with_postgres_pool, backend_order_admin_router_with_sqlite_pool,
+    backend_commerce_admin_router_with_postgres_pool,
+    backend_commerce_admin_router_with_sqlite_pool, backend_order_admin_router_with_postgres_pool,
+    backend_order_admin_router_with_sqlite_pool,
     openapi_contract::mount_backend_openapi,
     payment_confirmation_router_with_postgres_pool,
     payment_confirmation_router_with_sqlite_pool,
@@ -12,16 +14,24 @@ use crate::{
 
 pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
     let credit_port = host.account_credit_port();
+    let membership_port = host.membership_fulfillment_port();
     let router = match host.database_pool() {
         DatabasePool::Postgres(pool, _) => Router::new()
             .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
+            .merge(backend_commerce_admin_router_with_postgres_pool(pool.clone()))
             .merge(payment_confirmation_router_with_postgres_pool(
                 pool.clone(),
                 credit_port,
+                membership_port,
             )),
         DatabasePool::Sqlite(pool, _) => Router::new()
             .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(payment_confirmation_router_with_sqlite_pool(pool.clone(), credit_port)),
+            .merge(backend_commerce_admin_router_with_sqlite_pool(pool.clone()))
+            .merge(payment_confirmation_router_with_sqlite_pool(
+                pool.clone(),
+                credit_port,
+                membership_port,
+            )),
     };
     mount_backend_openapi(router)
 }

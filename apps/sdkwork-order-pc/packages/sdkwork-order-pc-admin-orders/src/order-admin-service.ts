@@ -6,9 +6,11 @@ import type {
   SdkworkOrderBackendClient,
 } from "@sdkwork/order-backend-sdk";
 import {
+  createSdkworkWriteCommandHeaders,
   resolveSdkworkOffsetPagination,
   unwrapSdkworkOrderListPage,
   unwrapSdkworkOrderResource,
+  writePayloadWithRouteParam,
 } from "@sdkwork/order-service";
 
 export interface OrderAdminListQuery {
@@ -65,10 +67,16 @@ export function createOrderAdminService(
       return unwrapSdkworkOrderResource<OrderDetail>(raw);
     },
     async cancelOrder(orderId, body) {
-      await client.orders.admin.cancel(orderId, body ?? { reason: "platform-cancel" });
+      const requestBody = body ?? { reason: "platform-cancel" };
+      const payload = writePayloadWithRouteParam("orderId", orderId, requestBody);
+      const writeHeaders = createSdkworkWriteCommandHeaders("orders.admin.cancel", payload);
+      await client.orders.admin.cancel(orderId, writeHeaders, requestBody);
     },
     async closeOrder(orderId, body) {
-      await client.orders.admin.close(orderId, body ?? { reason: "platform-close" });
+      const requestBody = body ?? { reason: "platform-close" };
+      const payload = writePayloadWithRouteParam("orderId", orderId, requestBody);
+      const writeHeaders = createSdkworkWriteCommandHeaders("orders.admin.close", payload);
+      await client.orders.admin.close(orderId, writeHeaders, requestBody);
     },
   };
 }

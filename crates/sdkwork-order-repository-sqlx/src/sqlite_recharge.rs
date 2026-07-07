@@ -360,7 +360,8 @@ WHERE o.tenant_id = CAST(?1 AS TEXT)
   AND ((o.organization_id = CAST(?2 AS TEXT)) OR (o.organization_id IS NULL AND ?2 IS NULL))
   AND o.owner_user_id = CAST(?3 AS TEXT)
   AND (
-        o.order_no = ?4
+        o.id = ?4
+        OR o.order_no = ?4
         OR pa.out_trade_no = ?4
    )
 ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC, o.id DESC
@@ -568,6 +569,13 @@ impl SqliteCommerceRechargeStore {
         &self,
         command: CreatePointsRechargeOrderCommand,
     ) -> Result<CreatePointsRechargeOrderOutcome, CommerceServiceError> {
+        if let Some(snapshot) = self
+            .load_recharge_checkout_by_idempotency_key(&command)
+            .await?
+        {
+            return Ok(recharge_outcome_from_checkout_status(snapshot));
+        }
+
         let mut tx = self
             .pool
             .begin_with("BEGIN IMMEDIATE")
@@ -651,6 +659,44 @@ impl SqliteCommerceRechargeStore {
         row.as_ref().map(map_checkout_status).transpose()
     }
 
+    pub async fn load_recharge_checkout_by_idempotency_key(
+        &self,
+        command: &CreatePointsRechargeOrderCommand,
+    ) -> Result<Option<CheckoutStatusSnapshot>, CommerceServiceError> {
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        let order_id = sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT id
+            FROM commerce_order
+            WHERE tenant_id = CAST(?1 AS TEXT)
+              AND ((organization_id = CAST(?2 AS TEXT)) OR (organization_id IS NULL AND ?2 IS NULL))
+              AND owner_user_id = CAST(?3 AS TEXT)
+              AND idempotency_key = CAST(?4 AS TEXT)
+              AND subject = 'points_recharge'
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.idempotency_key)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to load recharge idempotency replay", error))?;
+
+        let Some(order_id) = order_id else {
+            return Ok(None);
+        };
+
+        self.load_checkout_status(CheckoutStatusQuery::new(
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+            &command.owner_user_id,
+            &order_id,
+        )?)
+        .await
+    }
+
     pub async fn load_points_recharge_fulfillment_context(
         &self,
         command: &FulfillPointsRechargeOrderCommand,
@@ -693,6 +739,105 @@ impl SqliteCommerceRechargeStore {
         .fetch_optional(&self.pool)
         .await
         .map_err(|error| store_error("failed to resolve points recharge order owner", error))
+    }
+
+    pub async fn reserve_points_recharge_fulfillment(
+        &self,
+        command: &FulfillPointsRechargeOrderCommand,
+        context: &PointsRechargeFulfillmentContext,
+    ) -> Result<(), CommerceServiceError> {
+        if context.already_fulfilled() || context.fulfillment_in_progress() {
+            return Ok(());
+        }
+
+        let now = current_query_timestamp();
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(|error| store_error("failed to begin points recharge reservation transaction", error))?;
+
+        let updated = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET fulfillment_status = 'processing',
+                updated_at = ?
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+              AND owner_user_id = CAST(? AS TEXT)
+              AND id = CAST(? AS TEXT)
+              AND subject = 'points_recharge'
+              AND LOWER(COALESCE(fulfillment_status, '')) NOT IN ('fulfilled', 'completed', 'processing')
+            "#,
+        )
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to reserve points recharge fulfillment", error))?;
+
+        if updated.rows_affected() == 0 {
+            tx.rollback().await.map_err(|error| {
+                store_error("failed to rollback points recharge reservation transaction", error)
+            })?;
+            let reloaded = self
+                .load_points_recharge_fulfillment_context(command)
+                .await?;
+            if let Some(reloaded_context) = reloaded {
+                if reloaded_context.already_fulfilled()
+                    || reloaded_context.fulfillment_in_progress()
+                {
+                    return Ok(());
+                }
+            }
+            return Err(CommerceServiceError::conflict(
+                "points recharge fulfillment reservation could not be claimed",
+            ));
+        }
+
+        tx.commit().await.map_err(|error| {
+            store_error("failed to commit points recharge reservation transaction", error)
+        })?;
+        Ok(())
+    }
+
+    pub async fn release_points_recharge_fulfillment_reservation(
+        &self,
+        command: &FulfillPointsRechargeOrderCommand,
+        _context: &PointsRechargeFulfillmentContext,
+    ) -> Result<(), CommerceServiceError> {
+        let now = current_query_timestamp();
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET fulfillment_status = 'unfulfilled',
+                updated_at = ?
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+              AND owner_user_id = CAST(? AS TEXT)
+              AND id = CAST(? AS TEXT)
+              AND subject = 'points_recharge'
+              AND LOWER(COALESCE(fulfillment_status, '')) = 'processing'
+            "#,
+        )
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| {
+            store_error("failed to release points recharge fulfillment reservation", error)
+        })?;
+        Ok(())
     }
 
     pub async fn commit_points_recharge_fulfillment(
@@ -789,7 +934,7 @@ impl SqliteCommerceRechargeStore {
                 fulfillment_status = 'unfulfilled',
                 updated_at = ?
             WHERE tenant_id = CAST(? AS TEXT)
-              AND organization_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
               AND owner_user_id = CAST(? AS TEXT)
               AND id = CAST(? AS TEXT)
               AND subject = 'points_recharge'
@@ -799,6 +944,7 @@ impl SqliteCommerceRechargeStore {
         .bind(&context.order_status)
         .bind(&now)
         .bind(&command.tenant_id)
+        .bind(&organization_id)
         .bind(&organization_id)
         .bind(&command.owner_user_id)
         .bind(&command.order_id)
@@ -1896,7 +2042,7 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 }
 
 fn store_error(context: &str, error: sqlx::Error) -> CommerceServiceError {
-    CommerceServiceError::storage(format!("{context}: {error}"))
+    crate::sql_store_error::map_sqlx_store_error(context, error)
 }
 
 fn empty_rows_when_read_model_is_missing(
@@ -1936,6 +2082,27 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
         command: &'a FulfillPointsRechargeOrderCommand,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, Option<PointsRechargeFulfillmentContext>> {
         Box::pin(async move { self.load_points_recharge_fulfillment_context(command).await })
+    }
+
+    fn reserve_points_recharge_fulfillment<'a>(
+        &'a self,
+        command: &'a FulfillPointsRechargeOrderCommand,
+        context: &'a PointsRechargeFulfillmentContext,
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
+        Box::pin(async move {
+            self.reserve_points_recharge_fulfillment(command, context).await
+        })
+    }
+
+    fn release_points_recharge_fulfillment_reservation<'a>(
+        &'a self,
+        command: &'a FulfillPointsRechargeOrderCommand,
+        context: &'a PointsRechargeFulfillmentContext,
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
+        Box::pin(async move {
+            self.release_points_recharge_fulfillment_reservation(command, context)
+                .await
+        })
     }
 
     fn commit_points_recharge_fulfillment<'a>(

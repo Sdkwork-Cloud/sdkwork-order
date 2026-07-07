@@ -13,8 +13,13 @@ export function SdkworkOrderAdminOrdersPage() {
   );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrderDetail | null>(null);
@@ -24,14 +29,22 @@ export function SdkworkOrderAdminOrdersPage() {
     let active = true;
     async function loadOrders() {
       setLoading(true);
+      setListError(null);
       try {
         const result = await service.listOrders({
           page,
           pageSize: DEFAULT_PAGE_SIZE,
+          status: statusFilter.trim() || undefined,
+          q: searchQuery.trim() || undefined,
         });
         if (active) {
           setOrders(result.items);
           setTotalPages(Math.max(1, result.totalPages));
+        }
+      } catch {
+        if (active) {
+          setListError("订单列表加载失败，请检查 commerce.orders.read 权限与网络连接");
+          setOrders([]);
         }
       } finally {
         if (active) {
@@ -43,19 +56,35 @@ export function SdkworkOrderAdminOrdersPage() {
     return () => {
       active = false;
     };
-  }, [page, service]);
+  }, [page, searchQuery, service, statusFilter]);
 
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
+      setDetailError(null);
       return;
     }
     let active = true;
-    void service.getOrder(selectedId).then((value: OrderDetail) => {
-      if (active) {
-        setDetail(value);
-      }
-    });
+    setDetailLoading(true);
+    setDetailError(null);
+    void service
+      .getOrder(selectedId)
+      .then((value: OrderDetail) => {
+        if (active) {
+          setDetail(value);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setDetail(null);
+          setDetailError("订单详情加载失败");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setDetailLoading(false);
+        }
+      });
     return () => {
       active = false;
     };
@@ -71,7 +100,12 @@ export function SdkworkOrderAdminOrdersPage() {
         await service.closeOrder(orderId);
       }
       setMessage(`订单 ${orderId} 已${action === "cancel" ? "取消" : "关闭"}`);
-      const result = await service.listOrders({ page, pageSize: DEFAULT_PAGE_SIZE });
+      const result = await service.listOrders({
+        page,
+        pageSize: DEFAULT_PAGE_SIZE,
+        status: statusFilter.trim() || undefined,
+        q: searchQuery.trim() || undefined,
+      });
       setOrders(result.items);
       setTotalPages(Math.max(1, result.totalPages));
     } catch {
@@ -89,8 +123,35 @@ export function SdkworkOrderAdminOrdersPage() {
     <div className="order-admin-page">
       <h1>订单监管</h1>
       <p className="order-admin-hint">需要 IAM 权限：commerce.orders.read（查看）、commerce.orders.manage（取消/关闭）</p>
+      <div className="order-admin-filters">
+        <label>
+          状态
+          <input
+            type="search"
+            value={statusFilter}
+            onChange={(event) => {
+              setPage(1);
+              setStatusFilter(event.target.value);
+            }}
+            placeholder="pending_payment"
+          />
+        </label>
+        <label>
+          搜索
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => {
+              setPage(1);
+              setSearchQuery(event.target.value);
+            }}
+            placeholder="订单号 / 主题"
+          />
+        </label>
+      </div>
+      {listError ? <p role="alert">{listError}</p> : null}
       {message ? <p role="status">{message}</p> : null}
-      {orders.length === 0 ? (
+      {orders.length === 0 && !listError ? (
         <EmptyState description="平台订单将在此展示" title="暂无订单" />
       ) : (
         <>
@@ -142,13 +203,19 @@ export function SdkworkOrderAdminOrdersPage() {
         </>
       )}
 
-      {selectedId && detail ? (
+      {selectedId ? (
         <section className="order-admin-detail">
           <h2>订单详情</h2>
-          <p>订单号：{detail.orderSn}</p>
-          <p>状态：{detail.statusName || detail.status}</p>
-          <p>金额：{detail.totalAmount}</p>
-          <p>数量：{detail.quantity}</p>
+          {detailLoading ? <p>加载详情...</p> : null}
+          {detailError ? <p role="alert">{detailError}</p> : null}
+          {detail ? (
+            <>
+              <p>订单号：{detail.orderSn}</p>
+              <p>状态：{detail.statusName || detail.status}</p>
+              <p>金额：{detail.totalAmount}</p>
+              <p>数量：{detail.quantity}</p>
+            </>
+          ) : null}
         </section>
       ) : null}
     </div>

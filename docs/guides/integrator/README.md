@@ -1,7 +1,7 @@
 # Integrator Guide
 
 Status: active  
-Updated: 2026-07-06
+Updated: 2026-07-07
 
 ## SDK Packages
 
@@ -21,7 +21,7 @@ pnpm sdk:generate:backend
 
 - App routes require IAM session context (`AuthToken` / `Access-Token` per OpenAPI).
 - Backend routes require organization-scoped IAM with permissions such as `commerce.orders.read` and `commerce.orders.manage`.
-- Points-recharge fulfillment credits the account wallet through `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` (Bearer) unless `SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1` is set for local development only.
+- Points-recharge fulfillment credits the account wallet through `SDKWORK_ACCESS_TOKEN` (Bearer) unless `SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1` is set for local development only.
 
 ## Response Envelope
 
@@ -30,6 +30,26 @@ All business responses use `SdkWorkApiResponse` (`code: 0`, `data`, `traceId`). 
 List endpoints accept `page` and `page_size` (default 20, max 200). Invalid pagination returns HTTP 400; values are not silently clamped. Nested lists (`orders/{orderId}/events`, `orders/{orderId}/payments`, `shipments/{shipmentId}/packages`, `shipments/{shipmentId}/tracking_events`, `recharges/packages`) use the same pagination contract. Order-scoped payment history is available at `GET /app/v3/api/orders/{orderId}/payments`. After-sales return shipments list at `GET /app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments`.
 
 Cancel commands (`orders.cancel`, `orders.cancellations.create`, `recharges.orders.cancel`) return `SdkWorkCommandResponse` with `data.accepted: true`.
+
+## Write Command Headers
+
+All idempotent write operations (checkout, order create/pay/cancel, recharge submit/cancel, after-sales, backend cancel/close/review/shipment) require:
+
+| Header | Purpose |
+| --- | --- |
+| `Idempotency-Key` | Unique per logical command attempt (UUID recommended) |
+| `Sdkwork-Request-Hash` | Stable digest of operation scope + canonical JSON payload (includes route params where applicable) |
+
+OpenAPI marks these operations with `x-sdkwork-idempotent: true`. Generated TypeScript SDKs expose `idempotencyKey` and `sdkworkRequestHash` on each write call.
+
+| Hash style | Operations | Client helper |
+| --- | --- | --- |
+| Canonical JSON + route params | `orders.cancel`, `orders.cancellations.create`, `orders.pay`, `recharges.orders.create`, `memberships.orders.create`, after-sales, backend admin | `createSdkworkWriteCommandHeaders(operationId, payload)` |
+| Command digest (same operationId scope) | `checkout.sessions.create`, `checkout.sessions.quotes.create`, `checkout.sessions.orders.create` | `createCheckoutSessionWriteHeaders`, `createCheckoutQuoteWriteHeaders`, `createCheckoutOwnerOrderWriteHeaders` |
+
+Use the **operationId** as the hash scope for JSON-body writes. `/orders/{orderId}/cancel` (`orders.cancel`) and `/orders/{orderId}/cancellations` (`orders.cancellations.create`) are distinct routes with distinct scopes but identical behavior.
+
+Replays against terminal order states (`cancelled`, `closed`) return success without duplicate audit rows.
 
 ## Platform Recharge Catalog
 
@@ -41,8 +61,9 @@ Full topology: `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md`.
 
 | Flow | Order operations | Payment |
 | --- | --- | --- |
-| Product checkout | `checkout.sessions.create` → `checkout.orders.create` → `orders.pay` | `@sdkwork/payment-app-sdk`; open `paymentParams.cashierUrl` |
+| Product checkout | `checkout.sessions.create` → `checkout.sessions.orders.create` → `orders.pay` | `@sdkwork/payment-app-sdk`; open `paymentParams.cashierUrl` |
 | Points recharge | `recharges.orders.create` → `orders.pay` | Same; settlement via order webhook + in-process saga |
+| Membership purchase | `memberships.orders.create` → `orders.pay` | Same; settlement activates subscription via membership fulfillment port |
 
 PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**. Legacy payment webhook path returns 410 Gone.
 

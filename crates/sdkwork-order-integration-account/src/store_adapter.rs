@@ -41,43 +41,59 @@ impl AccountPointsCreditPort for StoreAccountPointsCreditAdapter {
         &'a self,
         request: PointsRechargeCreditRequest,
     ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
-        Box::pin(async move {
-            let points_text = request.points.to_string();
-            let amount = CommerceMoney::new(&points_text)
-                .map_err(|error| CommerceServiceError::validation(error.to_string()))?;
-            let command = AppendLedgerEntryCommand::new(
-                &request.tenant_id,
-                request.organization_id.as_deref(),
-                "",
-                &request.owner_user_id,
-                CommerceAccountAssetType::Points,
-                Some("POINT"),
-                CommerceLedgerDirection::Credit,
-                amount,
-                POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
-                &request.transaction_no,
-                &request.request_no,
-                &request.idempotency_key,
-            )?;
-            let request_hash = ledger_request_hash(&request)?;
-            let outcome = match &self.store {
-                StoreKind::Sqlite(store) => {
-                    store.append_ledger_entry(command, request_hash).await?
-                }
-                StoreKind::Postgres(store) => {
-                    store.append_ledger_entry(command, request_hash).await?
-                }
-            };
-            Ok(PointsRechargeCreditOutcome {
-                accepted: true,
-                replayed: outcome.replayed,
-            })
+        Box::pin(async move { self.append_points_adjustment(request, CommerceLedgerDirection::Credit).await })
+    }
+
+    fn reverse_points_recharge_credit<'a>(
+        &'a self,
+        request: PointsRechargeCreditRequest,
+    ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
+        Box::pin(async move { self.append_points_adjustment(request, CommerceLedgerDirection::Debit).await })
+    }
+}
+
+impl StoreAccountPointsCreditAdapter {
+    async fn append_points_adjustment(
+        &self,
+        request: PointsRechargeCreditRequest,
+        direction: CommerceLedgerDirection,
+    ) -> Result<PointsRechargeCreditOutcome, CommerceServiceError> {
+        let points_text = request.points.to_string();
+        let amount = CommerceMoney::new(&points_text)
+            .map_err(|error| CommerceServiceError::validation(error.to_string()))?;
+        let direction_text = match direction {
+            CommerceLedgerDirection::Credit => "credit",
+            CommerceLedgerDirection::Debit => "debit",
+        };
+        let request_hash = ledger_request_hash(&request, direction_text)?;
+        let command = AppendLedgerEntryCommand::new(
+            &request.tenant_id,
+            request.organization_id.as_deref(),
+            "",
+            &request.owner_user_id,
+            CommerceAccountAssetType::Points,
+            Some("POINT"),
+            direction,
+            amount,
+            POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
+            &request.transaction_no,
+            &request.request_no,
+            &request.idempotency_key,
+        )?;
+        let outcome = match &self.store {
+            StoreKind::Sqlite(store) => store.append_ledger_entry(command, request_hash).await?,
+            StoreKind::Postgres(store) => store.append_ledger_entry(command, request_hash).await?,
+        };
+        Ok(PointsRechargeCreditOutcome {
+            accepted: true,
+            replayed: outcome.replayed,
         })
     }
 }
 
 fn ledger_request_hash(
     request: &PointsRechargeCreditRequest,
+    direction: &str,
 ) -> Result<CommerceRequestHash, CommerceServiceError> {
     let body = serde_json::json!({
         "tenantId": request.tenant_id,
@@ -85,7 +101,7 @@ fn ledger_request_hash(
         "ownerUserId": request.owner_user_id,
         "assetType": "points",
         "currencyCode": "POINT",
-        "direction": "credit",
+        "direction": direction,
         "amount": request.points.to_string(),
         "businessType": POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
         "transactionNo": request.transaction_no,

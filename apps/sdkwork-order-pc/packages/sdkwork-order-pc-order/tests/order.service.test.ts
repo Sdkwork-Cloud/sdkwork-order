@@ -195,6 +195,25 @@ describe("sdkwork-order-pc-order service", () => {
       cancelled: true,
       orderId: "ORDER-3",
     });
+
+    const cancelMock = orderAppService.orders.cancel as ReturnType<typeof vi.fn>;
+    const payMock = orderAppService.orders.pay as ReturnType<typeof vi.fn>;
+    expect(cancelMock).toHaveBeenCalledWith(
+      "ORDER-3",
+      expect.objectContaining({
+        idempotencyKey: expect.any(String),
+        sdkworkRequestHash: expect.any(String),
+      }),
+      expect.objectContaining({ cancelReason: "Switched plan" }),
+    );
+    expect(payMock).toHaveBeenCalledWith(
+      "ORDER-3",
+      expect.objectContaining({ paymentMethod: "ALIPAY" }),
+      expect.objectContaining({
+        idempotencyKey: expect.any(String),
+        sdkworkRequestHash: expect.any(String),
+      }),
+    );
   });
 
   it("returns a guest-safe empty order dashboard without creating a client", async () => {

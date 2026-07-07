@@ -9,7 +9,7 @@
     "protocol": "http",
     "packageName": "@sdkwork/order-app-sdk"
   },
-  "changeFingerprint": "c678bf233ab8911b5b94bea26316673b5b916b400b7e3a4777226fabff2c38eb",
+  "changeFingerprint": "2d16929cda637f69227ab0f3264a9a957a75500480d6e6d68445a1b271cc54df",
   "changes": {
     "createdGeneratedFiles": [
       "bin/publish-core.mjs",
@@ -27,6 +27,7 @@
       "src/api/checkout.ts",
       "src/api/fulfillments.ts",
       "src/api/index.ts",
+      "src/api/memberships.ts",
       "src/api/orders.ts",
       "src/api/paths.ts",
       "src/api/payments.ts",
@@ -53,6 +54,8 @@
       "src/types/create-after-sales-return-shipment-request.ts",
       "src/types/field-error.ts",
       "src/types/index.ts",
+      "src/types/membership-order-create-command.ts",
+      "src/types/orders-payments-webhooks-receive-request.ts",
       "src/types/page-info.ts",
       "src/types/problem-detail.ts",
       "src/types/recharge-order-create-command.ts",
@@ -100,6 +103,7 @@
           "src/api/checkout.ts",
           "src/api/fulfillments.ts",
           "src/api/index.ts",
+          "src/api/memberships.ts",
           "src/api/orders.ts",
           "src/api/paths.ts",
           "src/api/payments.ts",
@@ -128,6 +132,8 @@
           "src/types/create-after-sales-return-shipment-request.ts",
           "src/types/field-error.ts",
           "src/types/index.ts",
+          "src/types/membership-order-create-command.ts",
+          "src/types/orders-payments-webhooks-receive-request.ts",
           "src/types/page-info.ts",
           "src/types/problem-detail.ts",
           "src/types/recharge-order-create-command.ts",

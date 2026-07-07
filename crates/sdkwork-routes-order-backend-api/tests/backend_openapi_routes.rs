@@ -3,11 +3,12 @@ use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
 use sdkwork_order_service::{
-    AccountPointsCreditPort, AccountPointsCreditFuture, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest,
+    AccountPointsCreditPort, AccountPointsCreditFuture, NoopMembershipPurchaseFulfillmentPort,
+    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
 };
 use sdkwork_routes_order_backend_api::{
-    backend_order_admin_router_with_sqlite_pool, openapi_contract::mount_backend_openapi,
+    backend_commerce_admin_router_with_sqlite_pool, backend_order_admin_router_with_sqlite_pool,
+    openapi_contract::mount_backend_openapi,
     payment_confirmation_router_with_sqlite_pool,
 };
 use serde_json::Value;
@@ -28,6 +29,18 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
             })
         })
     }
+
+    fn reverse_points_recharge_credit<'a>(
+        &'a self,
+        _request: PointsRechargeCreditRequest,
+    ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
+        Box::pin(async move {
+            Ok(PointsRechargeCreditOutcome {
+                accepted: true,
+                replayed: false,
+            })
+        })
+    }
 }
 
 fn build_test_backend_router(pool: sqlx::SqlitePool) -> Router {
@@ -35,7 +48,12 @@ fn build_test_backend_router(pool: sqlx::SqlitePool) -> Router {
     mount_backend_openapi(
         Router::new()
             .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(payment_confirmation_router_with_sqlite_pool(pool, credit)),
+            .merge(backend_commerce_admin_router_with_sqlite_pool(pool.clone()))
+            .merge(payment_confirmation_router_with_sqlite_pool(
+                pool,
+                credit,
+                Arc::new(NoopMembershipPurchaseFulfillmentPort),
+            )),
     )
 }
 
@@ -106,6 +124,7 @@ fn concrete_uri(template_path: &str) -> String {
         .replace("{checkoutSessionId}", "session-1")
         .replace("{afterSalesRequestId}", "as-1")
         .replace("{shipmentId}", "shipment-1")
+        .replace("{packageId}", "package-1")
         .replace("{fulfillmentId}", "fulfillment-1")
         .replace("{providerCode}", "wechat_pay")
 }

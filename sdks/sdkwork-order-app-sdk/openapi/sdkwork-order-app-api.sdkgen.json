@@ -47,6 +47,11 @@
       "x-sdk-nested-resource-surface": true
     },
     {
+      "name": "memberships",
+      "description": "Memberships API resources.",
+      "x-sdk-nested-resource-surface": true
+    },
+    {
       "name": "shipments",
       "description": "Shipments API resources.",
       "x-sdk-nested-resource-surface": true
@@ -60,7 +65,14 @@
         ],
         "summary": "Checkout sessions create.",
         "operationId": "checkout.sessions.create",
-        "parameters": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -154,7 +166,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/checkout/sessions/{checkoutSessionId}": {
@@ -275,6 +288,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -370,7 +389,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/checkout/sessions/{checkoutSessionId}/orders": {
@@ -388,6 +408,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -483,7 +509,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/orders": {
@@ -614,8 +641,17 @@
           "orders"
         ],
         "summary": "Orders create.",
+        "description": "Deprecated: prefer `checkout.sessions.orders.create` for new integrators. Pre-launch compatibility only.",
+        "deprecated": true,
         "operationId": "orders.create",
-        "parameters": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Success",
@@ -709,7 +745,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/orders/{orderId}": {
@@ -830,6 +867,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -925,7 +968,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       },
       "get": {
         "tags": [
@@ -1065,6 +1109,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -1152,7 +1202,7 @@
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -1160,7 +1210,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/orders/{orderId}/events": {
@@ -1302,6 +1353,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -1389,7 +1446,7 @@
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -1397,7 +1454,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/orders/{orderId}/payment_success": {
@@ -1700,6 +1758,62 @@
         "x-sdkwork-api-surface": "app-api"
       }
     },
+    "/app/v3/api/orders/payments/webhooks/{providerCode}": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Receive PSP payment webhook",
+        "operationId": "orders.payments.webhooks.receive",
+        "parameters": [
+          {
+            "name": "providerCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkCommandResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "x-sdkwork-wire-protocol": "external",
+        "x-sdkwork-external-protocol-id": "psp-payment-webhook",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
     "/app/v3/api/after_sales/requests": {
       "get": {
         "tags": [
@@ -1840,15 +1954,10 @@
         "operationId": "afterSales.requests.create",
         "parameters": [
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 8,
-              "maxLength": 128
-            },
-            "description": "Client retry key scoped by tenant, principal, method, and path."
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -2113,6 +2222,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -2233,7 +2348,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments": {
@@ -2384,15 +2500,10 @@
             }
           },
           {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 8,
-              "maxLength": 128
-            },
-            "description": "Client retry key scoped by tenant, principal, method, and path."
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "responses": {
@@ -3643,7 +3754,14 @@
         "x-sdkwork-resource": "recharges.orders",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "parameters": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3653,7 +3771,8 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/recharges/orders/{orderId}": {
@@ -3858,6 +3977,12 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "requestBody": {
@@ -3869,7 +3994,120 @@
               }
             }
           }
-        }
+        },
+        "x-sdkwork-idempotent": true
+      }
+    },
+    "/app/v3/api/memberships/orders": {
+      "post": {
+        "tags": [
+          "memberships"
+        ],
+        "summary": "Memberships orders create.",
+        "operationId": "memberships.orders.create",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "memberships.orders",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipOrderCreateCommand"
+              }
+            }
+          }
+        },
+        "x-sdkwork-idempotent": true
       }
     }
   },
@@ -4613,6 +4851,28 @@
           }
         }
       },
+      "MembershipOrderCreateCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packageId",
+          "paymentMethod"
+        ],
+        "properties": {
+          "packageId": {
+            "type": "string"
+          },
+          "paymentMethod": {
+            "type": "string"
+          },
+          "clientRequestNo": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        }
+      },
       "SdkWorkApiResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -4797,6 +5057,29 @@
             }
           }
         ]
+      }
+    },
+    "parameters": {
+      "WriteCommandIdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128
+        },
+        "description": "Client retry key scoped by tenant, principal, method, and path."
+      },
+      "WriteCommandRequestHash": {
+        "name": "Sdkwork-Request-Hash",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": "Stable digest of the canonical command payload; must match the request body and route params where applicable."
       }
     }
   },

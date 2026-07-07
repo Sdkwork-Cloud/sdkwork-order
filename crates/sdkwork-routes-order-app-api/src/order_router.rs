@@ -18,9 +18,9 @@ use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, SqliteCommerceOrderStore,
 };
 use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, PostgresCommercePaymentRecordStore,
-    SqliteCommerceOwnerOrderPaymentStore, SqliteCommercePaymentRecordStore,
+    PostgresCommercePaymentRecordStore, SqliteCommercePaymentRecordStore,
 };
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_service::{PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery};
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
@@ -33,7 +33,9 @@ use crate::api_response::{
 };
 use crate::command_headers::{
     ensure_request_hash_matches, required_app_write_command_headers, validate_app_write_payload,
+    write_payload_with_route_param,
 };
+use crate::owner_order_cancel::cancel_owner_order_with_payments;
 use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
 
 /// 允许的支付方式白名单，避免硬编码单一渠道。
@@ -221,7 +223,7 @@ struct OrderPaymentSuccessResponse {
     status_name: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct CancelOrderRequest {
     #[serde(rename = "cancelReason", alias = "cancel_reason")]
     cancel_reason: Option<String>,
@@ -299,18 +301,30 @@ struct OrderStatisticsResponse {
     total_amount: String,
 }
 
-pub fn app_order_router_with_sqlite_pool(pool: SqlitePool) -> Router {
+use crate::owner_order_payment_enrich::{
+    enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
+};
+
+pub fn app_order_router_with_sqlite_pool(
+    pool: SqlitePool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+) -> Router {
     build_app_order_router(
         Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-        Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
+        enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials),
         Arc::new(SqliteCommercePaymentRecordStore::new(pool)),
     )
 }
 
-pub fn app_order_router_with_postgres_pool(pool: PgPool) -> Router {
+pub fn app_order_router_with_postgres_pool(
+    pool: PgPool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+) -> Router {
     build_app_order_router(
         Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
-        Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
+        enriched_postgres_owner_order_payments(pool.clone(), registry, credentials),
         Arc::new(PostgresCommercePaymentRecordStore::new(pool)),
     )
 }
@@ -331,7 +345,7 @@ pub fn build_app_order_router(
                 "/app/v3/api/orders/{orderId}/payments",
                 get(list_order_payments).post(pay_order),
             )
-            .route("/app/v3/api/orders/{orderId}/cancel", post(cancel_order))
+            .route("/app/v3/api/orders/{orderId}/cancel", post(cancel_order_legacy))
             .route(
                 "/app/v3/api/orders/{orderId}/status",
                 get(fetch_order_status),
@@ -346,7 +360,7 @@ pub fn build_app_order_router(
             )
             .route(
                 "/app/v3/api/orders/{orderId}/cancellations",
-                post(cancel_order),
+                post(create_order_cancellation),
             )
             .with_state(AppOrderState {
                 store,
@@ -500,11 +514,13 @@ async fn fetch_order_payment_success(
     match state.store.retrieve_owner_order(query).await {
         Ok(Some(detail)) => {
             let summary = map_order_summary(detail.summary);
-            let paid = summary.paid_amount.is_some()
-                || matches!(
-                    summary.status.to_ascii_lowercase().as_str(),
-                    "paid" | "completed" | "fulfilled"
-                );
+            let paid = matches!(
+                summary.status.to_ascii_lowercase().as_str(),
+                "paid" | "completed" | "fulfilled" | "awaiting_external_fulfillment"
+            ) || summary
+                .paid_amount
+                .as_ref()
+                .is_some_and(|amount| !amount.as_str().trim().is_empty() && amount.as_str() != "0" && amount.as_str() != "0.00");
             success_item(ctx, OrderPaymentSuccessResponse {
                 paid,
                 status: summary.status,
@@ -550,20 +566,77 @@ async fn fetch_order_events(
     }
 }
 
-async fn cancel_order(
+async fn cancel_order_legacy(
+    state: State<AppOrderState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(order_id): Path<String>,
+    body: Option<Json<CancelOrderRequest>>,
+) -> Response {
+    cancel_order_impl(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        order_id,
+        body,
+        "orders.cancel",
+    )
+    .await
+}
+
+async fn create_order_cancellation(
+    state: State<AppOrderState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(order_id): Path<String>,
+    body: Option<Json<CancelOrderRequest>>,
+) -> Response {
+    cancel_order_impl(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        order_id,
+        body,
+        "orders.cancellations.create",
+    )
+    .await
+}
+
+async fn cancel_order_impl(
     State(state): State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
-    Path(order_id): Path<String>,
+    headers: HeaderMap,
+    order_id: String,
     body: Option<Json<CancelOrderRequest>>,
+    hash_scope: &'static str,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let cancel_reason = body.as_ref().and_then(|body| body.cancel_reason.clone());
-    let cancel_type = body.as_ref().and_then(|body| body.cancel_type.clone());
+    let body = body.map(|Json(value)| value).unwrap_or(CancelOrderRequest {
+        cancel_reason: None,
+        cancel_type: None,
+    });
+    let payload = write_payload_with_route_param("orderId", &order_id, &body);
+    let _write_headers = match validate_app_write_payload(
+        ctx,
+        &headers,
+        hash_scope,
+        &payload,
+        |idempotency_key| format!("order-cancel-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let cancel_reason = body.cancel_reason.clone();
+    let cancel_type = body.cancel_type.clone();
     let command = match CancelOwnerOrderCommand::with_cancel_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -576,15 +649,12 @@ async fn cancel_order(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.store.cancel_owner_order(command.clone()).await {
-        Ok(()) => match state.payments.cancel_owner_order_payments(command).await {
-            Ok(()) => success_command(
-                ctx,
-                Some(order_id.clone()),
-                Some("cancelled".to_string()),
-            ),
-            Err(error) => map_service_error(ctx, error),
-        },
+    match cancel_owner_order_with_payments(&*state.store, &*state.payments, command).await {
+        Ok(()) => success_command(
+            ctx,
+            Some(order_id.clone()),
+            Some("cancelled".to_string()),
+        ),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -663,15 +733,16 @@ async fn pay_order(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let callback_payload = body
-        .payment_password()
-        .map(|password| format!(r#"{{"paymentPassword":"{password}"}}"#));
+    let callback_payload = body.payment_password().map(|password| {
+        serde_json::json!({ "paymentPassword": password }).to_string()
+    });
     let command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
         &order_id,
         &payment_method,
+        None,
         callback_payload,
         &write_headers.request_no,
         &write_headers.idempotency_key,
@@ -979,38 +1050,6 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         command: CreateOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, CreateOwnerOrderOutcome> {
         Box::pin(async move { self.create_owner_order(command).await })
-    }
-}
-
-impl OwnerOrderPaymentStore for SqliteCommerceOwnerOrderPaymentStore {
-    fn pay_owner_order<'a>(
-        &'a self,
-        command: PayOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, PayOwnerOrderOutcome> {
-        Box::pin(async move { self.pay_owner_order(command).await })
-    }
-
-    fn cancel_owner_order_payments<'a>(
-        &'a self,
-        command: CancelOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, ()> {
-        Box::pin(async move { self.cancel_owner_order_payments(command).await })
-    }
-}
-
-impl OwnerOrderPaymentStore for PostgresCommerceOwnerOrderPaymentStore {
-    fn pay_owner_order<'a>(
-        &'a self,
-        command: PayOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, PayOwnerOrderOutcome> {
-        Box::pin(async move { self.pay_owner_order(command).await })
-    }
-
-    fn cancel_owner_order_payments<'a>(
-        &'a self,
-        command: CancelOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, ()> {
-        Box::pin(async move { self.cancel_owner_order_payments(command).await })
     }
 }
 

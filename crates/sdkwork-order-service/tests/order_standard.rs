@@ -89,6 +89,7 @@ fn order_service_contract_owns_shipment_package_queries_and_commands() {
     for operation_id in [
         "shipments.packages.list",
         "shipments.packages.management.list",
+        "shipments.list",
     ] {
         assert!(
             contract.read_queries.contains(&operation_id),
@@ -103,6 +104,7 @@ fn order_service_contract_owns_after_sales_lifecycle_queries_and_commands() {
 
     for operation_id in [
         "afterSales.requests.create",
+        "afterSales.requests.update",
         "afterSales.returnShipments.create",
         "afterSales.reviews.create",
     ] {

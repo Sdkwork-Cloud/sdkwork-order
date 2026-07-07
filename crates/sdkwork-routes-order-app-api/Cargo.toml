@@ -27,6 +27,7 @@ sdkwork-web-axum.workspace = true
 sdkwork-web-bootstrap.workspace = true
 sdkwork-iam-web-adapter.workspace = true
 sdkwork-utils-rust.workspace = true
+uuid = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

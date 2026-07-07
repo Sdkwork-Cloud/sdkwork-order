@@ -1,4 +1,5 @@
 import {
+  createSdkworkWriteCommandHeaders,
   getSdkworkOrderService,
   hasSdkworkOrderSession,
   requireSdkworkOrderSession,
@@ -10,6 +11,7 @@ import {
   unwrapSdkworkOrderListPage,
   unwrapSdkworkOrderResponse,
   readSdkworkMediaResource,
+  writePayloadWithRouteParam,
   type SdkworkOrderAppService,
   type SdkworkMediaResource,
 } from "@sdkwork/order-service";
@@ -478,11 +480,14 @@ export function createSdkworkOrderService(
   return {
     async cancelOrder(input) {
       requireSdkworkOrderSession(copy.signInRequired);
+      const body = {
+        cancelReason: toSdkworkOrderOptionalString(input.cancelReason),
+        cancelType: toSdkworkOrderOptionalString(input.cancelType),
+      };
+      const payload = writePayloadWithRouteParam("orderId", input.orderId, body);
+      const writeHeaders = createSdkworkWriteCommandHeaders("orders.cancel", payload);
       await unwrapSdkworkOrderResponse<void>(
-        await getOrderAppService().orders.cancel(input.orderId, {
-          cancelReason: toSdkworkOrderOptionalString(input.cancelReason),
-          cancelType: toSdkworkOrderOptionalString(input.cancelType),
-        }),
+        await getOrderAppService().orders.cancel(input.orderId, writeHeaders, body),
         copy.cancelFailed,
       );
 
@@ -550,11 +555,13 @@ export function createSdkworkOrderService(
 
     async payOrder(input) {
       requireSdkworkOrderSession(copy.signInRequired);
+      const body = {
+        paymentMethod: toSdkworkOrderOptionalString(input.paymentMethod),
+        paymentPassword: toSdkworkOrderOptionalString(input.paymentPassword),
+      };
+      const writeHeaders = createSdkworkWriteCommandHeaders("orders.pay", body);
       const result = unwrapSdkworkOrderResponse<RemotePaymentParams>(
-        await getOrderAppService().orders.pay(input.orderId, {
-          paymentMethod: toSdkworkOrderOptionalString(input.paymentMethod),
-          paymentPassword: toSdkworkOrderOptionalString(input.paymentPassword),
-        }),
+        await getOrderAppService().orders.pay(input.orderId, body, writeHeaders),
         copy.payFailed,
       );
 

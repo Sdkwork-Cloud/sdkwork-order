@@ -3,12 +3,13 @@ use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
 use sdkwork_order_service::{
-    AccountPointsCreditPort, AccountPointsCreditFuture, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest,
+    AccountPointsCreditPort, AccountPointsCreditFuture, NoopMembershipPurchaseFulfillmentPort,
+    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
 };
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_routes_order_app_api::{
     app_after_sales_router_with_sqlite_pool, app_checkout_router_with_sqlite_pool,
-    app_fulfillment_router_with_sqlite_pool, app_order_router_with_sqlite_pool,
+    app_fulfillment_router_with_sqlite_pool,     app_membership_order_router_with_sqlite_pool, app_order_router_with_sqlite_pool,
     app_payment_webhook_router_with_sqlite_pool, app_recharge_checkout_router_with_sqlite_pool,
     app_shipment_router_with_sqlite_pool, openapi_contract::mount_app_openapi,
 };
@@ -30,20 +31,44 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
             })
         })
     }
+
+    fn reverse_points_recharge_credit<'a>(
+        &'a self,
+        _request: PointsRechargeCreditRequest,
+    ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
+        Box::pin(async move {
+            Ok(PointsRechargeCreditOutcome {
+                accepted: true,
+                replayed: false,
+            })
+        })
+    }
 }
 
 fn build_test_app_router(pool: sqlx::SqlitePool) -> Router {
+    let credentials = ProviderCredentialBundle::from_env();
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(credentials.clone()));
     mount_app_openapi(
         Router::new()
-            .merge(app_order_router_with_sqlite_pool(pool.clone()))
+            .merge(app_order_router_with_sqlite_pool(
+                pool.clone(),
+                registry.clone(),
+                credentials.clone(),
+            ))
             .merge(app_checkout_router_with_sqlite_pool(pool.clone()))
-            .merge(app_recharge_checkout_router_with_sqlite_pool(pool.clone()))
+            .merge(app_recharge_checkout_router_with_sqlite_pool(
+                pool.clone(),
+                registry,
+                credentials,
+            ))
+            .merge(app_membership_order_router_with_sqlite_pool(pool.clone()))
             .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
             .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
             .merge(app_after_sales_router_with_sqlite_pool(pool.clone()))
             .merge(app_payment_webhook_router_with_sqlite_pool(
                 pool,
                 Arc::new(NoopAccountPointsCreditPort),
+                Arc::new(NoopMembershipPurchaseFulfillmentPort),
             )),
     )
 }

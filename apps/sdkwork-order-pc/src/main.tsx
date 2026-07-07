@@ -28,6 +28,7 @@ const accessToken =
 if (accessToken) {
   configureSdkworkOrderSessionTokenProvider(() => ({
     accessToken,
+    authToken: readEnv("VITE_SDKWORK_AUTH_TOKEN") ?? readEnv("SDKWORK_AUTH_TOKEN"),
   }));
   bootstrapSdkworkOrderAppService({
     baseUrl: orderApiBaseUrl,
@@ -61,6 +62,6 @@ const initialLocale = (() => {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <OrderAppShell theme={initialTheme} locale={initialLocale} />
+    <OrderAppShell theme={initialTheme} locale={initialLocale} authConfigured={Boolean(accessToken)} />
   </StrictMode>,
 );

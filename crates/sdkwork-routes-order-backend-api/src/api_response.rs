@@ -101,7 +101,7 @@ pub fn map_service_error(
             SdkWorkResultCode::NotFound,
             error.message().to_string(),
         ),
-        "conflict" => (
+        "conflict" | "unsupported-capability" => (
             StatusCode::CONFLICT,
             SdkWorkResultCode::Conflict,
             error.message().to_string(),

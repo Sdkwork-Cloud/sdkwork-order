@@ -21,9 +21,7 @@ use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
     SqliteCommerceRechargeStore,
 };
-use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
-};
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
@@ -33,8 +31,12 @@ use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_command, success_item,
     success_items, unauthorized, validation,
 };
+use crate::owner_order_payment_enrich::{
+    enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
+};
+use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
-use crate::command_headers::validate_app_write_payload;
+use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
 use crate::subject::{app_runtime_subject_from_extension, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
@@ -113,6 +115,14 @@ struct SubmitRechargeRequest {
     payment_method: Option<String>,
     payment_password: Option<String>,
     source: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+struct RechargeCancelRequest {
+    #[serde(rename = "cancelReason", alias = "cancel_reason")]
+    cancel_reason: Option<String>,
+    #[serde(rename = "cancelType", alias = "cancel_type")]
+    cancel_type: Option<String>,
 }
 
 struct CreateRechargeCommandInput<'a> {
@@ -288,21 +298,29 @@ impl CommerceRechargeCheckoutStore for PostgresCommerceRechargeStore {
     }
 }
 
-pub fn app_recharge_checkout_router_with_sqlite_pool(pool: SqlitePool) -> Router {
+pub fn app_recharge_checkout_router_with_sqlite_pool(
+    pool: SqlitePool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+) -> Router {
     let pool_for_orders = pool.clone();
     build_app_recharge_checkout_router(
         Arc::new(SqliteCommerceRechargeStore::new(pool)),
         Arc::new(SqliteCommerceOrderStore::new(pool_for_orders.clone())),
-        Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool_for_orders)),
+        enriched_sqlite_owner_order_payments(pool_for_orders, registry, credentials),
     )
 }
 
-pub fn app_recharge_checkout_router_with_postgres_pool(pool: PgPool) -> Router {
+pub fn app_recharge_checkout_router_with_postgres_pool(
+    pool: PgPool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+) -> Router {
     let pool_for_orders = pool.clone();
     build_app_recharge_checkout_router(
         Arc::new(PostgresCommerceRechargeStore::new(pool)),
         Arc::new(PostgresCommerceOrderStore::new(pool_for_orders.clone())),
-        Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool_for_orders)),
+        enriched_postgres_owner_order_payments(pool_for_orders, registry, credentials),
     )
 }
 
@@ -434,7 +452,7 @@ async fn list_recharge_orders(
                         status: item.status,
                         subject: item.subject,
                         amount: item.total_amount.as_str().to_string(),
-                        points: 0,
+                        points: item.points.unwrap_or(0),
                         created_at: item.created_at,
                     })
                     .collect(),
@@ -450,33 +468,49 @@ async fn cancel_recharge_order(
     State(state): State<AppRechargeCheckoutState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
     Path(order_id): Path<String>,
+    body: Option<Json<RechargeCancelRequest>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let command = match CancelOwnerOrderCommand::new(
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let payload = write_payload_with_route_param("orderId", &order_id, &body);
+    let _write_headers = match validate_app_write_payload(
+        ctx,
+        &headers,
+        "recharges.orders.cancel",
+        &payload,
+        |idempotency_key| format!("recharge-cancel-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let cancel_reason = body
+        .cancel_reason
+        .as_deref()
+        .or(Some("recharge cancelled by owner"));
+    let command = match CancelOwnerOrderCommand::with_cancel_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
         &order_id,
-        Some("recharge cancelled by owner"),
+        cancel_reason,
+        body.cancel_type.as_deref(),
     ) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.orders.cancel_owner_order(command.clone()).await {
-        Ok(()) => match state.payments.cancel_owner_order_payments(command).await {
-            Ok(()) => success_command(
-                ctx,
-                Some(order_id.clone()),
-                Some("cancelled".to_string()),
-            ),
-            Err(error) => map_service_error(ctx, error),
-        },
+    match cancel_owner_order_with_payments(&*state.orders, &*state.payments, command).await {
+        Ok(()) => success_command(
+            ctx,
+            Some(order_id.clone()),
+            Some("cancelled".to_string()),
+        ),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -506,7 +540,7 @@ async fn submit_recharge(
         Err(message) => return validation(ctx, message),
     };
     let write_headers =
-        match validate_app_write_payload(ctx, &headers, "recharge.submit", &request, |idempotency_key| {
+        match validate_app_write_payload(ctx, &headers, "recharges.orders.create", &request, |idempotency_key| {
             fallback_request_no(&subject, amount.as_str(), &method, idempotency_key)
         }) {
             Ok(value) => value,
@@ -543,6 +577,7 @@ async fn submit_recharge(
                 &subject.user_id,
                 &command.order_id,
                 &method,
+                None,
                 Some(callback_payload),
                 &format!("{}:pay", write_headers.request_no),
                 &format!("{}:pay", write_headers.idempotency_key),
@@ -555,7 +590,24 @@ async fn submit_recharge(
                     outcome = merge_recharge_pay_outcome(outcome, pay_outcome);
                     success_item(ctx, map_recharge_outcome(outcome))
                 }
-                Err(error) => map_service_error(ctx, error),
+                Err(error) => {
+                    let rollback = CancelOwnerOrderCommand::new(
+                        &subject.tenant_id,
+                        subject.organization_id.as_deref(),
+                        &subject.user_id,
+                        &command.order_id,
+                        Some("auto-cancel: recharge payment initiation failed"),
+                    );
+                    if let Ok(rollback_command) = rollback {
+                        compensate_failed_recharge_pay(
+                            &*state.orders,
+                            &*state.payments,
+                            rollback_command,
+                        )
+                        .await;
+                    }
+                    map_service_error(ctx, error)
+                }
             }
         }
         Err(error) => map_service_error(ctx, error),
@@ -566,22 +618,22 @@ async fn fetch_checkout_status(
     State(state): State<AppRechargeCheckoutState>,
     runtime_context: Option<Extension<IamAppContext>>,
     request_context: Option<Extension<WebRequestContext>>,
-    Path(order_no): Path<String>,
+    Path(order_lookup): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_extension(runtime_context) {
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let order_no = match validate_checkout_order_no(order_no) {
-        Ok(order_no) => order_no,
+    let order_lookup = match validate_recharge_order_lookup_key(order_lookup) {
+        Ok(order_lookup) => order_lookup,
         Err(message) => return validation(ctx, message),
     };
     let query = match CheckoutStatusQuery::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
-        &order_no,
+        &order_lookup,
     ) {
         Ok(query) => query,
         Err(error) => return map_service_error(ctx, error),
@@ -639,20 +691,23 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
     Ok(method)
 }
 
-fn validate_checkout_order_no(order_no: String) -> Result<String, String> {
-    let order_no = order_no.trim().to_string();
-    if order_no.is_empty() {
-        return Err("checkout order number must not be empty".to_string());
+fn validate_recharge_order_lookup_key(order_lookup: String) -> Result<String, String> {
+    let order_lookup = order_lookup.trim().to_string();
+    if order_lookup.is_empty() {
+        return Err("order id must not be empty".to_string());
     }
-    if order_no.chars().count() > MAX_CHECKOUT_ORDER_NO_LEN {
+    if order_lookup.chars().count() > MAX_CHECKOUT_ORDER_NO_LEN {
         return Err(format!(
-            "checkout order number length must not exceed {MAX_CHECKOUT_ORDER_NO_LEN} characters"
+            "order id length must not exceed {MAX_CHECKOUT_ORDER_NO_LEN} characters"
         ));
     }
-    if !order_no.bytes().all(|byte| (0x21..=0x7e).contains(&byte)) {
-        return Err("checkout order number must contain only visible ASCII characters".to_string());
+    if !order_lookup
+        .bytes()
+        .all(|byte| (0x21..=0x7e).contains(&byte))
+    {
+        return Err("order id must contain only visible ASCII characters".to_string());
     }
-    Ok(order_no)
+    Ok(order_lookup)
 }
 
 fn build_create_recharge_command(

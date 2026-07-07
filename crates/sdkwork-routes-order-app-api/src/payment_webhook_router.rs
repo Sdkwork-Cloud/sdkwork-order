@@ -14,7 +14,8 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort,
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort,
+    MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationPort,
 };
 use sdkwork_payment_providers::{
     normalize_provider_code, peek_webhook_routing_fields, provider_registry_for_account,
@@ -45,6 +46,7 @@ enum PaymentWebhookState {
         recharge: Arc<SqliteCommerceRechargeStore>,
         orders: Arc<SqliteCommerceOrderStore>,
         credit_port: Arc<dyn AccountPointsCreditPort>,
+        membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     },
     Postgres {
         registry: Arc<PaymentProviderRegistry>,
@@ -54,12 +56,14 @@ enum PaymentWebhookState {
         recharge: Arc<PostgresCommerceRechargeStore>,
         orders: Arc<PostgresCommerceOrderStore>,
         credit_port: Arc<dyn AccountPointsCreditPort>,
+        membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     },
 }
 
 pub fn app_payment_webhook_router_with_sqlite_pool(
     pool: SqlitePool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(credentials.clone()));
@@ -76,12 +80,14 @@ pub fn app_payment_webhook_router_with_sqlite_pool(
             recharge: Arc::new(SqliteCommerceRechargeStore::new(pool.clone())),
             orders: Arc::new(SqliteCommerceOrderStore::new(pool)),
             credit_port,
+            membership_port,
         })
 }
 
 pub fn app_payment_webhook_router_with_postgres_pool(
     pool: PgPool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(credentials.clone()));
@@ -98,6 +104,7 @@ pub fn app_payment_webhook_router_with_postgres_pool(
             recharge: Arc::new(PostgresCommerceRechargeStore::new(pool.clone())),
             orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
             credit_port,
+            membership_port,
         })
 }
 
@@ -118,6 +125,7 @@ async fn receive_provider_webhook(
             recharge,
             orders,
             credit_port,
+            membership_port,
         } => {
             receive_provider_webhook_inner(
                 ctx,
@@ -128,6 +136,7 @@ async fn receive_provider_webhook(
                 recharge.as_ref(),
                 orders.as_ref(),
                 credit_port.as_ref(),
+                membership_port.as_ref(),
                 provider_code,
                 headers,
                 body,
@@ -142,6 +151,7 @@ async fn receive_provider_webhook(
             recharge,
             orders,
             credit_port,
+            membership_port,
         } => {
             receive_provider_webhook_inner(
                 ctx,
@@ -152,6 +162,7 @@ async fn receive_provider_webhook(
                 recharge.as_ref(),
                 orders.as_ref(),
                 credit_port.as_ref(),
+                membership_port.as_ref(),
                 provider_code,
                 headers,
                 body,
@@ -161,7 +172,7 @@ async fn receive_provider_webhook(
     }
 }
 
-async fn receive_provider_webhook_inner<Pool, R, O, P, Payment>(
+async fn receive_provider_webhook_inner<Pool, R, O, P, M, Payment>(
     ctx: Option<&WebRequestContext>,
     deployment_registry: Arc<PaymentProviderRegistry>,
     credentials: ProviderCredentialBundle,
@@ -170,6 +181,7 @@ async fn receive_provider_webhook_inner<Pool, R, O, P, Payment>(
     recharge_store: &R,
     order_store: &O,
     credit_port: &P,
+    membership_port: &M,
     provider_code: String,
     headers: axum::http::HeaderMap,
     body: Bytes,
@@ -179,6 +191,7 @@ where
     R: sdkwork_order_service::PointsRechargeFulfillmentStore,
     O: OrderSubjectLoader,
     P: AccountPointsCreditPort + ?Sized,
+    M: MembershipPurchaseFulfillmentPort + ?Sized,
     Payment: OwnerOrderPaymentConfirmationPort + ?Sized,
 {
     let provider_code = normalize_provider_code(&provider_code);
@@ -264,6 +277,8 @@ where
             out_trade_no: event.out_trade_no.clone(),
             payment_status: event.payment_status.clone(),
             payload: event.payload.clone(),
+            tenant_id: None,
+            organization_id: None,
         })
         .await
     {
@@ -287,6 +302,7 @@ where
                     payment_store,
                     recharge_store,
                     credit_port,
+                    membership_port,
                     &settlement_attempt,
                     Some(subject.as_str()),
                     &request_no,

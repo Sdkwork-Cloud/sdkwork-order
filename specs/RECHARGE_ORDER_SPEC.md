@@ -109,7 +109,7 @@ Legacy payment-local recharge SQL and routes were removed (P3). Deprecated `/app
 | PSP webhook | `POST .../orders/payments/webhooks/{providerCode}` | Order-owned public route; verify + ingest + settle |
 | Manual confirm | `POST .../orders/{orderId}/payment_confirmations` | Operator replay of settlement saga |
 | Webhook base URL | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
-| Account credit (HTTP) | `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` | Default adapter: `POST .../wallet/adjustments/points` |
+| Account credit (HTTP) | `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ACCESS_TOKEN` | Default adapter: `POST .../wallet/adjustments/points` |
 | Account credit (store) | `SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=store` | In-process ledger via shared ACCOUNT database pool |
 
 Permissions: `commerce.orders.fulfill` (order backend payment_confirmations).

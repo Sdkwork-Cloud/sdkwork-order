@@ -131,7 +131,7 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "afterSales.requests.retrieve",
     ),
     HttpRoute::dual_token(
-        HttpMethod::Put,
+        HttpMethod::Patch,
         "/app/v3/api/after_sales/requests/{afterSalesRequestId}",
         "afterSales",
         "afterSales.requests.update",
@@ -226,6 +226,14 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "recharges.orders.cancel",
     )
     .with_idempotent(true),
+    // === Memberships ===
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/memberships/orders",
+        "memberships",
+        "memberships.orders.create",
+    )
+    .with_idempotent(true),
 ];
 
 pub fn app_route_manifest() -> HttpRouteManifest {
@@ -282,5 +290,42 @@ mod tests {
         manifest
             .validate_no_ambient_context_path_markers(&profile)
             .expect("manifest must not embed ambient tenant/org scoping");
+    }
+
+    #[test]
+    fn manifest_methods_match_openapi_authority() {
+        let manifest = app_route_manifest();
+        let openapi: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../apis/app-api/order/order-app-api.openapi.json"
+        ))
+        .expect("parse app openapi authority");
+
+        for route in manifest.routes() {
+            let wire_method = manifest_method_wire(route.method);
+            let methods = openapi["paths"][route.path]
+                .as_object()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "manifest route {:?} {} missing from OpenAPI paths",
+                        route.method, route.path
+                    )
+                });
+            assert!(
+                methods.contains_key(wire_method),
+                "manifest route {:?} {} must declare {wire_method} in OpenAPI",
+                route.method,
+                route.path
+            );
+        }
+    }
+
+    fn manifest_method_wire(method: HttpMethod) -> &'static str {
+        match method {
+            HttpMethod::Get => "get",
+            HttpMethod::Post => "post",
+            HttpMethod::Put => "put",
+            HttpMethod::Patch => "patch",
+            HttpMethod::Delete => "delete",
+        }
     }
 }

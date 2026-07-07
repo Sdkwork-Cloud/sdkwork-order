@@ -54,6 +54,57 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders.paymentConfirmations.create",
     )
     .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/after_sales/requests",
+        "afterSales",
+        "afterSales.management.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/after_sales/requests/{afterSalesRequestId}",
+        "afterSales",
+        "afterSales.management.retrieve",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/after_sales/requests/{afterSalesRequestId}/reviews",
+        "afterSales",
+        "afterSales.reviews.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/shipments",
+        "commerce",
+        "shipments.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/shipments/{shipmentId}",
+        "commerce",
+        "shipments.retrieve",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/shipments/{shipmentId}/packages",
+        "commerce",
+        "shipments.packages.management.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/shipments/{shipmentId}/packages",
+        "commerce",
+        "shipments.packages.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Patch,
+        "/backend/v3/api/shipments/{shipmentId}/packages/{packageId}",
+        "commerce",
+        "shipments.packages.update",
+    )
+    .with_idempotent(true),
 ];
 
 pub fn backend_route_manifest() -> HttpRouteManifest {
@@ -90,5 +141,42 @@ mod tests {
         manifest
             .validate_no_ambient_context_path_markers(&profile)
             .expect("manifest must not embed ambient tenant/org scoping");
+    }
+
+    #[test]
+    fn manifest_methods_match_openapi_authority() {
+        let manifest = backend_route_manifest();
+        let openapi: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../apis/backend-api/order/order-backend-api.openapi.json"
+        ))
+        .expect("parse backend openapi authority");
+
+        for route in manifest.routes() {
+            let wire_method = manifest_method_wire(route.method);
+            let methods = openapi["paths"][route.path]
+                .as_object()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "manifest route {:?} {} missing from OpenAPI paths",
+                        route.method, route.path
+                    )
+                });
+            assert!(
+                methods.contains_key(wire_method),
+                "manifest route {:?} {} must declare {wire_method} in OpenAPI",
+                route.method,
+                route.path
+            );
+        }
+    }
+
+    fn manifest_method_wire(method: HttpMethod) -> &'static str {
+        match method {
+            HttpMethod::Get => "get",
+            HttpMethod::Post => "post",
+            HttpMethod::Put => "put",
+            HttpMethod::Patch => "patch",
+            HttpMethod::Delete => "delete",
+        }
     }
 }

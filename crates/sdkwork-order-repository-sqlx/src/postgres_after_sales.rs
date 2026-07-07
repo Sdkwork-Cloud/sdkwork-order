@@ -2,11 +2,12 @@
 
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
-    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView, AfterSalesRequestDetailQuery,
-    AfterSalesRequestListQuery, AfterSalesRequestPage, AfterSalesRequestView,
-    AfterSalesReturnShipmentListQuery, AfterSalesReturnShipmentPage, AfterSalesReturnShipmentView,
-    CreateAfterSalesRequestCommand, CreateAfterSalesReturnShipmentCommand,
-    OrderOwnerDetailQuery, UpdateAfterSalesRequestCommand,
+    AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView, AfterSalesManagementDetailQuery,
+    AfterSalesManagementListQuery, AfterSalesRequestDetailQuery, AfterSalesRequestListQuery,
+    AfterSalesRequestPage, AfterSalesRequestView, AfterSalesReturnShipmentListQuery,
+    AfterSalesReturnShipmentPage, AfterSalesReturnShipmentView, CreateAfterSalesRequestCommand,
+    CreateAfterSalesReturnShipmentCommand, OrderOwnerDetailQuery, ReviewAfterSalesRequestCommand,
+    UpdateAfterSalesRequestCommand,
 };
 use sqlx::{Postgres, Row, Transaction};
 
@@ -33,6 +34,7 @@ impl PostgresCommerceOrderStore {
         let Some(detail) = self.retrieve_owner_order(detail_query).await? else {
             return Err(CommerceServiceError::not_found("order was not found"));
         };
+        validate_order_eligible_for_after_sales(&detail.summary.status)?;
 
         let mut tx = self.pool().begin().await.map_err(|error| {
             store_error("failed to begin after sales request transaction", error)
@@ -208,20 +210,18 @@ impl PostgresCommerceOrderStore {
                 reason_code = COALESCE($2, reason_code),
                 description = COALESCE($3, description),
                 requested_amount = COALESCE($4, requested_amount),
-                approved_amount = COALESCE($5, approved_amount),
-                currency_code = COALESCE($6, currency_code),
-                updated_at = $7
-            WHERE tenant_id = CAST($8 AS TEXT)
-              AND ((organization_id = CAST($9 AS TEXT)) OR (organization_id IS NULL AND $10 IS NULL))
-              AND owner_user_id = CAST($11 AS TEXT)
-              AND id = CAST($12 AS TEXT)
+                currency_code = COALESCE($5, currency_code),
+                updated_at = $6
+            WHERE tenant_id = CAST($7 AS TEXT)
+              AND ((organization_id = CAST($8 AS TEXT)) OR (organization_id IS NULL AND $9 IS NULL))
+              AND owner_user_id = CAST($10 AS TEXT)
+              AND id = CAST($11 AS TEXT)
             "#,
         )
         .bind(next_status)
         .bind(command.reason_code.as_deref())
         .bind(command.description.as_deref())
         .bind(command.requested_amount.as_deref())
-        .bind(command.approved_amount.as_deref())
         .bind(command.currency_code.as_deref())
         .bind(&now)
         .bind(&command.tenant_id)
@@ -316,6 +316,165 @@ impl PostgresCommerceOrderStore {
             page_size: query.page_size,
             total,
         })
+    }
+
+    pub async fn list_management_after_sales_requests(
+        &self,
+        query: AfterSalesManagementListQuery,
+    ) -> Result<AfterSalesRequestPage, CommerceServiceError> {
+        let rows = sqlx::query(
+            r#"
+            SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
+                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status,
+                   COUNT(*) OVER() AS total_count
+            FROM commerce_after_sales_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND ($4 IS NULL OR order_id = CAST($5 AS TEXT))
+              AND ($6 IS NULL OR after_sales_type = CAST($7 AS TEXT))
+              AND ($8 IS NULL OR status = CAST($9 AS TEXT))
+              AND ($10 IS NULL OR id = CAST($11 AS TEXT))
+            ORDER BY created_at DESC, id DESC
+            LIMIT $12 OFFSET $13
+           "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(query.organization_id.as_deref())
+        .bind(query.organization_id.as_deref())
+        .bind(query.order_id.as_deref())
+        .bind(query.order_id.as_deref())
+        .bind(query.after_sales_type.as_deref())
+        .bind(query.after_sales_type.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.status.as_deref())
+        .bind(query.after_sales_request_id.as_deref())
+        .bind(query.after_sales_request_id.as_deref())
+        .bind(query.limit())
+        .bind(query.offset())
+        .fetch_all(self.pool())
+        .await
+        .map_err(|error| store_error("failed to list management after sales requests", error))?;
+
+        let total = rows
+            .first()
+            .and_then(|row| row.try_get::<i64, _>("total_count").ok())
+            .unwrap_or(0);
+        let items = rows
+            .into_iter()
+            .map(map_after_sales_request_row)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(AfterSalesRequestPage {
+            items,
+            page: query.page,
+            page_size: query.page_size,
+            total,
+        })
+    }
+
+    pub async fn retrieve_management_after_sales_request(
+        &self,
+        query: AfterSalesManagementDetailQuery,
+    ) -> Result<Option<AfterSalesRequestView>, CommerceServiceError> {
+        let row = sqlx::query(
+            r#"
+            SELECT id, after_sales_no, order_id, after_sales_type, reason_code,
+                   CAST(requested_amount AS TEXT) AS requested_amount, currency_code, status
+            FROM commerce_after_sales_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+              AND id = CAST($4 AS TEXT)
+            LIMIT 1
+           "#,
+        )
+        .bind(&query.tenant_id)
+        .bind(query.organization_id.as_deref())
+        .bind(query.organization_id.as_deref())
+        .bind(&query.after_sales_request_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to retrieve management after sales request", error))?;
+
+        row.map(map_after_sales_request_row).transpose()
+    }
+
+    pub async fn review_after_sales_request(
+        &self,
+        command: ReviewAfterSalesRequestCommand,
+    ) -> Result<AfterSalesRequestView, CommerceServiceError> {
+        let existing = self
+            .retrieve_management_after_sales_request(AfterSalesManagementDetailQuery {
+                after_sales_request_id: command.after_sales_request_id.clone(),
+                organization_id: command.organization_id.clone(),
+                tenant_id: command.tenant_id.clone(),
+            })
+            .await?
+            .ok_or_else(|| CommerceServiceError::not_found("after sales request was not found"))?;
+
+        let next_status = command.resolved_status();
+        validate_management_after_sales_status_transition(&existing.status, &next_status)?;
+
+        let mut tx = self.pool().begin().await.map_err(|error| {
+            store_error("failed to begin after sales review transaction", error)
+        })?;
+        let now = current_timestamp_string();
+
+        sqlx::query(
+            r#"
+            UPDATE commerce_after_sales_request
+            SET status = $1,
+                reason_code = COALESCE($2, reason_code),
+                approved_amount = COALESCE($3, approved_amount),
+                refund_status = COALESCE($4, refund_status),
+                return_status = COALESCE($5, return_status),
+                exchange_status = COALESCE($6, exchange_status),
+                description = COALESCE($7, description),
+                updated_at = $8
+            WHERE tenant_id = CAST($9 AS TEXT)
+              AND ((organization_id = CAST($10 AS TEXT)) OR (organization_id IS NULL AND $11 IS NULL))
+              AND id = CAST($12 AS TEXT)
+            "#,
+        )
+        .bind(&next_status)
+        .bind(command.reason_code.as_deref())
+        .bind(command.approved_amount.as_deref())
+        .bind(command.refund_status.as_deref())
+        .bind(command.return_status.as_deref())
+        .bind(command.exchange_status.as_deref())
+        .bind(command.review_comment.as_deref())
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
+        .bind(&command.after_sales_request_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to review after sales request", error))?;
+
+        insert_after_sales_event(
+            &mut tx,
+            &command.tenant_id,
+            command.organization_id.as_deref(),
+            &command.after_sales_request_id,
+            "reviewed",
+            &next_status,
+            &command.request_no,
+            &command.idempotency_key,
+            &now,
+        )
+        .await?;
+
+        tx.commit()
+            .await
+            .map_err(|error| store_error("failed to commit after sales review transaction", error))?;
+
+        self.retrieve_management_after_sales_request(AfterSalesManagementDetailQuery {
+            after_sales_request_id: command.after_sales_request_id,
+            organization_id: command.organization_id,
+            tenant_id: command.tenant_id,
+        })
+        .await?
+        .ok_or_else(|| CommerceServiceError::not_found("after sales request was not found"))
     }
 
     pub async fn list_after_sales_events(
@@ -678,6 +837,19 @@ fn after_sales_request_id(command: &CreateAfterSalesRequestCommand) -> String {
     ])
 }
 
+fn validate_order_eligible_for_after_sales(order_status: &str) -> Result<(), CommerceServiceError> {
+    let status = order_status.trim().to_ascii_lowercase();
+    if matches!(
+        status.as_str(),
+        "pending_payment" | "unpaid" | "wait_pay" | "draft" | "cancelled" | "closed" | "expired"
+    ) {
+        return Err(CommerceServiceError::conflict(
+            "after sales requests are not allowed for orders in the current status",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_owner_after_sales_status_transition(
     current_status: &str,
     next_status: &str,
@@ -696,6 +868,33 @@ fn validate_owner_after_sales_status_transition(
     } else {
         Err(CommerceServiceError::conflict(
             "after sales request status transition is not allowed",
+        ))
+    }
+}
+
+fn validate_management_after_sales_status_transition(
+    current_status: &str,
+    next_status: &str,
+) -> Result<(), CommerceServiceError> {
+    let current = current_status.trim().to_ascii_lowercase();
+    let next = next_status.trim().to_ascii_lowercase();
+    if current == next {
+        return Ok(());
+    }
+    let allowed = matches!(
+        (current.as_str(), next.as_str()),
+        ("submitted", "approved")
+            | ("submitted", "rejected")
+            | ("submitted", "cancelled")
+            | ("approved", "processing")
+            | ("processing", "completed")
+            | ("approved", "rejected")
+    );
+    if allowed {
+        Ok(())
+    } else {
+        Err(CommerceServiceError::conflict(
+            "after sales management status transition is not allowed",
         ))
     }
 }
@@ -728,7 +927,7 @@ fn stable_storage_id(parts: &[&str]) -> String {
 }
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
-    CommerceServiceError::storage(format!("{message}: {error}"))
+    crate::sql_store_error::map_sql_store_error(message, error)
 }
 
 fn current_timestamp_string() -> String {

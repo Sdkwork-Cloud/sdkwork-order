@@ -13,3 +13,7 @@ pub use service::*;
 pub use validation::request_hash::{
     checkout_owner_order_request_hash, checkout_quote_request_hash, checkout_session_request_hash,
 };
+pub use validation::write_command_hash::{
+    stable_canonical_json_request_hash, stable_command_request_hash, stable_json_request_hash,
+    WriteCommandHashError,
+};

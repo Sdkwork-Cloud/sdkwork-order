@@ -17,6 +17,20 @@ pub trait PointsRechargeFulfillmentStore: Send + Sync {
         command: &'a FulfillPointsRechargeOrderCommand,
     ) -> PointsRechargeFulfillmentFuture<'a, Option<PointsRechargeFulfillmentContext>>;
 
+    /// Claims the order for in-process fulfillment (sets `fulfillment_status = processing`).
+    fn reserve_points_recharge_fulfillment<'a>(
+        &'a self,
+        command: &'a FulfillPointsRechargeOrderCommand,
+        context: &'a PointsRechargeFulfillmentContext,
+    ) -> PointsRechargeFulfillmentFuture<'a, ()>;
+
+    /// Releases a processing claim after credit/commit failure.
+    fn release_points_recharge_fulfillment_reservation<'a>(
+        &'a self,
+        command: &'a FulfillPointsRechargeOrderCommand,
+        context: &'a PointsRechargeFulfillmentContext,
+    ) -> PointsRechargeFulfillmentFuture<'a, ()>;
+
     fn commit_points_recharge_fulfillment<'a>(
         &'a self,
         command: FulfillPointsRechargeOrderCommand,

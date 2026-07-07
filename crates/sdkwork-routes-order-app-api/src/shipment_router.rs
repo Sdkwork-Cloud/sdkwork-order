@@ -55,6 +55,7 @@ struct AppShipmentState {
 #[serde(rename_all = "camelCase")]
 struct ShipmentListQueryParams {
     page: Option<i64>,
+    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 

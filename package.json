@@ -30,7 +30,7 @@
     "db:bootstrap": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . bootstrap",
     "gateway:assembly:materialize": "node scripts/gateway/assembly-materialize.mjs",
     "gateway:assembly:validate": "node scripts/gateway/assembly-validate.mjs",
-    "sync:openapi": "node scripts/openapi/materialize-recharges-openapi.mjs",
+    "sync:openapi": "node -e \"const fs=require('fs');const p=[['apis/app-api/order/order-app-api.openapi.json','sdks/sdkwork-order-app-sdk/openapi/sdkwork-order-app-api.openapi.json'],['apis/app-api/order/order-app-api.openapi.json','sdks/sdkwork-order-app-sdk/openapi/sdkwork-order-app-api.sdkgen.json'],['apis/backend-api/order/order-backend-api.openapi.json','sdks/sdkwork-order-backend-sdk/openapi/sdkwork-order-backend-api.openapi.json']];for(const [s,d] of p){fs.copyFileSync(s,d);}console.log('synced openapi authorities to sdk families');\"",
     "prune:openapi": "node scripts/openapi/prune-legacy-openapi.mjs",
     "align:openapi": "node ../sdkwork-specs/tools/align-openapi-response-envelope.mjs --file apis/app-api/order/order-app-api.openapi.json --legacy-envelope CommerceApiResult",
     "sdk:generate": "node sdks/sdkwork-order-app-sdk/bin/generate-sdk.mjs",

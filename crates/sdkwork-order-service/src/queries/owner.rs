@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
+
+pub use sdkwork_payment_service::{PayOwnerOrderCommand, PayOwnerOrderOutcome};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderOwnerListQuery {
@@ -156,6 +156,8 @@ pub struct OrderOwnerSummary {
     pub pay_time: Option<String>,
     pub expire_time: Option<String>,
     pub payment_method: Option<String>,
+    /// Points credited for `points_recharge` orders when available from line-item snapshot or payment callback.
+    pub points: Option<i64>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -250,28 +252,6 @@ pub struct CancelOwnerOrderCommand {
     pub tenant_id: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PayOwnerOrderCommand {
-    pub order_id: String,
-    pub organization_id: Option<String>,
-    pub owner_user_id: String,
-    pub payment_method: String,
-    pub payment_attempt_callback_payload: Option<String>,
-    pub tenant_id: String,
-    pub idempotency_key: String,
-    pub request_no: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PayOwnerOrderOutcome {
-    pub amount: CommerceMoney,
-    pub order_id: String,
-    pub out_trade_no: String,
-    pub payment_id: String,
-    pub payment_method: String,
-    pub payment_params: BTreeMap<String, String>,
-}
-
 impl CancelOwnerOrderCommand {
     pub fn new(
         tenant_id: &str,
@@ -353,60 +333,6 @@ impl CreateOwnerOrderCommand {
             owner_user_id: owner_user_id.trim().to_string(),
             request_no: request_no.trim().to_string(),
             tenant_id: tenant_id.trim().to_string(),
-        })
-    }
-}
-
-impl PayOwnerOrderCommand {
-    pub fn new(
-        tenant_id: &str,
-        organization_id: Option<&str>,
-        owner_user_id: &str,
-        order_id: &str,
-        payment_method: &str,
-        request_no: &str,
-        idempotency_key: &str,
-    ) -> Result<Self, CommerceServiceError> {
-        Self::with_payment_attempt_callback_payload(
-            tenant_id,
-            organization_id,
-            owner_user_id,
-            order_id,
-            payment_method,
-            None,
-            request_no,
-            idempotency_key,
-        )
-    }
-
-    pub fn with_payment_attempt_callback_payload(
-        tenant_id: &str,
-        organization_id: Option<&str>,
-        owner_user_id: &str,
-        order_id: &str,
-        payment_method: &str,
-        payment_attempt_callback_payload: Option<String>,
-        request_no: &str,
-        idempotency_key: &str,
-    ) -> Result<Self, CommerceServiceError> {
-        crate::validation::require_non_empty("tenant_id", tenant_id)?;
-        crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
-        crate::validation::require_non_empty("order_id", order_id)?;
-        crate::validation::require_non_empty("payment_method", payment_method)?;
-        crate::validation::require_non_empty("request_no", request_no)?;
-        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
-
-        Ok(Self {
-            order_id: order_id.trim().to_string(),
-            organization_id: optional_text(organization_id),
-            owner_user_id: owner_user_id.trim().to_string(),
-            payment_method: payment_method.trim().to_ascii_lowercase(),
-            payment_attempt_callback_payload: payment_attempt_callback_payload
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty()),
-            tenant_id: tenant_id.trim().to_string(),
-            idempotency_key: idempotency_key.trim().to_string(),
-            request_no: request_no.trim().to_string(),
         })
     }
 }

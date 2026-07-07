@@ -60,6 +60,8 @@ const client = new SdkworkOrderBackendClient({
 ## API Modules
 
 - `client.orders` - orders API
+- `client.afterSales` - after_sales API
+- `client.shipments` - shipments API
 
 ## Usage Examples
 
@@ -73,6 +75,34 @@ const params = {
   page_size: 3,
 };
 const result = await client.orders.admin.cancellations.list(params);
+```
+
+### after_sales
+
+```typescript
+// List after-sales requests for operator review
+const params = {
+  status: 'status',
+  after_sales_type: 'after_sales_type',
+  order_id: 'order_id',
+  page: 4,
+  page_size: 5,
+};
+const result = await client.afterSales.management.list(params);
+```
+
+### shipments
+
+```typescript
+// List shipments for operator review
+const params = {
+  status: 'status',
+  order_id: 'order_id',
+  fulfillment_id: 'fulfillment_id',
+  page: 4,
+  page_size: 5,
+};
+const result = await client.shipments.list(params);
 ```
 
 ## Error Handling

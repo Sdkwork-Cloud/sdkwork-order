@@ -1,4 +1,5 @@
 mod account_ledger;
+mod membership_fulfillment;
 mod owner_order_payment;
 mod points_recharge_fulfillment;
 
@@ -7,7 +8,14 @@ pub use owner_order_payment::{
     OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
     OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
 };
+pub use membership_fulfillment::{
+    membership_purchase_fulfillment_idempotency_key, MembershipPurchaseFulfillmentFuture,
+    MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
+    MembershipPurchaseFulfillmentRequest, NoopMembershipPurchaseFulfillmentPort,
+    MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
+};
 pub use account_ledger::{
+    points_recharge_compensation_idempotency_key, points_recharge_compensation_transaction_no,
     points_recharge_fulfillment_idempotency_key, points_recharge_fulfillment_transaction_no,
     points_recharge_payment_success_idempotency_key, AccountPointsCreditFuture,
     AccountPointsCreditPort, PointsRechargeCreditOutcome, PointsRechargeCreditRequest,

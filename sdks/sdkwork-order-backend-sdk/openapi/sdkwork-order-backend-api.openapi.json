@@ -18,6 +18,14 @@
     {
       "name": "orders",
       "description": "Order admin read, lifecycle commands, and payment settlement replay."
+    },
+    {
+      "name": "afterSales",
+      "description": "After-sales management and review."
+    },
+    {
+      "name": "shipments",
+      "description": "Shipment and package management."
     }
   ],
   "paths": {
@@ -25,30 +33,47 @@
       "get": {
         "operationId": "orders.admin.list",
         "summary": "List orders for operator review",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "x-sdkwork-request-context": "WebRequestContext",
         "parameters": [
           {
             "name": "status",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "q",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Free-text search across order identifiers and subject."
           },
           {
             "name": "page",
             "in": "query",
-            "schema": { "type": "integer", "format": "int64", "minimum": 1, "default": 1 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1
+            }
           },
           {
             "name": "page_size",
             "in": "query",
-            "schema": { "type": "integer", "format": "int64", "minimum": 1, "maximum": 200, "default": 20 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
           }
         ],
         "responses": {
@@ -58,21 +83,32 @@
               "application/json": {
                 "schema": {
                   "allOf": [
-                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
                     {
                       "type": "object",
-                      "required": ["data"],
+                      "required": [
+                        "data"
+                      ],
                       "properties": {
                         "data": {
                           "type": "object",
                           "additionalProperties": false,
-                          "required": ["items", "pageInfo"],
+                          "required": [
+                            "items",
+                            "pageInfo"
+                          ],
                           "properties": {
                             "items": {
                               "type": "array",
-                              "items": { "$ref": "#/components/schemas/OrderSummary" }
+                              "items": {
+                                "$ref": "#/components/schemas/OrderSummary"
+                              }
                             },
-                            "pageInfo": { "$ref": "#/components/schemas/PageInfo" }
+                            "pageInfo": {
+                              "$ref": "#/components/schemas/PageInfo"
+                            }
                           }
                         }
                       }
@@ -86,35 +122,57 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
       }
     },
     "/backend/v3/api/orders/cancellations": {
       "get": {
         "operationId": "orders.admin.cancellations.list",
         "summary": "List order cancellation audit records",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
           {
             "name": "status",
             "in": "query",
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "page",
             "in": "query",
-            "schema": { "type": "integer", "format": "int64", "minimum": 1, "default": 1 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1
+            }
           },
           {
             "name": "page_size",
             "in": "query",
-            "schema": { "type": "integer", "format": "int64", "minimum": 1, "maximum": 200, "default": 20 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
           }
         ],
         "responses": {
@@ -124,21 +182,32 @@
               "application/json": {
                 "schema": {
                   "allOf": [
-                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
                     {
                       "type": "object",
-                      "required": ["data"],
+                      "required": [
+                        "data"
+                      ],
                       "properties": {
                         "data": {
                           "type": "object",
                           "additionalProperties": false,
-                          "required": ["items", "pageInfo"],
+                          "required": [
+                            "items",
+                            "pageInfo"
+                          ],
                           "properties": {
                             "items": {
                               "type": "array",
-                              "items": { "$ref": "#/components/schemas/OrderCancellation" }
+                              "items": {
+                                "$ref": "#/components/schemas/OrderCancellation"
+                              }
                             },
-                            "pageInfo": { "$ref": "#/components/schemas/PageInfo" }
+                            "pageInfo": {
+                              "$ref": "#/components/schemas/PageInfo"
+                            }
                           }
                         }
                       }
@@ -152,26 +221,37 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
       }
     },
     "/backend/v3/api/orders/{orderId}": {
       "get": {
         "operationId": "orders.admin.retrieve",
         "summary": "Retrieve order detail for operator review",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
           {
             "name": "orderId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -181,17 +261,25 @@
               "application/json": {
                 "schema": {
                   "allOf": [
-                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
                     {
                       "type": "object",
-                      "required": ["data"],
+                      "required": [
+                        "data"
+                      ],
                       "properties": {
                         "data": {
                           "type": "object",
                           "additionalProperties": false,
-                          "required": ["item"],
+                          "required": [
+                            "item"
+                          ],
                           "properties": {
-                            "item": { "$ref": "#/components/schemas/OrderDetail" }
+                            "item": {
+                              "$ref": "#/components/schemas/OrderDetail"
+                            }
                           }
                         }
                       }
@@ -205,33 +293,52 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
       }
     },
     "/backend/v3/api/orders/{orderId}/cancel": {
       "post": {
         "operationId": "orders.admin.cancel",
         "summary": "Cancel an order from the admin surface",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
           {
             "name": "orderId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "requestBody": {
           "required": false,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CancelOrderRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CancelOrderRequest"
+              }
             }
           }
         },
@@ -240,7 +347,9 @@
             "description": "Cancel accepted",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkCommandResponse"
+                }
               }
             }
           },
@@ -248,33 +357,53 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true
       }
     },
     "/backend/v3/api/orders/{orderId}/close": {
       "post": {
         "operationId": "orders.admin.close",
         "summary": "Close an order from the admin surface",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
           {
             "name": "orderId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "requestBody": {
           "required": false,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CloseOrderRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/CloseOrderRequest"
+              }
             }
           }
         },
@@ -283,7 +412,9 @@
             "description": "Close accepted",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SdkWorkCommandResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkCommandResponse"
+                }
               }
             }
           },
@@ -291,36 +422,59 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true
       }
     },
     "/backend/v3/api/orders/{orderId}/events": {
       "get": {
         "operationId": "orders.admin.events.list",
         "summary": "List order lifecycle events",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
           {
             "name": "orderId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "name": "page",
             "in": "query",
-            "schema": { "type": "integer", "format": "int64", "minimum": 1, "default": 1 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1
+            }
           },
           {
             "name": "page_size",
             "in": "query",
-            "schema": { "type": "integer", "format": "int64", "minimum": 1, "maximum": 200, "default": 20 }
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
           }
         ],
         "responses": {
@@ -330,21 +484,32 @@
               "application/json": {
                 "schema": {
                   "allOf": [
-                    { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+                    {
+                      "$ref": "#/components/schemas/SdkWorkApiResponse"
+                    },
                     {
                       "type": "object",
-                      "required": ["data"],
+                      "required": [
+                        "data"
+                      ],
                       "properties": {
                         "data": {
                           "type": "object",
                           "additionalProperties": false,
-                          "required": ["items", "pageInfo"],
+                          "required": [
+                            "items",
+                            "pageInfo"
+                          ],
                           "properties": {
                             "items": {
                               "type": "array",
-                              "items": { "$ref": "#/components/schemas/OrderEvent" }
+                              "items": {
+                                "$ref": "#/components/schemas/OrderEvent"
+                              }
                             },
-                            "pageInfo": { "$ref": "#/components/schemas/PageInfo" }
+                            "pageInfo": {
+                              "$ref": "#/components/schemas/PageInfo"
+                            }
                           }
                         }
                       }
@@ -358,33 +523,52 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
       }
     },
     "/backend/v3/api/orders/{orderId}/payment_confirmations": {
       "post": {
         "operationId": "orders.paymentConfirmations.create",
         "summary": "Manually confirm payment and run order settlement saga",
-        "tags": ["orders"],
+        "tags": [
+          "orders"
+        ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
           {
             "name": "orderId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/ConfirmOrderPaymentRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmOrderPaymentRequest"
+              }
             }
           }
         },
@@ -393,7 +577,9 @@
             "description": "Payment confirmation accepted",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SdkWorkItemResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkItemResponse"
+                }
               }
             }
           },
@@ -401,12 +587,550 @@
             "description": "Error",
             "content": {
               "application/problem+json": {
-                "schema": { "$ref": "#/components/schemas/ProblemDetail" }
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
               }
             }
           }
         },
-        "security": [{ "AuthToken": [], "AccessToken": [] }]
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true
+      }
+    },
+    "/backend/v3/api/after_sales/requests": {
+      "get": {
+        "operationId": "afterSales.management.list",
+        "summary": "List after-sales requests for operator review",
+        "tags": [
+          "afterSales"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_sales_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "After-sales request list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AfterSalesRequestListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
+      }
+    },
+    "/backend/v3/api/after_sales/requests/{afterSalesRequestId}": {
+      "get": {
+        "operationId": "afterSales.management.retrieve",
+        "summary": "Retrieve after-sales request for operator review",
+        "tags": [
+          "afterSales"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "afterSalesRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "After-sales request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AfterSalesRequestItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
+      }
+    },
+    "/backend/v3/api/after_sales/requests/{afterSalesRequestId}/reviews": {
+      "post": {
+        "operationId": "afterSales.reviews.create",
+        "summary": "Review after-sales request",
+        "tags": [
+          "afterSales"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "afterSalesRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewAfterSalesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reviewed after-sales request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AfterSalesRequestItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true
+      }
+    },
+    "/backend/v3/api/shipments": {
+      "get": {
+        "operationId": "shipments.list",
+        "summary": "List shipments for operator review",
+        "tags": [
+          "shipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fulfillment_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipment list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
+      }
+    },
+    "/backend/v3/api/shipments/{shipmentId}": {
+      "get": {
+        "operationId": "shipments.retrieve",
+        "summary": "Retrieve shipment for operator review",
+        "tags": [
+          "shipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
+      }
+    },
+    "/backend/v3/api/shipments/{shipmentId}/packages": {
+      "get": {
+        "operationId": "shipments.packages.management.list",
+        "summary": "List shipment packages",
+        "tags": [
+          "shipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shipment package list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentPackageListResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "shipments.packages.create",
+        "summary": "Create shipment package",
+        "tags": [
+          "shipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShipmentPackageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created shipment package",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentPackageItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true
+      }
+    },
+    "/backend/v3/api/shipments/{shipmentId}/packages/{packageId}": {
+      "patch": {
+        "operationId": "shipments.packages.update",
+        "summary": "Update shipment package",
+        "tags": [
+          "shipments"
+        ],
+        "x-sdkwork-api-surface": "backend-api",
+        "parameters": [
+          {
+            "name": "shipmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "packageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateShipmentPackageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated shipment package",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentPackageItemResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "x-sdkwork-idempotent": true
       }
     }
   },
@@ -429,12 +1153,18 @@
       "SdkWorkApiResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "data", "traceId"],
+        "required": [
+          "code",
+          "data",
+          "traceId"
+        ],
         "properties": {
           "code": {
             "type": "integer",
             "format": "int32",
-            "enum": [0],
+            "enum": [
+              0
+            ],
             "default": 0,
             "minimum": 0,
             "maximum": 0
@@ -452,37 +1182,61 @@
       "SdkWorkCommandData": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["accepted"],
+        "required": [
+          "accepted"
+        ],
         "properties": {
-          "accepted": { "type": "boolean", "const": true },
-          "resourceId": { "type": "string" },
-          "status": { "type": "string" }
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
         }
       },
       "SdkWorkCommandResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
           {
             "type": "object",
-            "required": ["data"],
+            "required": [
+              "data"
+            ],
             "properties": {
-              "data": { "$ref": "#/components/schemas/SdkWorkCommandData" }
+              "data": {
+                "$ref": "#/components/schemas/SdkWorkCommandData"
+              }
             }
           }
         ]
       },
       "SdkWorkItemResponse": {
         "allOf": [
-          { "$ref": "#/components/schemas/SdkWorkApiResponse" },
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
           {
             "type": "object",
-            "required": ["data"],
+            "required": [
+              "data"
+            ],
             "properties": {
               "data": {
                 "type": "object",
-                "required": ["item"],
+                "required": [
+                  "item"
+                ],
                 "properties": {
-                  "item": { "type": "object", "additionalProperties": true }
+                  "item": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
                 }
               }
             }
@@ -492,23 +1246,55 @@
       "ConfirmOrderPaymentRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["requestNo"],
+        "required": [
+          "requestNo"
+        ],
         "properties": {
-          "requestNo": { "type": "string" }
+          "requestNo": {
+            "type": "string"
+          }
         }
       },
       "PageInfo": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["mode"],
+        "required": [
+          "mode"
+        ],
         "properties": {
-          "mode": { "type": "string", "enum": ["offset", "cursor"] },
-          "page": { "type": "integer", "minimum": 1 },
-          "pageSize": { "type": "integer", "minimum": 1, "maximum": 200 },
-          "totalItems": { "type": "string", "pattern": "^[0-9]+$" },
-          "totalPages": { "type": "integer", "minimum": 0 },
-          "nextCursor": { "type": ["string", "null"] },
-          "hasMore": { "type": "boolean" }
+          "mode": {
+            "type": "string",
+            "enum": [
+              "offset",
+              "cursor"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "totalItems": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
         }
       },
       "SdkWorkPlatformErrorCode": {
@@ -521,29 +1307,67 @@
       "ProblemDetail": {
         "type": "object",
         "additionalProperties": true,
-        "required": ["type", "title", "status", "code", "traceId"],
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "traceId"
+        ],
         "properties": {
-          "type": { "type": "string", "format": "uri-reference" },
-          "title": { "type": "string" },
-          "status": { "type": "integer", "minimum": 100, "maximum": 599 },
-          "detail": { "type": "string" },
-          "instance": { "type": "string" },
-          "code": { "$ref": "#/components/schemas/SdkWorkPlatformErrorCode" },
-          "traceId": { "type": "string", "format": "uuid" },
+          "type": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "code": {
+            "$ref": "#/components/schemas/SdkWorkPlatformErrorCode"
+          },
+          "traceId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "errors": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/FieldError" }
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
           }
         }
       },
       "FieldError": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["field", "message"],
+        "required": [
+          "field",
+          "message"
+        ],
         "properties": {
-          "field": { "type": "string" },
-          "message": { "type": "string" },
-          "code": { "type": "integer", "format": "int32", "minimum": 40011, "maximum": 40099 }
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 40011,
+            "maximum": 40099
+          }
         }
       },
       "OrderSummary": {
@@ -560,46 +1384,100 @@
           "createdAt"
         ],
         "properties": {
-          "orderId": { "type": "string" },
-          "orderSn": { "type": "string" },
-          "status": { "type": "string" },
-          "statusName": { "type": "string" },
-          "subject": { "type": "string" },
-          "totalAmount": { "type": "string" },
-          "paidAmount": { "type": "string" },
-          "discountAmount": { "type": "string" },
-          "quantity": { "type": "integer", "format": "int64" },
-          "createdAt": { "type": "string" },
-          "payTime": { "type": "string" },
-          "expireTime": { "type": "string" },
-          "paymentMethod": { "type": "string" }
+          "orderId": {
+            "type": "string"
+          },
+          "orderSn": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "statusName": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "string"
+          },
+          "paidAmount": {
+            "type": "string"
+          },
+          "discountAmount": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "payTime": {
+            "type": "string"
+          },
+          "expireTime": {
+            "type": "string"
+          },
+          "paymentMethod": {
+            "type": "string"
+          }
         }
       },
       "OrderItem": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "productName", "quantity", "unitPrice", "totalAmount"],
+        "required": [
+          "id",
+          "productName",
+          "quantity",
+          "unitPrice",
+          "totalAmount"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "productName": { "type": "string" },
-          "quantity": { "type": "integer", "format": "int64" },
-          "unitPrice": { "type": "string" },
-          "totalAmount": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unitPrice": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "string"
+          }
         }
       },
       "OrderDetail": {
         "allOf": [
-          { "$ref": "#/components/schemas/OrderSummary" },
+          {
+            "$ref": "#/components/schemas/OrderSummary"
+          },
           {
             "type": "object",
-            "required": ["items"],
+            "required": [
+              "items"
+            ],
             "properties": {
               "items": {
                 "type": "array",
-                "items": { "$ref": "#/components/schemas/OrderItem" }
+                "items": {
+                  "$ref": "#/components/schemas/OrderItem"
+                }
               },
-              "outTradeNo": { "type": "string" },
-              "transactionId": { "type": "string" }
+              "outTradeNo": {
+                "type": "string"
+              },
+              "transactionId": {
+                "type": "string"
+              }
             }
           }
         ]
@@ -607,46 +1485,474 @@
       "OrderEvent": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "eventType", "toStatus", "actorType", "createdAt"],
+        "required": [
+          "id",
+          "eventType",
+          "toStatus",
+          "actorType",
+          "createdAt"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "eventType": { "type": "string" },
-          "fromStatus": { "type": "string" },
-          "toStatus": { "type": "string" },
-          "actorType": { "type": "string" },
-          "actorId": { "type": "string" },
-          "message": { "type": "string" },
-          "createdAt": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "fromStatus": {
+            "type": "string"
+          },
+          "toStatus": {
+            "type": "string"
+          },
+          "actorType": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
         }
       },
       "OrderCancellation": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "orderId", "status", "reasonCode", "createdAt"],
+        "required": [
+          "id",
+          "orderId",
+          "status",
+          "reasonCode",
+          "createdAt"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "orderId": { "type": "string" },
-          "status": { "type": "string" },
-          "reasonCode": { "type": "string" },
-          "reasonMessage": { "type": "string" },
-          "createdAt": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "reasonMessage": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
         }
       },
       "CancelOrderRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "reason": { "type": "string" },
-          "cancelType": { "type": "string" }
+          "reason": {
+            "type": "string"
+          },
+          "cancelType": {
+            "type": "string"
+          }
         }
       },
       "CloseOrderRequest": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "reason": { "type": "string" },
-          "closeType": { "type": "string" }
+          "reason": {
+            "type": "string"
+          },
+          "closeType": {
+            "type": "string"
+          }
         }
+      },
+      "AfterSalesRequestSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "afterSalesRequestId",
+          "afterSalesNo",
+          "orderId",
+          "afterSalesType",
+          "reasonCode",
+          "requestedAmount",
+          "currencyCode",
+          "status"
+        ],
+        "properties": {
+          "afterSalesRequestId": {
+            "type": "string"
+          },
+          "afterSalesNo": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "afterSalesType": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "requestedAmount": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "AfterSalesRequestListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "pageInfo"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/AfterSalesRequestSummary"
+                    }
+                  },
+                  "pageInfo": {
+                    "$ref": "#/components/schemas/PageInfo"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AfterSalesRequestItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/AfterSalesRequestSummary"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ReviewAfterSalesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reviewAction"
+        ],
+        "properties": {
+          "reviewAction": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "refundStatus": {
+            "type": "string"
+          },
+          "returnStatus": {
+            "type": "string"
+          },
+          "exchangeStatus": {
+            "type": "string"
+          },
+          "approvedAmount": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "reasonDetail": {
+            "type": "string"
+          },
+          "reviewComment": {
+            "type": "string"
+          }
+        }
+      },
+      "ShipmentSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "shipmentId",
+          "shipmentNo",
+          "fulfillmentId",
+          "carrierCode",
+          "status"
+        ],
+        "properties": {
+          "shipmentId": {
+            "type": "string"
+          },
+          "shipmentNo": {
+            "type": "string"
+          },
+          "fulfillmentId": {
+            "type": "string"
+          },
+          "carrierCode": {
+            "type": "string"
+          },
+          "trackingNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ShipmentListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "pageInfo"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ShipmentSummary"
+                    }
+                  },
+                  "pageInfo": {
+                    "$ref": "#/components/schemas/PageInfo"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ShipmentItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/ShipmentSummary"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ShipmentPackageSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packageId",
+          "shipmentId",
+          "packageNo",
+          "packageType",
+          "status"
+        ],
+        "properties": {
+          "packageId": {
+            "type": "string"
+          },
+          "shipmentId": {
+            "type": "string"
+          },
+          "packageNo": {
+            "type": "string"
+          },
+          "packageType": {
+            "type": "string"
+          },
+          "trackingNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "ShipmentPackageListResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items",
+                  "pageInfo"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ShipmentPackageSummary"
+                    }
+                  },
+                  "pageInfo": {
+                    "$ref": "#/components/schemas/PageInfo"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "ShipmentPackageItemResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/ShipmentPackageSummary"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CreateShipmentPackageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "packageType"
+        ],
+        "properties": {
+          "packageType": {
+            "type": "string"
+          },
+          "packageNo": {
+            "type": "string"
+          },
+          "trackingNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateShipmentPackageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "packageType": {
+            "type": "string"
+          },
+          "trackingNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "parameters": {
+      "WriteCommandIdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128
+        },
+        "description": "Client retry key scoped by tenant, principal, method, and path."
+      },
+      "WriteCommandRequestHash": {
+        "name": "Sdkwork-Request-Hash",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": "Stable digest of the canonical command payload; must match the request body and route params where applicable."
       }
     }
   }

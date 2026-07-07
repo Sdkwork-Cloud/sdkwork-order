@@ -2,6 +2,7 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_utils_rust::{validated_offset_list_params, MAX_LIST_PAGE_SIZE};
 
 pub mod request_hash;
+pub mod write_command_hash;
 
 pub fn require_non_empty(field: &str, value: &str) -> Result<(), CommerceServiceError> {
     if value.trim().is_empty() {

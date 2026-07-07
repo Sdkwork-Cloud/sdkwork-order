@@ -939,7 +939,7 @@ fn stable_storage_id(parts: &[&str]) -> String {
 }
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
-    CommerceServiceError::storage(format!("{message}: {error}"))
+    crate::sql_store_error::map_sql_store_error(message, error)
 }
 
 fn current_timestamp_string() -> String {

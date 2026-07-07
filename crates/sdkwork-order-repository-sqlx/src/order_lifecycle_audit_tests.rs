@@ -1,9 +1,122 @@
-use sdkwork_order_service::CancelOwnerOrderCommand;
+use sdkwork_order_service::{CancelOwnerOrderCommand, CloseManagementOrderCommand};
 
 use crate::test_sqlite_pool::{
     order_points_recharge_e2e_postgres_pool_from_env, order_points_recharge_e2e_sqlite_memory_pool,
 };
 use crate::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+
+#[tokio::test]
+async fn sqlite_close_management_order_is_idempotent_when_already_closed() {
+    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    seed_pending_order_sqlite(&pool).await;
+
+    let store = SqliteCommerceOrderStore::new(pool.clone());
+    let command = sample_close_command();
+    store
+        .close_management_order(command.clone())
+        .await
+        .expect("first close");
+    store
+        .close_management_order(command)
+        .await
+        .expect("idempotent close replay");
+
+    assert_close_audit_sqlite(&pool).await;
+}
+
+#[tokio::test]
+async fn postgres_close_management_order_is_idempotent_when_already_closed() {
+    let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
+        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres close idempotency test");
+        return;
+    };
+    seed_pending_order_postgres(&pool).await;
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    let command = sample_close_command();
+    store
+        .close_management_order(command.clone())
+        .await
+        .expect("first close");
+    store
+        .close_management_order(command)
+        .await
+        .expect("idempotent close replay");
+
+    assert_close_audit_postgres(&pool).await;
+}
+
+#[tokio::test]
+async fn sqlite_close_management_order_writes_event_audit_row() {
+    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    seed_pending_order_sqlite(&pool).await;
+
+    let store = SqliteCommerceOrderStore::new(pool.clone());
+    store
+        .close_management_order(sample_close_command())
+        .await
+        .expect("close order");
+
+    assert_close_audit_sqlite(&pool).await;
+}
+
+#[tokio::test]
+async fn postgres_close_management_order_writes_event_audit_row() {
+    let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
+        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres close audit parity test");
+        return;
+    };
+    seed_pending_order_postgres(&pool).await;
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    store
+        .close_management_order(sample_close_command())
+        .await
+        .expect("close order");
+
+    assert_close_audit_postgres(&pool).await;
+}
+
+#[tokio::test]
+async fn sqlite_cancel_owner_order_is_idempotent_when_already_cancelled() {
+    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    seed_pending_order_sqlite(&pool).await;
+
+    let store = SqliteCommerceOrderStore::new(pool.clone());
+    let command = sample_cancel_command();
+    store
+        .cancel_owner_order(command.clone())
+        .await
+        .expect("first cancel");
+    store
+        .cancel_owner_order(command)
+        .await
+        .expect("idempotent cancel replay");
+
+    assert_cancel_audit_sqlite(&pool, "changed mind").await;
+}
+
+#[tokio::test]
+async fn postgres_cancel_owner_order_is_idempotent_when_already_cancelled() {
+    let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
+        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres cancel idempotency test");
+        return;
+    };
+    seed_pending_order_postgres(&pool).await;
+
+    let store = PostgresCommerceOrderStore::new(pool.clone());
+    let command = sample_cancel_command();
+    store
+        .cancel_owner_order(command.clone())
+        .await
+        .expect("first cancel");
+    store
+        .cancel_owner_order(command)
+        .await
+        .expect("idempotent cancel replay");
+
+    assert_cancel_audit_postgres(&pool, "changed mind").await;
+}
 
 #[tokio::test]
 async fn sqlite_cancel_owner_order_writes_event_and_cancellation_audit_rows() {
@@ -46,6 +159,17 @@ fn sample_cancel_command() -> CancelOwnerOrderCommand {
         cancel_reason: Some("changed mind".to_owned()),
         cancel_type: Some("user_cancel".to_owned()),
     }
+}
+
+fn sample_close_command() -> CloseManagementOrderCommand {
+    CloseManagementOrderCommand::with_close_type(
+        "tenant-1",
+        None,
+        "order-1",
+        Some("admin resolved"),
+        Some("admin_close"),
+    )
+    .expect("valid close command")
 }
 
 async fn seed_pending_order_sqlite(pool: &sqlx::SqlitePool) {
@@ -111,6 +235,50 @@ async fn assert_cancel_audit_sqlite(pool: &sqlx::SqlitePool, reason: &str) {
     .await
     .expect("cancellation reason");
     assert_eq!(cancellation_reason, reason);
+}
+
+async fn assert_close_audit_sqlite(pool: &sqlx::SqlitePool) {
+    let event_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM commerce_order_event WHERE tenant_id = ? AND order_id = ? AND event_type = 'closed'",
+    )
+    .bind("tenant-1")
+    .bind("order-1")
+    .fetch_one(pool)
+    .await
+    .expect("count close events");
+    assert_eq!(event_count, 1);
+
+    let cancellation_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM commerce_order_cancellation WHERE tenant_id = ? AND order_id = ?",
+    )
+    .bind("tenant-1")
+    .bind("order-1")
+    .fetch_one(pool)
+    .await
+    .expect("count cancellations");
+    assert_eq!(cancellation_count, 0);
+}
+
+async fn assert_close_audit_postgres(pool: &sqlx::PgPool) {
+    let event_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM commerce_order_event WHERE tenant_id = $1 AND order_id = $2 AND event_type = 'closed'",
+    )
+    .bind("tenant-1")
+    .bind("order-1")
+    .fetch_one(pool)
+    .await
+    .expect("count close events");
+    assert_eq!(event_count, 1);
+
+    let cancellation_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM commerce_order_cancellation WHERE tenant_id = $1 AND order_id = $2",
+    )
+    .bind("tenant-1")
+    .bind("order-1")
+    .fetch_one(pool)
+    .await
+    .expect("count cancellations");
+    assert_eq!(cancellation_count, 0);
 }
 
 async fn assert_cancel_audit_postgres(pool: &sqlx::PgPool, reason: &str) {

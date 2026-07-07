@@ -1,3 +1,8 @@
+use crate::order_limits::MAX_ORDER_LINE_ITEMS;
+use crate::read_model::{
+    empty_rows_when_read_model_is_missing, none_when_read_model_is_missing,
+    read_model_table_is_missing,
+};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,
@@ -55,6 +60,17 @@ SELECT
         NULLIF(pi.payment_method, '')
     ) AS payment_method,
     COALESCE(NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
+    COALESCE(
+        (
+            SELECT CAST(COALESCE(NULLIF(json_extract(oi.sku_snapshot_json, '$.points'), ''), '0') AS INTEGER)
+            FROM commerce_order_item oi
+            WHERE oi.tenant_id = o.tenant_id
+              AND oi.order_id = o.id
+            LIMIT 1
+        ),
+        CAST(COALESCE(NULLIF(json_extract(COALESCE(pa.callback_payload, '{}'), '$.points'), ''), '0') AS INTEGER),
+        0
+    ) AS recharge_points,
     COUNT(*) OVER() AS total_count
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
@@ -179,6 +195,7 @@ FROM commerce_order_item
 WHERE tenant_id = CAST(?1 AS TEXT)
   AND order_id = CAST(?2 AS TEXT)
 ORDER BY created_at ASC, id ASC
+LIMIT ?3
 "#;
 
 const OWNER_ORDER_STATISTICS: &str = r#"
@@ -712,6 +729,13 @@ impl SqliteCommerceOrderStore {
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
+        if from_status.eq_ignore_ascii_case("cancelled") {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
+            return Ok(());
+        }
+
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
@@ -738,9 +762,35 @@ impl SqliteCommerceOrderStore {
         .map_err(|error| store_error("failed to cancel owner order", error))?;
 
         if result.rows_affected() == 0 {
+            let current_status = sqlx::query_scalar::<_, String>(
+                r#"
+                SELECT status
+                FROM commerce_order
+                WHERE tenant_id = CAST(? AS TEXT)
+                  AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+                  AND owner_user_id = CAST(? AS TEXT)
+                  AND id = CAST(? AS TEXT)
+                "#,
+            )
+            .bind(&command.tenant_id)
+            .bind(command.organization_id.as_deref())
+            .bind(command.organization_id.as_deref())
+            .bind(&command.owner_user_id)
+            .bind(&command.order_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|error| store_error("failed to reload order status after cancel", error))?;
+
             tx.rollback()
                 .await
                 .map_err(|error| store_error("failed to rollback cancel owner order transaction", error))?;
+
+            if current_status
+                .as_deref()
+                .is_some_and(|status| status.eq_ignore_ascii_case("cancelled"))
+            {
+                return Ok(());
+            }
             return Err(CommerceServiceError::conflict(
                 "order is not cancellable or was not found",
             ));
@@ -782,6 +832,7 @@ async fn load_order_items(
     let rows = sqlx::query(LIST_ORDER_ITEMS)
         .bind(tenant_id)
         .bind(order_id)
+        .bind(MAX_ORDER_LINE_ITEMS)
         .fetch_all(pool)
         .await
         .or_else(empty_rows_when_read_model_is_missing)
@@ -849,7 +900,12 @@ fn map_order_summary_row(
         pay_time: optional_string_cell(row, "pay_time"),
         expire_time: optional_string_cell(row, "expire_time"),
         payment_method: optional_string_cell(row, "payment_method"),
+        points: positive_i64_cell(row, "recharge_points"),
     })
+}
+
+fn positive_i64_cell(row: &sqlx::sqlite::SqliteRow, column: &str) -> Option<i64> {
+    row.try_get::<i64, _>(column).ok().filter(|value| *value > 0)
 }
 
 fn optional_string_cell(row: &sqlx::sqlite::SqliteRow, column: &str) -> Option<String> {
@@ -861,27 +917,7 @@ fn string_cell(row: &sqlx::sqlite::SqliteRow, column: &str) -> String {
 }
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
-    CommerceServiceError::storage(format!("{message}: {error}"))
-}
-
-fn empty_rows_when_read_model_is_missing<T>(error: sqlx::Error) -> Result<Vec<T>, sqlx::Error> {
-    if read_model_table_is_missing(&error) {
-        Ok(Vec::new())
-    } else {
-        Err(error)
-    }
-}
-
-fn none_when_read_model_is_missing<T>(error: sqlx::Error) -> Result<Option<T>, sqlx::Error> {
-    if read_model_table_is_missing(&error) {
-        Ok(None)
-    } else {
-        Err(error)
-    }
-}
-
-fn read_model_table_is_missing(error: &sqlx::Error) -> bool {
-    matches!(error, sqlx::Error::Database(ref db) if db.message().contains("no such table"))
+    crate::sql_store_error::map_sql_store_error(message, error)
 }
 
 fn empty_order_statistics() -> OrderOwnerStatistics {

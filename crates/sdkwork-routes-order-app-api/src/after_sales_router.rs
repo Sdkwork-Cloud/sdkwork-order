@@ -372,6 +372,12 @@ async fn update_after_sales_request(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
+    if body.approved_amount.is_some() {
+        return validation(ctx, "approved_amount is not writable by owner");
+    }
+    if body.reviewer_note.is_some() {
+        return validation(ctx, "reviewer_note is not writable by owner");
+    }
     let payload =
         write_payload_with_route_param("afterSalesRequestId", &after_sales_request_id, &body);
     let write_headers = match validate_app_write_payload(
@@ -384,7 +390,7 @@ async fn update_after_sales_request(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let command = match UpdateAfterSalesRequestCommand::new(
+    let command = match UpdateAfterSalesRequestCommand::new_for_owner(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
@@ -393,9 +399,7 @@ async fn update_after_sales_request(
         body.reason_code.as_deref(),
         body.description.as_deref(),
         body.requested_amount.as_deref(),
-        body.approved_amount.as_deref(),
         body.currency_code.as_deref(),
-        body.reviewer_note.as_deref(),
         &write_headers.request_no,
         &write_headers.idempotency_key,
     ) {

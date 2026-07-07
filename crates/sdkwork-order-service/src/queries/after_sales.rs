@@ -434,6 +434,38 @@ impl CreateAfterSalesReturnShipmentCommand {
 }
 
 impl UpdateAfterSalesRequestCommand {
+    /// Buyer-scoped update; rejects operator-only review fields.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_owner(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        after_sales_request_id: &str,
+        status: Option<&str>,
+        reason_code: Option<&str>,
+        description: Option<&str>,
+        requested_amount: Option<&str>,
+        currency_code: Option<&str>,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        Self::new(
+            tenant_id,
+            organization_id,
+            owner_user_id,
+            after_sales_request_id,
+            status,
+            reason_code,
+            description,
+            requested_amount,
+            None,
+            currency_code,
+            None,
+            request_no,
+            idempotency_key,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         tenant_id: &str,
@@ -490,6 +522,174 @@ impl UpdateAfterSalesRequestCommand {
     }
 }
 
+/// 运营端售后单列表查询（租户/组织范围，不限定买家）。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AfterSalesManagementListQuery {
+    pub after_sales_request_id: Option<String>,
+    pub after_sales_type: Option<String>,
+    pub order_id: Option<String>,
+    pub organization_id: Option<String>,
+    pub page: i64,
+    pub page_size: i64,
+    pub status: Option<String>,
+    pub tenant_id: String,
+}
+
+/// 运营端售后单详情查询。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AfterSalesManagementDetailQuery {
+    pub after_sales_request_id: String,
+    pub organization_id: Option<String>,
+    pub tenant_id: String,
+}
+
+/// 运营端售后审核命令。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReviewAfterSalesRequestCommand {
+    pub after_sales_request_id: String,
+    pub approved_amount: Option<String>,
+    pub exchange_status: Option<String>,
+    pub idempotency_key: String,
+    pub organization_id: Option<String>,
+    pub reason_code: Option<String>,
+    pub refund_status: Option<String>,
+    pub request_no: String,
+    pub return_status: Option<String>,
+    pub review_action: String,
+    pub review_comment: Option<String>,
+    pub status: Option<String>,
+    pub tenant_id: String,
+}
+
+impl AfterSalesManagementListQuery {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: Option<&str>,
+        after_sales_type: Option<&str>,
+        status: Option<&str>,
+        after_sales_request_id: Option<&str>,
+        page: Option<i64>,
+        page_size: Option<i64>,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        let (page, page_size) = crate::validation::offset_list_params(page, page_size)?;
+        Ok(Self {
+            after_sales_request_id: optional_text(after_sales_request_id),
+            after_sales_type: optional_text(after_sales_type),
+            order_id: optional_text(order_id),
+            organization_id: optional_text(organization_id),
+            page,
+            page_size,
+            status: optional_text(status),
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+
+    pub fn limit(&self) -> i64 {
+        self.page_size
+    }
+
+    pub fn offset(&self) -> i64 {
+        (self.page - 1) * self.page_size
+    }
+}
+
+impl AfterSalesManagementDetailQuery {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        after_sales_request_id: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("after_sales_request_id", after_sales_request_id)?;
+        Ok(Self {
+            after_sales_request_id: after_sales_request_id.trim().to_string(),
+            organization_id: optional_text(organization_id),
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+}
+
+impl ReviewAfterSalesRequestCommand {
+    pub fn new(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        after_sales_request_id: &str,
+        review_action: &str,
+        request_no: &str,
+        idempotency_key: &str,
+    ) -> Result<Self, CommerceServiceError> {
+        crate::validation::require_non_empty("tenant_id", tenant_id)?;
+        crate::validation::require_non_empty("after_sales_request_id", after_sales_request_id)?;
+        crate::validation::require_non_empty("review_action", review_action)?;
+        crate::validation::require_non_empty("request_no", request_no)?;
+        crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
+        Ok(Self {
+            after_sales_request_id: after_sales_request_id.trim().to_string(),
+            approved_amount: None,
+            exchange_status: None,
+            idempotency_key: idempotency_key.trim().to_string(),
+            organization_id: optional_text(organization_id),
+            reason_code: None,
+            refund_status: None,
+            request_no: request_no.trim().to_string(),
+            return_status: None,
+            review_action: review_action.trim().to_string(),
+            review_comment: None,
+            status: None,
+            tenant_id: tenant_id.trim().to_string(),
+        })
+    }
+
+    pub fn with_status(mut self, status: Option<String>) -> Self {
+        self.status = status;
+        self
+    }
+
+    pub fn with_refund_status(mut self, refund_status: Option<String>) -> Self {
+        self.refund_status = refund_status;
+        self
+    }
+
+    pub fn with_return_status(mut self, return_status: Option<String>) -> Self {
+        self.return_status = return_status;
+        self
+    }
+
+    pub fn with_exchange_status(mut self, exchange_status: Option<String>) -> Self {
+        self.exchange_status = exchange_status;
+        self
+    }
+
+    pub fn with_approved_amount(mut self, approved_amount: Option<String>) -> Self {
+        self.approved_amount = approved_amount;
+        self
+    }
+
+    pub fn with_reason_code(mut self, reason_code: Option<String>) -> Self {
+        self.reason_code = reason_code;
+        self
+    }
+
+    pub fn with_review_comment(mut self, review_comment: Option<String>) -> Self {
+        self.review_comment = review_comment;
+        self
+    }
+
+    pub fn resolved_status(&self) -> String {
+        if let Some(status) = optional_text(self.status.as_deref()) {
+            return status;
+        }
+        match self.review_action.trim().to_ascii_lowercase().as_str() {
+            "approve" | "approved" => "approved".to_owned(),
+            "reject" | "rejected" => "rejected".to_owned(),
+            other => other.to_owned(),
+        }
+    }
+}
+
 fn merge_optional_text(primary: Option<&str>, secondary: Option<&str>) -> Option<String> {
     optional_text(primary).or_else(|| optional_text(secondary))
 }
@@ -507,6 +707,26 @@ mod tests {
 
     fn build_item(order_item_id: &str, quantity: i64) -> CreateAfterSalesRequestItemInput {
         CreateAfterSalesRequestItemInput::new(order_item_id, quantity, None).unwrap()
+    }
+
+    #[test]
+    fn update_after_sales_request_for_owner_rejects_operator_fields_via_constructor() {
+        let command = UpdateAfterSalesRequestCommand::new_for_owner(
+            "tenant-1",
+            None,
+            "user-1",
+            "asr-1",
+            Some("cancelled"),
+            None,
+            None,
+            None,
+            None,
+            "REQ-1",
+            "IDEM-1",
+        )
+        .unwrap();
+        assert!(command.approved_amount.is_none());
+        assert!(command.reviewer_note.is_none());
     }
 
     #[test]

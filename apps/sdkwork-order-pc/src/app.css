@@ -68,6 +68,17 @@
   font-size: 0.875rem;
 }
 
+.order-shell-auth-warning,
+.order-shell-config-hint {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--sdk-color-brand-warning, #f59e0b) 12%, transparent);
+  color: var(--sdk-color-text-primary, #1f2937);
+  font-size: 0.875rem;
+}
+
 .order-shell-body {
   max-width: var(--sdkwork-order-shell-max-width);
   margin: 0 auto;

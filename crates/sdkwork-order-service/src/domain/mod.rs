@@ -1,9 +1,11 @@
 mod fulfillment;
+mod membership;
 mod recharge;
 
 pub use fulfillment::{
     FulfillPointsRechargeOrderOutcome, PointsRechargeFulfillmentContext,
 };
+pub use membership::CreateMembershipOrderOutcome;
 pub use recharge::{
     CheckoutStatusSnapshot, CreatePointsRechargeOrderOutcome, RechargeGrantPreview,
     RechargePackageItem, RechargeSettingsSnapshot,

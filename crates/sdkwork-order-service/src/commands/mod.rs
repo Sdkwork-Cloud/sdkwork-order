@@ -1,4 +1,5 @@
 mod fulfillment;
+mod membership;
 mod recharge;
 
 use crate::OrderItemDraft;
@@ -7,6 +8,7 @@ use sdkwork_contract_service::CommerceMoney;
 pub use fulfillment::{
     FulfillPointsRechargeOrderCommand, MarkPointsRechargePaymentSucceededCommand,
 };
+pub use membership::CreateMembershipOrderCommand;
 pub use recharge::CreatePointsRechargeOrderCommand;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

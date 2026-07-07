@@ -165,6 +165,7 @@ export default defineConfig({
     include: [
       "apps/sdkwork-order-pc/packages/**/*.test.ts",
       "apps/sdkwork-order-pc/packages/**/*.test.tsx",
+      "apps/sdkwork-order-common/packages/**/*.test.ts",
     ],
   },
 });

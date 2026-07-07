@@ -8,6 +8,7 @@ use sdkwork_order_service::{
 };
 use sqlx::{PgPool, Row};
 
+use crate::order_limits::MAX_ORDER_LINE_ITEMS;
 use crate::postgres_order::PostgresCommerceOrderStore;
 
 const LIST_MANAGEMENT_ORDERS: &str = r#"
@@ -206,6 +207,29 @@ impl PostgresCommerceOrderStore {
         }))
     }
 
+    pub async fn resolve_management_order_owner_user_id(
+        &self,
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        order_id: &str,
+    ) -> Result<Option<String>, CommerceServiceError> {
+        sqlx::query_scalar(
+            r#"
+            SELECT owner_user_id
+            FROM commerce_order
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND id = CAST($3 AS TEXT)
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(organization_id)
+        .bind(order_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to resolve management order owner", error))
+    }
+
     pub async fn cancel_management_order(
         &self,
         command: CancelManagementOrderCommand,
@@ -248,6 +272,13 @@ impl PostgresCommerceOrderStore {
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
+        if from_status.eq_ignore_ascii_case("cancelled") {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+            return Ok(());
+        }
+
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
@@ -271,9 +302,32 @@ impl PostgresCommerceOrderStore {
         .map_err(|error| store_error("failed to cancel management order", error))?;
 
         if result.rows_affected() == 0 {
+            let current_status = sqlx::query_scalar::<_, String>(
+                r#"
+                SELECT status
+                FROM commerce_order
+                WHERE tenant_id = CAST($1 AS TEXT)
+                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+                  AND id = CAST($3 AS TEXT)
+                "#,
+            )
+            .bind(&command.tenant_id)
+            .bind(command.organization_id.as_deref())
+            .bind(&command.order_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|error| store_error("failed to reload order status after cancel", error))?;
+
             tx.rollback()
                 .await
                 .map_err(|error| store_error("failed to rollback cancel management order transaction", error))?;
+
+            if current_status
+                .as_deref()
+                .is_some_and(|status| status.eq_ignore_ascii_case("cancelled"))
+            {
+                return Ok(());
+            }
             return Err(CommerceServiceError::conflict(
                 "order is not cancellable or was not found",
             ));
@@ -347,6 +401,13 @@ impl PostgresCommerceOrderStore {
             return Err(CommerceServiceError::not_found("order was not found"));
         };
 
+        if from_status.eq_ignore_ascii_case("closed") {
+            tx.rollback()
+                .await
+                .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+            return Ok(());
+        }
+
         let result = sqlx::query(
             r#"
             UPDATE commerce_order
@@ -367,9 +428,32 @@ impl PostgresCommerceOrderStore {
         .map_err(|error| store_error("failed to close management order", error))?;
 
         if result.rows_affected() == 0 {
+            let current_status = sqlx::query_scalar::<_, String>(
+                r#"
+                SELECT status
+                FROM commerce_order
+                WHERE tenant_id = CAST($1 AS TEXT)
+                  AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+                  AND id = CAST($3 AS TEXT)
+                "#,
+            )
+            .bind(&command.tenant_id)
+            .bind(command.organization_id.as_deref())
+            .bind(&command.order_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(|error| store_error("failed to reload order status after close", error))?;
+
             tx.rollback()
                 .await
                 .map_err(|error| store_error("failed to rollback close management order transaction", error))?;
+
+            if current_status
+                .as_deref()
+                .is_some_and(|status| status.eq_ignore_ascii_case("closed"))
+            {
+                return Ok(());
+            }
             return Err(CommerceServiceError::conflict(
                 "order is not closable or was not found",
             ));
@@ -510,10 +594,12 @@ async fn load_management_order_items(
         WHERE tenant_id = CAST($1 AS TEXT)
           AND order_id = CAST($2 AS TEXT)
         ORDER BY created_at ASC, id ASC
+        LIMIT $3
         "#,
     )
     .bind(tenant_id)
     .bind(order_id)
+    .bind(MAX_ORDER_LINE_ITEMS)
     .fetch_all(pool)
     .await
     .map_err(|error| store_error("failed to list management order items", error))?;
@@ -554,6 +640,7 @@ fn map_management_summary_row(
         pay_time: optional_string_cell(row, "pay_time"),
         expire_time: optional_string_cell(row, "expire_time"),
         payment_method: optional_string_cell(row, "payment_method"),
+        points: None,
     })
 }
 
@@ -569,7 +656,7 @@ fn optional_string_cell(row: &sqlx::postgres::PgRow, column: &str) -> Option<Str
 }
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
-    CommerceServiceError::storage(format!("{message}: {error}"))
+    crate::sql_store_error::map_sql_store_error(message, error)
 }
 
 fn current_command_timestamp() -> String {

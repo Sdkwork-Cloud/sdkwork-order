@@ -4,6 +4,11 @@ import type { HttpClient } from '../http/client';
 import type { CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
 
 
+export interface OrdersPaymentConfirmationsCreateParams {
+  idempotencyKey: string;
+  sdkworkRequestHash: string;
+}
+
 export class OrdersPaymentConfirmationsApi {
   private client: HttpClient;
 
@@ -13,8 +18,15 @@ export class OrdersPaymentConfirmationsApi {
 
 
 /** Manually confirm payment and run order settlement saga */
-  async create(orderId: string, body: ConfirmOrderPaymentRequest): Promise<Record<string, unknown>> {
-    return this.client.post<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), body, undefined, undefined, 'application/json');
+  async create(orderId: string, body: ConfirmOrderPaymentRequest, params: OrdersPaymentConfirmationsCreateParams): Promise<Record<string, unknown>> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.post<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), body, undefined, requestHeaders, 'application/json');
   }
 }
 
@@ -73,6 +85,16 @@ export interface OrdersAdminListParams {
   pageSize?: string;
 }
 
+export interface OrdersAdminCancelParams {
+  idempotencyKey: string;
+  sdkworkRequestHash: string;
+}
+
+export interface OrdersAdminCloseParams {
+  idempotencyKey: string;
+  sdkworkRequestHash: string;
+}
+
 export class OrdersAdminApi {
   private client: HttpClient;
   public readonly cancellations: OrdersAdminCancellationsApi;
@@ -102,13 +124,27 @@ export class OrdersAdminApi {
   }
 
 /** Cancel an order from the admin surface */
-  async cancel(orderId: string, body?: CancelOrderRequest): Promise<SdkWorkCommandData> {
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, undefined, 'application/json');
+  async cancel(orderId: string, params: OrdersAdminCancelParams, body?: CancelOrderRequest): Promise<SdkWorkCommandData> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, requestHeaders, 'application/json');
   }
 
 /** Close an order from the admin surface */
-  async close(orderId: string, body?: CloseOrderRequest): Promise<SdkWorkCommandData> {
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/close`), body, undefined, undefined, 'application/json');
+  async close(orderId: string, params: OrdersAdminCloseParams, body?: CloseOrderRequest): Promise<SdkWorkCommandData> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/close`), body, undefined, requestHeaders, 'application/json');
   }
 }
 
@@ -359,4 +395,79 @@ function encodeQueryValue(value: string, allowReserved: boolean): string {
     .replace(/%2C/gi, ',')
     .replace(/%3B/gi, ';')
     .replace(/%3D/gi, '=');
+}
+function buildRequestHeaders(
+  headers: Record<string, HeaderParameterSpec | undefined>,
+  cookies: Record<string, HeaderParameterSpec | undefined> = {},
+): Record<string, string> | undefined {
+  const requestHeaders: Record<string, string> = {};
+
+  for (const [name, parameter] of Object.entries(headers)) {
+    const serialized = serializeParameterValue(parameter);
+    if (serialized !== undefined) {
+      requestHeaders[name] = serialized;
+    }
+  }
+
+  const cookieHeader = buildCookieHeader(cookies);
+  if (cookieHeader) {
+    requestHeaders.Cookie = requestHeaders.Cookie
+      ? `${requestHeaders.Cookie}; ${cookieHeader}`
+      : cookieHeader;
+  }
+
+  return Object.keys(requestHeaders).length > 0 ? requestHeaders : undefined;
+}
+
+interface HeaderParameterSpec {
+  value: unknown;
+  style: string;
+  explode: boolean;
+  contentType?: string;
+}
+
+function buildCookieHeader(cookies: Record<string, HeaderParameterSpec | undefined>): string | undefined {
+  const pairs: string[] = [];
+  for (const [name, parameter] of Object.entries(cookies)) {
+    const serialized = serializeParameterValue(parameter);
+    if (serialized !== undefined) {
+      pairs.push(`${encodeURIComponent(name)}=${encodeURIComponent(serialized)}`);
+    }
+  }
+  return pairs.length > 0 ? pairs.join('; ') : undefined;
+}
+
+function serializeParameterValue(parameter: HeaderParameterSpec | undefined): string | undefined {
+  const value = parameter?.value;
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (parameter?.contentType) {
+    return JSON.stringify(value);
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => serializeHeaderPrimitive(item)).join(',');
+  }
+  if (typeof value === 'object' && value !== null) {
+    return serializeHeaderObject(value as Record<string, unknown>, parameter?.explode === true);
+  }
+  return serializeHeaderPrimitive(value);
+}
+
+function serializeHeaderObject(value: Record<string, unknown>, explode: boolean): string {
+  const entries = Object.entries(value).filter(([, entryValue]) => entryValue !== undefined && entryValue !== null);
+  if (explode) {
+    return entries.map(([key, entryValue]) => `${key}=${serializeHeaderPrimitive(entryValue)}`).join(',');
+  }
+  return entries.flatMap(([key, entryValue]) => [key, serializeHeaderPrimitive(entryValue)]).join(',');
+}
+
+function serializeHeaderPrimitive(value: unknown): string {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return String(value);
 }

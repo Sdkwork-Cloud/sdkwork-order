@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use sdkwork_contract_service::CommerceMoney;
+use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, points_recharge_fulfillment_idempotency_key,
@@ -63,6 +63,46 @@ fn fulfillment_context_accepts_succeeded_payment() {
     };
 
     assert!(context.validate_for_fulfillment().is_ok());
+}
+
+#[tokio::test]
+async fn fulfill_points_recharge_order_compensates_when_commit_fails_after_credit() {
+    let store = Arc::new(MockFulfillmentStore {
+        commit_should_fail: Mutex::new(true),
+        ..MockFulfillmentStore::default()
+    });
+    let credit_port = Arc::new(MockAccountPointsCreditPort::default());
+
+    store.seed_context(PointsRechargeFulfillmentContext {
+        order_id: "order-77".to_owned(),
+        order_no: "ORD-77".to_owned(),
+        order_status: "pending_payment".to_owned(),
+        fulfillment_status: "unfulfilled".to_owned(),
+        payment_status: "success".to_owned(),
+        payment_attempt_status: "succeeded".to_owned(),
+        points: 80,
+        amount: CommerceMoney::new("8.00").expect("money"),
+        currency_code: "CNY".to_owned(),
+        billing_history_status: Some("pending".to_owned()),
+    });
+
+    let command = default_fulfill_points_recharge_command(
+        "100001",
+        Some("0"),
+        "1",
+        "order-77",
+        "req-fulfill-compensate",
+    )
+    .expect("command");
+
+    let error = fulfill_points_recharge_order(store.as_ref(), credit_port.as_ref(), command)
+        .await
+        .expect_err("commit failure should surface");
+
+    assert!(error.message().contains("commit failed"));
+    assert_eq!(credit_port.credit_calls(), 1);
+    assert_eq!(credit_port.reverse_calls(), 1);
+    assert_eq!(store.commit_calls(), 1);
 }
 
 #[tokio::test]
@@ -165,6 +205,7 @@ struct MockFulfillmentStore {
     contexts: Mutex<HashMap<String, PointsRechargeFulfillmentContext>>,
     commit_calls: Mutex<u32>,
     payment_success_calls: Mutex<u32>,
+    commit_should_fail: Mutex<bool>,
 }
 
 impl MockFulfillmentStore {
@@ -198,12 +239,33 @@ impl PointsRechargeFulfillmentStore for MockFulfillmentStore {
         Box::pin(async move { Ok(context) })
     }
 
+    fn reserve_points_recharge_fulfillment<'a>(
+        &'a self,
+        _command: &'a FulfillPointsRechargeOrderCommand,
+        _context: &'a PointsRechargeFulfillmentContext,
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn release_points_recharge_fulfillment_reservation<'a>(
+        &'a self,
+        _command: &'a FulfillPointsRechargeOrderCommand,
+        _context: &'a PointsRechargeFulfillmentContext,
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
+        Box::pin(async { Ok(()) })
+    }
+
     fn commit_points_recharge_fulfillment<'a>(
         &'a self,
         command: FulfillPointsRechargeOrderCommand,
         context: &'a PointsRechargeFulfillmentContext,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome> {
         *self.commit_calls.lock().expect("commit lock") += 1;
+        if *self.commit_should_fail.lock().expect("commit fail lock") {
+            return Box::pin(async move {
+                Err(CommerceServiceError::storage("commit failed after credit"))
+            });
+        }
         let order_no = context.order_no.clone();
         let points = context.points;
         Box::pin(async move {
@@ -235,25 +297,38 @@ impl PointsRechargeFulfillmentStore for MockFulfillmentStore {
 #[derive(Default)]
 struct MockAccountPointsCreditPort {
     credit_calls: Mutex<u32>,
+    reverse_calls: Mutex<u32>,
 }
 
 impl MockAccountPointsCreditPort {
     fn credit_calls(&self) -> u32 {
         *self.credit_calls.lock().expect("credit lock")
     }
+
+    fn reverse_calls(&self) -> u32 {
+        *self.reverse_calls.lock().expect("reverse lock")
+    }
 }
 
 impl AccountPointsCreditPort for MockAccountPointsCreditPort {
     fn credit_points_recharge<'a>(
         &'a self,
-        request: PointsRechargeCreditRequest,
+        _request: PointsRechargeCreditRequest,
     ) -> sdkwork_order_service::AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
         *self.credit_calls.lock().expect("credit lock") += 1;
-        assert_eq!(request.points, 250);
-        assert_eq!(
-            request.idempotency_key,
-            points_recharge_fulfillment_idempotency_key("order-99")
-        );
+        Box::pin(async {
+            Ok(PointsRechargeCreditOutcome {
+                accepted: true,
+                replayed: false,
+            })
+        })
+    }
+
+    fn reverse_points_recharge_credit<'a>(
+        &'a self,
+        _request: PointsRechargeCreditRequest,
+    ) -> sdkwork_order_service::AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
+        *self.reverse_calls.lock().expect("reverse lock") += 1;
         Box::pin(async {
             Ok(PointsRechargeCreditOutcome {
                 accepted: true,

@@ -1,11 +1,12 @@
 use sdkwork_contract_service::CommerceServiceError;
 
 use crate::{
+    points_recharge_compensation_idempotency_key, points_recharge_compensation_transaction_no,
     AccountPointsCreditPort, FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
     MarkPointsRechargePaymentSucceededCommand, PointsRechargeCreditRequest,
     PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore,
-    POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
-    points_recharge_fulfillment_idempotency_key, points_recharge_fulfillment_transaction_no,
+    POINTS_RECHARGE_LEDGER_BUSINESS_TYPE, points_recharge_fulfillment_idempotency_key,
+    points_recharge_fulfillment_transaction_no,
 };
 
 pub async fn mark_points_recharge_payment_succeeded<S>(
@@ -46,12 +47,52 @@ where
 
     context.validate_for_fulfillment()?;
 
-    let credit_request = build_credit_request(&command, &context);
-    let credit_outcome = credit_port.credit_points_recharge(credit_request).await?;
-
-    let mut outcome = store
-        .commit_points_recharge_fulfillment(command, &context)
+    store
+        .reserve_points_recharge_fulfillment(&command, &context)
         .await?;
+
+    let credit_request = build_credit_request(&command, &context);
+    let credit_outcome = match credit_port.credit_points_recharge(credit_request.clone()).await {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let _ = store
+                .release_points_recharge_fulfillment_reservation(&command, &context)
+                .await;
+            return Err(error);
+        }
+    };
+
+    let mut outcome = match store
+        .commit_points_recharge_fulfillment(command.clone(), &context)
+        .await
+    {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            tracing::error!(
+                target = "order.fulfillment",
+                order_id = %context.order_id,
+                ?error,
+                "points recharge fulfillment commit failed after account credit; compensating"
+            );
+            if !credit_outcome.replayed {
+                let compensation = build_compensation_request(&credit_request);
+                if let Err(compensation_error) =
+                    credit_port.reverse_points_recharge_credit(compensation).await
+                {
+                    tracing::error!(
+                        target = "order.fulfillment",
+                        order_id = %context.order_id,
+                        ?compensation_error,
+                        "points recharge compensation debit failed; operator replay required"
+                    );
+                }
+            }
+            let _ = store
+                .release_points_recharge_fulfillment_reservation(&command, &context)
+                .await;
+            return Err(error);
+        }
+    };
 
     if outcome.replayed {
         return Ok(outcome);
@@ -75,6 +116,22 @@ fn build_credit_request(
         request_no: command.request_no.clone(),
         idempotency_key: points_recharge_fulfillment_idempotency_key(&context.order_id),
         transaction_no: points_recharge_fulfillment_transaction_no(&context.order_id),
+    }
+}
+
+fn build_compensation_request(
+    credit_request: &PointsRechargeCreditRequest,
+) -> PointsRechargeCreditRequest {
+    PointsRechargeCreditRequest {
+        tenant_id: credit_request.tenant_id.clone(),
+        organization_id: credit_request.organization_id.clone(),
+        owner_user_id: credit_request.owner_user_id.clone(),
+        order_id: credit_request.order_id.clone(),
+        order_no: credit_request.order_no.clone(),
+        points: credit_request.points,
+        request_no: format!("{}:compensate", credit_request.request_no),
+        idempotency_key: points_recharge_compensation_idempotency_key(&credit_request.order_id),
+        transaction_no: points_recharge_compensation_transaction_no(&credit_request.order_id),
     }
 }
 

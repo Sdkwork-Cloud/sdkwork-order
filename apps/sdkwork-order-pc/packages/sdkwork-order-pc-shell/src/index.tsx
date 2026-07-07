@@ -14,6 +14,10 @@ function resolveStandaloneSurface(): "app" | "backend-admin" {
 
 export interface OrderAppShellProps {
   /**
+   * When false, surfaces show an auth configuration warning (missing access token).
+   */
+  authConfigured?: boolean;
+  /**
    * Optional order page controller override. When omitted, the shell creates a
    * default controller bound to the runtime identity and the
    * `@sdkwork/order-service` SDK.
@@ -46,6 +50,7 @@ export interface OrderAppShellProps {
  * standalone capability build.
  */
 export function OrderAppShell({
+  authConfigured = true,
   orderController,
   locale = "zh-CN",
   messages,
@@ -73,6 +78,11 @@ export function OrderAppShell({
         <header className="order-shell-header" role="banner">
           <span className="order-shell-mark">SDKWork</span>
           <h1 className="order-shell-title">{sdkworkOrderPcRuntimeIdentity.appKey}</h1>
+          {!authConfigured ? (
+            <p className="order-shell-auth-warning" role="alert">
+              未配置 VITE_SDKWORK_ACCESS_TOKEN：API 调用将失败，请在环境变量中设置访问令牌。
+            </p>
+          ) : null}
           <p className="order-shell-subtitle">
             {surface === "backend-admin"
               ? "Order backend-admin surface — operator list, cancel, and close."
@@ -84,7 +94,14 @@ export function OrderAppShell({
           </nav>
         </header>
         <section className="order-shell-body" role="main">
-          {surface === "backend-admin" ? adminPage : buyerPage}
+          {authConfigured ? (surface === "backend-admin" ? adminPage : buyerPage) : (
+            <div className="order-shell-config-hint" role="alert">
+              <p>
+                未配置 SDK 会话。请设置 <code>VITE_SDKWORK_ACCESS_TOKEN</code>
+                （及可选的 <code>VITE_SDKWORK_AUTH_TOKEN</code>）后重新加载。
+              </p>
+            </div>
+          )}
         </section>
       </main>
     </SdkworkThemeProvider>

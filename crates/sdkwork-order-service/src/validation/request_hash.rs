@@ -1,22 +1,7 @@
-use crate::{CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand};
-
-fn stable_request_hash(parts: &[&str]) -> String {
-    parts
-        .iter()
-        .map(|part| {
-            part.chars()
-                .map(|character| {
-                    if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                        character
-                    } else {
-                        '-'
-                    }
-                })
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("-")
-}
+use crate::{
+    CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand,
+};
+use crate::validation::write_command_hash::stable_command_request_hash;
 
 pub fn checkout_session_request_hash(command: &CreateCheckoutSessionCommand) -> String {
     let lines = command
@@ -25,37 +10,43 @@ pub fn checkout_session_request_hash(command: &CreateCheckoutSessionCommand) -> 
         .map(|line| format!("{}:{}", line.sku_id, line.quantity))
         .collect::<Vec<_>>()
         .join(",");
-    stable_request_hash(&[
-        "checkout-session",
-        &command.tenant_id,
-        command.organization_id.as_deref().unwrap_or("global"),
-        &command.owner_user_id,
-        &command.currency_code,
-        &lines,
-        &command.request_no,
-    ])
+    stable_command_request_hash(
+        "checkout.sessions.create",
+        &[
+            &command.tenant_id,
+            command.organization_id.as_deref().unwrap_or("global"),
+            &command.owner_user_id,
+            &command.currency_code,
+            &lines,
+            &command.request_no,
+        ],
+    )
 }
 
 pub fn checkout_quote_request_hash(command: &CreateCheckoutQuoteCommand) -> String {
-    stable_request_hash(&[
-        "checkout-quote",
-        &command.tenant_id,
-        command.organization_id.as_deref().unwrap_or("global"),
-        &command.owner_user_id,
-        &command.checkout_session_id,
-        &command.request_no,
-    ])
+    stable_command_request_hash(
+        "checkout.sessions.quotes.create",
+        &[
+            &command.tenant_id,
+            command.organization_id.as_deref().unwrap_or("global"),
+            &command.owner_user_id,
+            &command.checkout_session_id,
+            &command.request_no,
+        ],
+    )
 }
 
 pub fn checkout_owner_order_request_hash(command: &CreateOwnerOrderCommand) -> String {
-    stable_request_hash(&[
-        "checkout-owner-order",
-        &command.tenant_id,
-        command.organization_id.as_deref().unwrap_or("global"),
-        &command.owner_user_id,
-        &command.checkout_session_id,
-        &command.request_no,
-    ])
+    stable_command_request_hash(
+        "checkout.sessions.orders.create",
+        &[
+            &command.tenant_id,
+            command.organization_id.as_deref().unwrap_or("global"),
+            &command.owner_user_id,
+            &command.checkout_session_id,
+            &command.request_no,
+        ],
+    )
 }
 
 #[cfg(test)]

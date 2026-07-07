@@ -27,14 +27,37 @@ Specs: ARCHITECTURE_DECISION_SPEC.md, DOCUMENTATION_SPEC.md
 
 | Surface | Prefix | Contract |
 | --- | --- | --- |
-| App API | `/app/v3/api/orders`, `/app/v3/api/recharges`, `/app/v3/api/checkout` | `apis/app-api/order/order-app-api.openapi.json` |
+| App API | `/app/v3/api/orders`, `/app/v3/api/recharges`, `/app/v3/api/checkout`, `/app/v3/api/memberships` | `apis/app-api/order/order-app-api.openapi.json` |
 | Backend API | `/backend/v3/api/orders` | `apis/backend-api/order/order-backend-api.openapi.json` |
+| Backend after-sales | `/backend/v3/api/after_sales/requests` | same authority |
+| Backend shipments | `/backend/v3/api/shipments` | same authority |
 
 OpenAPI discovery is served at `/app/v3/api/openapi.json` and `/backend/v3/api/openapi.json`.
 
 All success responses use `SdkWorkApiResponse` (`code: 0`, `data`, `traceId`). List endpoints return `data.items` + `data.pageInfo` with SQL-level `LIMIT`/`OFFSET` and `COUNT(*) OVER()` totals.
 
-Order cancel/close commands write `commerce_order_event` and `commerce_order_cancellation` rows in the same transaction as the status update.
+Order cancel/close commands write `commerce_order_event` (and `commerce_order_cancellation` for cancels) in the same transaction as the status update. **Payment intents are closed before order state mutation** on app and backend surfaces so terminal orders cannot retain open PSP attempts. Idempotent replays return success when the order is already in the target status.
+
+Write commands (app cancel, backend cancel/close, payment confirmation replay, after-sales review, shipment package create/update, checkout create/quote/order, recharge create/cancel) require `Idempotency-Key` and `Sdkwork-Request-Hash` headers. Most writes use `stable_json_request_hash(operationId, canonicalJsonBody)` including route parameters where applicable. Checkout and checkout-bound order creation use **command digests** keyed by the same `operationId` (`checkout.sessions.create`, `checkout.sessions.quotes.create`, `checkout.sessions.orders.create`) over tenant, organization, owner, session, line, and request-no fields — mirrored in TypeScript via `checkoutSessionRequestHash` and related helpers in `@sdkwork/order-service`. OpenAPI declares both headers on every `x-sdkwork-idempotent` operation.
+
+### Order creation entry points
+
+| Route | Operation | Use case |
+| --- | --- | --- |
+| `POST /app/v3/api/checkout/sessions/{checkoutSessionId}/orders` | `checkout.sessions.orders.create` | **Canonical** checkout-bound order creation after quote; binds order to an active checkout session |
+| `POST /app/v3/api/orders` | `orders.create` | **Deprecated** — use `checkout.sessions.orders.create` instead |
+| `POST /app/v3/api/recharges/orders` | `recharges.orders.create` | Points-recharge checkout (separate fulfillment saga) |
+| `POST /app/v3/api/memberships/orders` | `memberships.orders.create` | Membership purchase checkout (`subject=membership`; settlement via MembershipPurchaseFulfillmentPort) |
+
+New PC and integrator surfaces **must** use the checkout-session route for product checkout. `orders.create` remains in the contract as deprecated for transitional integrators only.
+
+Points-recharge fulfillment uses a three-phase saga: `fulfillment_status = processing` reservation, idempotent Account wallet credit, then local `fulfilled` commit. Commit failure triggers compensation debit and reservation release.
+
+Membership-subject orders call `MembershipPurchaseFulfillmentPort` after payment confirmation (HTTP adapter to membership backend, or `noop` for external-only fulfillment).
+
+Order detail projections cap line items at **500** rows per request (`MAX_ORDER_LINE_ITEMS`) to avoid unbounded memory use.
+
+Missing `commerce_*` read-model tables surface as storage errors in production. Local scaffolding may set `ORDER_READ_MODEL_LENIENT=1` to return empty pages when tables are absent (not for production).
 
 List/search endpoints reject invalid `page` or `page_size` with HTTP 400 (`ProblemDetail`) instead of silently clamping; validation is centralized in `sdkwork-utils-rust::validated_offset_list_params` and `sdkwork-order-service::validation::offset_list_params`.
 
@@ -42,8 +65,9 @@ List/search endpoints reject invalid `page` or `page_size` with HTTP 400 (`Probl
 
 - Engines: PostgreSQL (production), SQLite (local/tests)
 - Table prefix: `commerce_`
-- DDL authority: platform bootstrap; reference contract in `database/contract/`
-- Repository implementations must stay behaviorally aligned across engines (organization id normalization, status columns, pagination).
+- DDL authority: `database/contract/table-registry.json` registers order-owned tables; platform-owned `commerce_order*` core tables remain `referenceOnly` and are bootstrapped by the commerce platform
+- Order-owned tables (`commerce_after_sales_*`, `commerce_shipment*`, `commerce_idempotency_key`) ship in repository test migrations and platform bootstrap
+- Repository implementations stay behaviorally aligned across engines (organization id normalization, status columns, SQL-level pagination)
 
 ## 5. PC Surface
 
@@ -109,7 +133,7 @@ See `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md` and `specs/co
 | `ORDER_API_BIND` | Gateway listen address | `0.0.0.0:18093` |
 | `ORDER_CORS_ALLOW_ORIGINS` | Comma-separated browser origins | empty (same-origin only) |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | Tenant id for public recharge package catalog fallback | `100001` |
-| `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` | Bearer token for account wallet credit during fulfillment | required in production |
+| `SDKWORK_ACCESS_TOKEN` | Bearer token for service-to-service wallet credit and membership fulfillment during order settlement | required in production |
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Public base URL registered with PSP for order-owned webhooks | required in production |
 | `ORDER_TEST_POSTGRES_URL` | PostgreSQL URL for repository parity tests | unset (SQLite-only CI) |
 | `RUST_LOG` | Tracing filter (`order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`) | `info` |

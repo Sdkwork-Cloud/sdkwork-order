@@ -201,5 +201,5 @@ pub async fn insert_order_cancellation_sqlite(
 }
 
 fn store_error(message: &str, error: impl std::fmt::Display) -> CommerceServiceError {
-    CommerceServiceError::storage(format!("{message}: {error}"))
+    crate::sql_store_error::map_sql_store_error(message, error)
 }

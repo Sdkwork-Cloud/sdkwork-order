@@ -2,7 +2,7 @@
 
 Status: active  
 Owner: SDKWork maintainers  
-Updated: 2026-07-06  
+Updated: 2026-07-07  
 Machine contracts: `specs/commerce-checkout-topology.spec.json`, `specs/commerce-payment-webhook.spec.json`
 
 ## 1. Capability Boundaries
@@ -76,6 +76,30 @@ Legacy payment gateway path `POST /app/v3/api/payments/webhooks/{provider}` retu
 
 Manual operator replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations`.
 
+### 2.4 Membership purchase
+
+Order center **creates** `commerce_order` with `subject=membership` (checkout or membership-subject order create — parallel to `recharges.orders.create`). Membership **must not** insert `commerce_order` in production paths.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Order as order-app-api
+    participant Membership as membership-app-api
+    participant Payment as payment port
+
+    Client->>Order: memberships.orders.create
+    Client->>Order: orders.pay
+    Order->>Payment: pay_owner_order
+    Note over Order: PSP webhook on order gateway
+    Order->>Payment: ingest webhook
+    Order->>Order: settle_owner_order_after_payment_success
+    Order->>Membership: MembershipPurchaseFulfillmentPort
+```
+
+**Dependency:** `sdkwork-order` → `sdkwork-membership` via fulfillment port at gateway assembly (same pattern as order → account for points recharge). Payment remains a foundation module with no order or membership dependencies.
+
+Authority: `../sdkwork-membership/specs/COMMERCE_ORDER_BOUNDARY_SPEC.md`, `../sdkwork-membership/specs/commerce-order-membership-boundary.spec.json`.
+
 ## 3. Cashier URL Contract
 
 Cashier deep-links are built by `sdkwork-utils-rust`:
@@ -114,7 +138,7 @@ All application packages **must** consume composed SDKs (`@sdkwork/order-app-sdk
 
 | Call | Auth |
 | --- | --- |
-| Order → account credit | `SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN` (Bearer) |
+| Order → account credit | `SDKWORK_ACCESS_TOKEN` (Bearer) |
 
 PSP notify URLs MUST target the **order gateway**, not payment:
 

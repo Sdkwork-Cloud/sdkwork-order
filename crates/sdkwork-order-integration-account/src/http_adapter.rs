@@ -28,7 +28,7 @@ impl HttpAccountPointsCreditAdapter {
             .trim()
             .trim_end_matches('/')
             .to_owned();
-        let auth_token = std::env::var("SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN")
+        let auth_token = std::env::var("SDKWORK_ACCESS_TOKEN")
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
@@ -41,7 +41,14 @@ impl AccountPointsCreditPort for HttpAccountPointsCreditAdapter {
         &'a self,
         request: PointsRechargeCreditRequest,
     ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
-        Box::pin(async move { self.post_points_adjustment(request).await })
+        Box::pin(async move { self.post_points_adjustment(request, "credit").await })
+    }
+
+    fn reverse_points_recharge_credit<'a>(
+        &'a self,
+        request: PointsRechargeCreditRequest,
+    ) -> AccountPointsCreditFuture<'a, PointsRechargeCreditOutcome> {
+        Box::pin(async move { self.post_points_adjustment(request, "debit").await })
     }
 }
 
@@ -49,12 +56,13 @@ impl HttpAccountPointsCreditAdapter {
     async fn post_points_adjustment(
         &self,
         request: PointsRechargeCreditRequest,
+        direction: &str,
     ) -> Result<PointsRechargeCreditOutcome, CommerceServiceError> {
         let body = serde_json::json!({
             "tenantId": request.tenant_id,
             "organizationId": request.organization_id,
             "ownerUserId": request.owner_user_id,
-            "direction": "credit",
+            "direction": direction,
             "amount": request.points.to_string(),
             "businessType": POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
             "transactionNo": request.transaction_no,
@@ -70,7 +78,7 @@ impl HttpAccountPointsCreditAdapter {
             && std::env::var("SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE").as_deref() != Ok("1")
         {
             return Err(CommerceServiceError::storage(
-                "SDKWORK_ORDER_ACCOUNT_SERVICE_AUTH_TOKEN is required for account points credit; set SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1 only for local development",
+                "SDKWORK_ACCESS_TOKEN is required for account points credit; set SDKWORK_ORDER_ACCOUNT_CREDIT_ALLOW_INSECURE=1 only for local development",
             ));
         }
 

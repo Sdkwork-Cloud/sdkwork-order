@@ -5,6 +5,7 @@ members = [
   "crates/sdkwork-order-service",
   "crates/sdkwork-order-repository-sqlx",
   "crates/sdkwork-order-integration-account",
+  "crates/sdkwork-order-integration-membership",
   "crates/sdkwork-routes-order-app-api",
   "crates/sdkwork-routes-order-backend-api",
   "crates/sdkwork-order-database-host",
@@ -54,6 +55,7 @@ sdkwork_routes_order_backend_api = { path = "crates/sdkwork-routes-order-backend
 sdkwork_order_database_host = { path = "crates/sdkwork-order-database-host", package = "sdkwork-order-database-host" }
 sdkwork_order_service_host = { path = "crates/sdkwork-order-service-host", package = "sdkwork-order-service-host" }
 sdkwork_order_integration_account = { path = "crates/sdkwork-order-integration-account", package = "sdkwork-order-integration-account" }
+sdkwork_order_integration_membership = { path = "crates/sdkwork-order-integration-membership", package = "sdkwork-order-integration-membership" }
 sdkwork_account_service = { path = "../sdkwork-account/crates/sdkwork-account-service", package = "sdkwork-account-service" }
 sdkwork_account_repository_sqlx = { path = "../sdkwork-account/crates/sdkwork-account-repository-sqlx", package = "sdkwork-account-repository-sqlx" }
 sdkwork-utils-rust = { path = "../sdkwork-utils/packages/sdkwork-utils-rust" }

@@ -13,5 +13,6 @@ sdkwork-database-sqlx.workspace = true
 sdkwork-database-spi.workspace = true
 sdkwork_order_database_host.workspace = true
 sdkwork_order_integration_account.workspace = true
+sdkwork_order_integration_membership.workspace = true
 sdkwork_order_service.workspace = true
 dotenvy = { workspace = true }

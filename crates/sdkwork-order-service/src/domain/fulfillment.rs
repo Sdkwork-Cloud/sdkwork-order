@@ -36,6 +36,10 @@ impl PointsRechargeFulfillmentContext {
             || self.order_status.eq_ignore_ascii_case("completed")
     }
 
+    pub fn fulfillment_in_progress(&self) -> bool {
+        self.fulfillment_status.eq_ignore_ascii_case("processing")
+    }
+
     pub fn validate_for_fulfillment(&self) -> Result<(), CommerceServiceError> {
         if self.already_fulfilled() {
             return Ok(());

@@ -61,15 +61,16 @@ const client = new SdkworkAppClient({
 - `client.fulfillments` - fulfillments API
 - `client.shipments` - shipments API
 - `client.recharges` - recharges API
+- `client.memberships` - memberships API
 
 ## Usage Examples
 
 ### checkout
 
 ```typescript
-// Checkout sessions create.
-const body = {};
-const result = await client.checkout.sessions.create(body);
+// Checkout sessions retrieve.
+const checkoutSessionId = '1';
+const result = await client.checkout.sessions.retrieve(checkoutSessionId);
 ```
 
 ### orders
@@ -129,6 +130,25 @@ const result = await client.shipments.retrieve(shipmentId);
 ```typescript
 // Recharges settings retrieve.
 const result = await client.recharges.settings.retrieve();
+```
+
+### memberships
+
+```typescript
+// Memberships orders create.
+const body = {
+  packageId: 'packageId',
+  paymentMethod: 'paymentMethod',
+  clientRequestNo: 'clientRequestNo',
+  source: 'source',
+};
+const idempotencyKey = 'Idempotency-Key';
+const sdkworkRequestHash = 'Sdkwork-Request-Hash';
+const params = {
+  idempotencyKey,
+  sdkworkRequestHash,
+};
+const result = await client.memberships.orders.create(body, params);
 ```
 
 ## Error Handling

@@ -2,9 +2,11 @@ use sdkwork_contract_service::CommerceServiceError;
 
 use crate::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
-    mark_points_recharge_payment_succeeded, points_recharge_payment_success_idempotency_key,
-    AccountPointsCreditPort, MarkPointsRechargePaymentSucceededCommand,
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort, PointsRechargeFulfillmentStore,
+    mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
+    points_recharge_payment_success_idempotency_key, AccountPointsCreditPort,
+    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
+    MembershipPurchaseFulfillmentRequest, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationPort, PointsRechargeFulfillmentStore,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -31,7 +33,7 @@ impl OrderSubjectKind {
     }
 
     pub fn is_fulfillment_implemented(self) -> bool {
-        matches!(self, Self::PointsRecharge)
+        matches!(self, Self::PointsRecharge | Self::Membership)
     }
 }
 
@@ -46,10 +48,11 @@ pub struct OwnerOrderSettlementOutcome {
     pub fulfillment_status: String,
 }
 
-pub async fn settle_owner_order_after_payment_success<S, P, Payment>(
+pub async fn settle_owner_order_after_payment_success<S, P, M, Payment>(
     payment_store: &Payment,
     recharge_store: &S,
     credit_port: &P,
+    membership_port: &M,
     attempt: &OrderPaymentSettlementAttempt,
     order_subject: Option<&str>,
     request_no: &str,
@@ -57,6 +60,7 @@ pub async fn settle_owner_order_after_payment_success<S, P, Payment>(
 where
     S: PointsRechargeFulfillmentStore,
     P: AccountPointsCreditPort + ?Sized,
+    M: MembershipPurchaseFulfillmentPort + ?Sized,
     Payment: OwnerOrderPaymentConfirmationPort + ?Sized,
 {
     let payment_outcome = payment_store
@@ -73,6 +77,7 @@ where
         subject_kind,
         recharge_store,
         credit_port,
+        membership_port,
         attempt,
         &payment_outcome.paid_at,
         request_no,
@@ -98,10 +103,11 @@ struct SubjectFulfillmentOutcome {
     status: String,
 }
 
-async fn dispatch_subject_fulfillment<S, P>(
+async fn dispatch_subject_fulfillment<S, P, M>(
     subject: OrderSubjectKind,
     recharge_store: &S,
     credit_port: &P,
+    membership_port: &M,
     attempt: &OrderPaymentSettlementAttempt,
     paid_at: &str,
     request_no: &str,
@@ -109,40 +115,41 @@ async fn dispatch_subject_fulfillment<S, P>(
 where
     S: PointsRechargeFulfillmentStore,
     P: AccountPointsCreditPort + ?Sized,
+    M: MembershipPurchaseFulfillmentPort + ?Sized,
 {
     match subject {
         OrderSubjectKind::PointsRecharge => {
             settle_points_recharge_subject(recharge_store, credit_port, attempt, paid_at, request_no)
                 .await
         }
-        OrderSubjectKind::Product
-        | OrderSubjectKind::VirtualGoods
-        | OrderSubjectKind::Membership
-        | OrderSubjectKind::CouponPackage => {
-            tracing::warn!(
+        OrderSubjectKind::Membership => {
+            settle_membership_subject(membership_port, attempt, request_no).await
+        }
+        OrderSubjectKind::Product | OrderSubjectKind::VirtualGoods | OrderSubjectKind::CouponPackage => {
+            tracing::info!(
                 target = "order.settlement",
                 order_id = %attempt.order_id,
                 ?subject,
-                "payment confirmed; subject fulfillment handler is not implemented yet"
+                "payment confirmed; fulfillment is owned by external commerce capabilities"
             );
             Ok(SubjectFulfillmentOutcome {
                 accepted: false,
                 replayed: false,
                 points_credited: 0,
-                status: "fulfillment_pending".to_owned(),
+                status: "awaiting_external_fulfillment".to_owned(),
             })
         }
         OrderSubjectKind::Unknown => {
             tracing::warn!(
                 target = "order.settlement",
                 order_id = %attempt.order_id,
-                "payment confirmed; order subject is missing or unsupported for fulfillment"
+                "payment confirmed; order subject is missing or unsupported for automated fulfillment"
             );
             Ok(SubjectFulfillmentOutcome {
                 accepted: false,
                 replayed: false,
                 points_credited: 0,
-                status: "fulfillment_skipped".to_owned(),
+                status: "awaiting_subject_resolution".to_owned(),
             })
         }
     }
@@ -186,5 +193,33 @@ where
         replayed: fulfill_outcome.replayed,
         points_credited: fulfill_outcome.points_credited,
         status: fulfill_outcome.fulfillment_status,
+    })
+}
+
+async fn settle_membership_subject<M>(
+    membership_port: &M,
+    attempt: &OrderPaymentSettlementAttempt,
+    request_no: &str,
+) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
+where
+    M: MembershipPurchaseFulfillmentPort + ?Sized,
+{
+    let idempotency_key = membership_purchase_fulfillment_idempotency_key(&attempt.order_id);
+    let outcome = membership_port
+        .fulfill_membership_purchase(MembershipPurchaseFulfillmentRequest {
+            tenant_id: attempt.tenant_id.clone(),
+            organization_id: attempt.organization_id.clone(),
+            owner_user_id: attempt.owner_user_id.clone(),
+            order_id: attempt.order_id.clone(),
+            request_no: request_no.to_owned(),
+            idempotency_key,
+        })
+        .await?;
+
+    Ok(SubjectFulfillmentOutcome {
+        accepted: outcome.accepted,
+        replayed: outcome.replayed,
+        points_credited: 0,
+        status: outcome.fulfillment_status,
     })
 }

@@ -46,6 +46,105 @@
       "engine": ["postgres", "sqlite"],
       "migration": "commerce-initial",
       "referenceOnly": true
+    },
+    {
+      "name": "commerce_after_sales_request",
+      "owner": "sdkwork-order",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-after-sales",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_after_sales_request_item",
+      "owner": "sdkwork-order",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-after-sales",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_after_sales_event",
+      "owner": "sdkwork-order",
+      "profile": "event_log",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-after-sales",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_after_sales_return_shipment",
+      "owner": "sdkwork-order",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-after-sales",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_fulfillment_order",
+      "owner": "sdkwork-commerce-platform",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    },
+    {
+      "name": "commerce_shipment",
+      "owner": "sdkwork-order",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-shipment",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_shipment_package",
+      "owner": "sdkwork-order",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-shipment",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_shipment_tracking_event",
+      "owner": "sdkwork-order",
+      "profile": "event_log",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-shipment",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_idempotency_key",
+      "owner": "sdkwork-order",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-checkout",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_payment_intent",
+      "owner": "sdkwork-payment",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
+    },
+    {
+      "name": "commerce_payment_attempt",
+      "owner": "sdkwork-payment",
+      "profile": "relation_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "commerce-initial",
+      "referenceOnly": true
     }
   ]
 }

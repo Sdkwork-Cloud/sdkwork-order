@@ -9,6 +9,7 @@ import { AfterSalesApi, createAfterSalesApi } from './api/after-sales';
 import { FulfillmentsApi, createFulfillmentsApi } from './api/fulfillments';
 import { ShipmentsApi, createShipmentsApi } from './api/shipments';
 import { RechargesApi, createRechargesApi } from './api/recharges';
+import { MembershipsApi, createMembershipsApi } from './api/memberships';
 
 export class SdkworkAppClient {
   private httpClient: HttpClient;
@@ -20,6 +21,7 @@ export class SdkworkAppClient {
   public readonly fulfillments: FulfillmentsApi;
   public readonly shipments: ShipmentsApi;
   public readonly recharges: RechargesApi;
+  public readonly memberships: MembershipsApi;
 
   constructor(config: SdkworkAppConfig) {
     this.httpClient = createHttpClient(config);
@@ -36,6 +38,8 @@ export class SdkworkAppClient {
     this.shipments = createShipmentsApi(this.httpClient);
 
     this.recharges = createRechargesApi(this.httpClient);
+
+    this.memberships = createMembershipsApi(this.httpClient);
   }
   setAuthToken(token: string): this {
     this.httpClient.setAuthToken(token);

@@ -9,11 +9,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::http::header::{ACCEPT, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE};
+use axum::http::HeaderName;
 use sdkwork_order_gateway_assembly::{assemble_application_router, order_contract_fallback_config};
 use sdkwork_order_service_host::OrderServiceHost;
-use sdkwork_web_bootstrap::{
-    service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig,
-};
+use sdkwork_web_bootstrap::{service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -29,13 +29,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let business = assemble_application_router(host.clone()).await.router
+    if std::env::var("ORDER_READ_MODEL_LENIENT").as_deref() == Ok("1") {
+        tracing::warn!(
+            target = "order.security",
+            "ORDER_READ_MODEL_LENIENT=1 is active; missing commerce tables return empty reads — forbidden in production"
+        );
+    }
+
+    let business = assemble_application_router(host.clone())
+        .await
+        .router
         .layer(TraceLayer::new_for_http())
         .layer(build_cors_layer());
 
-    let readiness = Arc::new(OrderReadiness {
-        host: host.clone(),
-    });
+    let readiness = Arc::new(OrderReadiness { host: host.clone() });
     let app = service_router(
         business,
         ServiceRouterConfig::default()
@@ -43,16 +50,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_contract_fallback(order_contract_fallback_config()),
     );
 
-    let addr = std::env::var("ORDER_API_BIND")
-        .unwrap_or_else(|_| "0.0.0.0:18093".to_owned());
+    let addr = std::env::var("ORDER_API_BIND").unwrap_or_else(|_| "0.0.0.0:18093".to_owned());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(target = "order.bootstrap", %addr, "order api server listening");
 
     // `with_graceful_shutdown` makes axum::serve stop accepting new
     // connections once the signal future resolves, then drain in-flight
     // requests. We don't duplicate the signal with tokio::select! here.
-    let serve = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal());
+    let serve = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal());
 
     if let Err(error) = serve.await {
         tracing::error!(target = "order.runtime", error = %error, "axum serve failed");
@@ -158,7 +163,20 @@ fn build_cors_layer() -> CorsLayer {
             axum::http::Method::DELETE,
             axum::http::Method::OPTIONS,
         ])
-        .allow_headers(tower_http::cors::Any)
+        .allow_headers([
+            ACCEPT,
+            ACCEPT_LANGUAGE,
+            AUTHORIZATION,
+            CONTENT_TYPE,
+            HeaderName::from_static("access-token"),
+            HeaderName::from_static("idempotency-key"),
+            HeaderName::from_static("if-match"),
+            HeaderName::from_static("sdkwork-request-hash"),
+            HeaderName::from_static("sdkwork-request-no"),
+            HeaderName::from_static("traceparent"),
+            HeaderName::from_static("tracestate"),
+            HeaderName::from_static("x-sdkwork-locale"),
+        ])
         .allow_credentials(true)
         .max_age(Duration::from_secs(600))
 }

@@ -1,6 +1,7 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
+use sdkwork_order_service::stable_json_request_hash;
 use sdkwork_utils_rust::{SdkWorkProblemDetail, SdkWorkResultCode};
 use sdkwork_web_core::WebRequestContext;
 use serde::Serialize;
@@ -22,78 +23,6 @@ pub(crate) enum WriteCommandHeaderError {
     InvalidHeader(String),
 }
 
-pub(crate) fn stable_command_request_hash(scope: &str, parts: &[&str]) -> String {
-    let mut normalized = vec![scope];
-    normalized.extend(parts);
-    normalized
-        .iter()
-        .map(|part| {
-            part.chars()
-                .map(|character| {
-                    if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                        character
-                    } else {
-                        '-'
-                    }
-                })
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("-")
-}
-
-pub(crate) fn stable_json_request_hash(
-    scope: &str,
-    value: &impl Serialize,
-) -> Result<String, WriteCommandHeaderError> {
-    let value = serde_json::to_value(value).map_err(|_| {
-        WriteCommandHeaderError::InvalidHeader(
-            "request body could not be canonicalized for request hash validation".to_owned(),
-        )
-    })?;
-    Ok(stable_canonical_json_request_hash(scope, &value))
-}
-
-pub(crate) fn stable_canonical_json_request_hash(scope: &str, value: &serde_json::Value) -> String {
-    stable_command_request_hash(scope, &[&canonical_json_string(value)])
-}
-
-fn canonical_json_string(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::Null => "null".to_string(),
-        serde_json::Value::Bool(value) => value.to_string(),
-        serde_json::Value::Number(value) => value.to_string(),
-        serde_json::Value::String(value) => {
-            serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_owned())
-        }
-        serde_json::Value::Array(values) => {
-            let items = values
-                .iter()
-                .map(canonical_json_string)
-                .collect::<Vec<_>>()
-                .join(",");
-            format!("[{items}]")
-        }
-        serde_json::Value::Object(values) => {
-            let mut keys = values.keys().collect::<Vec<_>>();
-            keys.sort_unstable();
-            let items = keys
-                .into_iter()
-                .filter(|key| !values[*key].is_null())
-                .map(|key| {
-                    format!(
-                        "{}:{}",
-                        serde_json::to_string(key).unwrap_or_else(|_| "\"\"".to_owned()),
-                        canonical_json_string(&values[key])
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(",");
-            format!("{{{items}}}")
-        }
-    }
-}
-
 #[allow(clippy::result_large_err)]
 pub(crate) fn validate_write_payload(
     headers: &HeaderMap,
@@ -102,7 +31,11 @@ pub(crate) fn validate_write_payload(
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<AppWriteCommandHeaders, WriteCommandHeaderError> {
     let write_headers = parse_required_write_command_headers(headers, fallback_request_no)?;
-    let expected_hash = stable_json_request_hash(scope, body)?;
+    let expected_hash = stable_json_request_hash(scope, body).map_err(|_| {
+        WriteCommandHeaderError::InvalidHeader(
+            "request body could not be canonicalized for request hash validation".to_owned(),
+        )
+    })?;
     if expected_hash.trim() != write_headers.request_hash.trim() {
         return Err(WriteCommandHeaderError::InvalidHeader(
             "Sdkwork-Request-Hash does not match the command payload".to_owned(),
@@ -252,8 +185,13 @@ fn problem_response(
 
 #[cfg(test)]
 mod tests {
-    use axum::http::HeaderValue;
+    use axum::http::{HeaderMap, HeaderValue, StatusCode};
     use sdkwork_web_core::WebRequestContext;
+    use serde::{Deserialize, Serialize};
+
+    use sdkwork_order_service::{
+        stable_canonical_json_request_hash, stable_command_request_hash, stable_json_request_hash,
+    };
 
     use super::*;
 
@@ -286,8 +224,6 @@ mod tests {
 
     #[test]
     fn stable_json_request_hash_matches_struct_and_value_payloads() {
-        use serde::Deserialize;
-
         let body_json = r#"{"methodKey":"wechat_pay","displayName":"WeChat Pay","providerCode":"wechat_pay","status":"active"}"#;
         let value: serde_json::Value = serde_json::from_str(body_json).expect("json");
         let from_value = stable_canonical_json_request_hash("payment-method-upsert", &value);
