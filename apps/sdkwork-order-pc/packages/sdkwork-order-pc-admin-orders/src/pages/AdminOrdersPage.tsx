@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, EmptyState, LoadingBlock } from "@sdkwork/ui-pc-react";
-import { getSdkworkOrderBackendSdkClient } from "@sdkwork/order-service";
-import type { OrderDetail, OrderSummary } from "@sdkwork/order-backend-sdk";
+import {
+  getSdkworkOrderBackendSdkClient,
+  type OrderDetail,
+  type OrderSummary,
+} from "@sdkwork/order-pc-admin-core";
 import { createOrderAdminService } from "../order-admin-service";
 
 const DEFAULT_PAGE_SIZE = 20;

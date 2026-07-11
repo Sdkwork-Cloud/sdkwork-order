@@ -1,6 +1,7 @@
 pub mod order_lifecycle;
 pub mod order_limits;
 pub mod order_settlement_context;
+pub mod postgres_account_value;
 pub mod postgres_after_sales;
 pub mod postgres_checkout;
 pub mod postgres_fulfillment;
@@ -12,6 +13,7 @@ pub mod postgres_shipment;
 pub mod read_model;
 pub mod recharge_platform_catalog;
 pub mod sql_store_error;
+pub mod sqlite_account_value;
 pub mod sqlite_after_sales;
 pub mod sqlite_checkout;
 pub mod sqlite_fulfillment;

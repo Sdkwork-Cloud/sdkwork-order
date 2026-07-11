@@ -1768,6 +1768,7 @@ dependencies = [
  "sdkwork-database-lifecycle",
  "sdkwork-database-spi",
  "sdkwork-database-sqlx",
+ "sqlx",
 ]
 
 [[package]]
@@ -1818,6 +1819,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-order-integration-payment"
+version = "0.1.0"
+dependencies = [
+ "dotenvy",
+ "sdkwork-contract-service",
+ "sdkwork-database-config",
+ "sdkwork-database-sqlx",
+ "sdkwork-order-service",
+ "sdkwork-payment-providers",
+ "sdkwork-payment-repository-sqlx",
+ "sdkwork-payment-service",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "sdkwork-order-repository-sqlx"
 version = "0.1.0"
 dependencies = [
@@ -1857,7 +1874,9 @@ dependencies = [
  "sdkwork-order-database-host",
  "sdkwork-order-integration-account",
  "sdkwork-order-integration-membership",
+ "sdkwork-order-integration-payment",
  "sdkwork-order-service",
+ "sqlx",
 ]
 
 [[package]]

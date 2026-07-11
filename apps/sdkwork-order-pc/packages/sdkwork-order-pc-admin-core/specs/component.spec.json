@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/order-pc-admin-core",
+    "type": "typescript-package",
+    "root": "apps/sdkwork-order-pc/packages/sdkwork-order-pc-admin-core",
+    "domain": "order",
+    "capability": "admin-core",
+    "surface": "backend-admin",
+    "languages": [
+      "typescript"
+    ],
+    "generated": false
+  },
+  "contracts": {
+    "layerRole": "frontend-core",
+    "publicExports": [
+      ".",
+      "./sdk",
+      "./modules",
+      "./host",
+      "./session",
+      "./composition"
+    ],
+    "providedPorts": [
+      {
+        "name": "orderPcAdminCoreRuntime",
+        "export": "."
+      },
+      {
+        "name": "orderPcAdminSdkRuntime",
+        "export": "./sdk"
+      },
+      {
+        "name": "orderPcAdminModuleRegistry",
+        "export": "./modules"
+      },
+      {
+        "name": "orderPcAdminHostRuntime",
+        "export": "./host"
+      },
+      {
+        "name": "orderPcAdminSessionRuntime",
+        "export": "./session"
+      },
+      {
+        "name": "orderPcAdminComposition",
+        "export": "./composition"
+      }
+    ],
+    "requiredPorts": [],
+    "runtimeEntrypoints": [
+      "package.json#scripts.typecheck"
+    ],
+    "sdkDependencies": [
+      {
+        "workspace": "sdkwork-order-backend-sdk",
+        "permissionModuleId": "commerce",
+        "surface": "backend-api",
+        "credentialMode": "authenticated-backend-admin"
+      }
+    ],
+    "permissionComposition": {
+      "inheritanceMode": "module-catalog-with-overrides",
+      "moduleCatalogRefs": [
+        {
+          "moduleId": "commerce",
+          "manifestRef": "../../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json",
+          "inheritPermissions": true,
+          "inheritRoles": true
+        },
+        {
+          "moduleId": "iam-kernel",
+          "manifestRef": "../../../../../../sdkwork-iam/iam/modules/iam-kernel/iam.module.manifest.json",
+          "inheritPermissions": true,
+          "inheritRoles": false
+        }
+      ],
+      "bootstrapAccessTokenScope": {
+        "inheritFrom": "sdkwork.app.config.json#backend.accessTokenPermissionScope",
+        "supplement": [],
+        "overrideReplace": false
+      },
+      "routePermissionHints": {
+        "inheritFromOpenApi": true,
+        "inheritFromModuleManifests": true,
+        "overrides": []
+      },
+      "consumerPolicy": {
+        "forbidLocalPermissionCatalogForDependencyDomains": true,
+        "allowExplicitOverridesOnly": true,
+        "allowFrontendHintsWithoutServerDuplication": true
+      },
+      "applicationModule": {
+        "manifestRef": "../../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json"
+      }
+    },
+    "sdkClients": [
+      "@sdkwork/order-backend-sdk"
+    ],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": []
+  },
+  "verification": {
+    "commands": [
+      "pnpm --filter @sdkwork/order-pc-admin-core typecheck"
+    ]
+  }
+}

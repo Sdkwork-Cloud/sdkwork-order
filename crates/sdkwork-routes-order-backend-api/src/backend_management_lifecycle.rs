@@ -27,9 +27,18 @@ pub async fn cancel_management_order_with_payments(
     payments: &BackendManagementPaymentStore,
     command: CancelManagementOrderCommand,
 ) -> Result<(), CommerceServiceError> {
-    close_management_order_payments(orders, payments, &command.tenant_id, command.organization_id.as_deref(), &command.order_id).await?;
+    close_management_order_payments(
+        orders,
+        payments,
+        &command.tenant_id,
+        command.organization_id.as_deref(),
+        &command.order_id,
+    )
+    .await?;
     match orders {
-        BackendManagementOrderStore::Postgres(store) => store.cancel_management_order(command).await,
+        BackendManagementOrderStore::Postgres(store) => {
+            store.cancel_management_order(command).await
+        }
         BackendManagementOrderStore::Sqlite(store) => store.cancel_management_order(command).await,
     }
 }
@@ -39,7 +48,14 @@ pub async fn close_management_order_with_payments(
     payments: &BackendManagementPaymentStore,
     command: CloseManagementOrderCommand,
 ) -> Result<(), CommerceServiceError> {
-    close_management_order_payments(orders, payments, &command.tenant_id, command.organization_id.as_deref(), &command.order_id).await?;
+    close_management_order_payments(
+        orders,
+        payments,
+        &command.tenant_id,
+        command.organization_id.as_deref(),
+        &command.order_id,
+    )
+    .await?;
     match orders {
         BackendManagementOrderStore::Postgres(store) => store.close_management_order(command).await,
         BackendManagementOrderStore::Sqlite(store) => store.close_management_order(command).await,
@@ -54,13 +70,10 @@ async fn close_management_order_payments(
     order_id: &str,
 ) -> Result<(), CommerceServiceError> {
     let owner_user_id =
-        resolve_management_order_owner_user_id(orders, tenant_id, organization_id, order_id).await?;
-    let payment_command = CancelOrderPaymentsCommand::new(
-        tenant_id,
-        organization_id,
-        &owner_user_id,
-        order_id,
-    )?;
+        resolve_management_order_owner_user_id(orders, tenant_id, organization_id, order_id)
+            .await?;
+    let payment_command =
+        CancelOrderPaymentsCommand::new(tenant_id, organization_id, &owner_user_id, order_id)?;
     match payments {
         BackendManagementPaymentStore::Postgres(store) => {
             store.cancel_order_payments(payment_command).await

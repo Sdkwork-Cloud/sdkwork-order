@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 use uuid::Uuid;
 
-use crate::api_response::{map_service_error, success_item, unauthorized, validation};
+use crate::api_response::{map_service_error, success_created_item, unauthorized, validation};
 use crate::command_headers::validate_app_write_payload;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
@@ -173,7 +173,7 @@ async fn create_membership_order(
     };
 
     match state.store.create_membership_order(command).await {
-        Ok(outcome) => success_item(ctx, map_membership_order_outcome(outcome)),
+        Ok(outcome) => success_created_item(ctx, map_membership_order_outcome(outcome)),
         Err(error) => map_service_error(ctx, error),
     }
 }

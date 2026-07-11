@@ -62,6 +62,7 @@ const client = new SdkworkAppClient({
 - `client.shipments` - shipments API
 - `client.recharges` - recharges API
 - `client.memberships` - memberships API
+- `client.withdrawals` - withdrawals API
 
 ## Usage Examples
 
@@ -151,6 +152,14 @@ const params = {
   xIdempotencyFingerprint,
 };
 const result = await client.memberships.orders.create(body, params);
+```
+
+### withdrawals
+
+```typescript
+// Withdrawal requests retrieve.
+const withdrawalRequestId = '1';
+const result = await client.withdrawals.requests.retrieve(withdrawalRequestId);
 ```
 
 ## Error Handling

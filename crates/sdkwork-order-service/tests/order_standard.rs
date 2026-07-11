@@ -7,28 +7,37 @@ use sdkwork_order_service::{
 #[test]
 fn computes_order_payable_amount_from_items_and_discount() {
     let item =
-        OrderItemDraft::new("sku-1", "Pro plan", 2, CommerceMoney::new("10.00").unwrap()).unwrap();
+        OrderItemDraft::new("sku-1", "Pro plan", 2, CommerceMoney::new("1000").unwrap()).unwrap();
     let breakdown =
-        OrderAmountBreakdown::from_items(vec![item], CommerceMoney::new("3.00").unwrap()).unwrap();
+        OrderAmountBreakdown::from_items(vec![item], CommerceMoney::new("300").unwrap()).unwrap();
 
-    assert_eq!(breakdown.original_amount.as_str(), "20.00");
-    assert_eq!(breakdown.discount_amount.as_str(), "3.00");
-    assert_eq!(breakdown.payable_amount.as_str(), "17.00");
+    assert_eq!(breakdown.original_amount.as_str(), "2000");
+    assert_eq!(breakdown.discount_amount.as_str(), "300");
+    assert_eq!(breakdown.payable_amount.as_str(), "1700");
 }
 
 #[test]
 fn rejects_order_amount_overflow_instead_of_panicking_or_zeroing() {
-    let item = OrderItemDraft::new(
+    let huge_item = OrderItemDraft::new(
         "sku-huge",
         "Huge plan",
         1,
-        CommerceMoney::new("92233720368547758.08").unwrap(),
+        CommerceMoney::new("9223372036854775807").unwrap(),
+    )
+    .unwrap();
+    let extra_item = OrderItemDraft::new(
+        "sku-extra",
+        "Extra plan",
+        1,
+        CommerceMoney::new("1").unwrap(),
     )
     .unwrap();
 
-    assert!(
-        OrderAmountBreakdown::from_items(vec![item], CommerceMoney::new("0").unwrap()).is_err()
-    );
+    assert!(OrderAmountBreakdown::from_items(
+        vec![huge_item, extra_item],
+        CommerceMoney::new("0").unwrap()
+    )
+    .is_err());
 }
 
 #[test]
@@ -37,7 +46,7 @@ fn rejects_order_line_total_overflow() {
         "sku-many",
         "Many seats",
         u32::MAX,
-        CommerceMoney::new("21474836.49").unwrap(),
+        CommerceMoney::new("2147483649").unwrap(),
     )
     .unwrap();
 

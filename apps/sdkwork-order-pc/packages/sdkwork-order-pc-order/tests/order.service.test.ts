@@ -124,16 +124,18 @@ describe("sdkwork-order-pc-order service", () => {
             totalPages: 1,
           },
         }),
-        pay: vi.fn().mockResolvedValue({
-          amount: "199",
-          orderId: "ORDER-3",
-          outTradeNo: "OUT-ORDER-3",
-          paymentId: "PAY-ORDER-3",
-          paymentMethod: "ALIPAY",
-          paymentParams: {
-            payUrl: "https://pay.sdkwork.ai/alipay/ORDER-3",
-          },
-        }),
+        payments: {
+          create: vi.fn().mockResolvedValue({
+            amount: "199",
+            orderId: "ORDER-3",
+            outTradeNo: "OUT-ORDER-3",
+            paymentId: "PAY-ORDER-3",
+            paymentMethod: "ALIPAY",
+            paymentParams: {
+              payUrl: "https://pay.sdkwork.ai/alipay/ORDER-3",
+            },
+          }),
+        },
       },
     });
 
@@ -197,7 +199,7 @@ describe("sdkwork-order-pc-order service", () => {
     });
 
     const cancelMock = orderAppService.orders.cancel as ReturnType<typeof vi.fn>;
-    const payMock = orderAppService.orders.pay as ReturnType<typeof vi.fn>;
+    const payMock = orderAppService.orders.payments.create as ReturnType<typeof vi.fn>;
     expect(cancelMock).toHaveBeenCalledWith(
       "ORDER-3",
       expect.objectContaining({
@@ -317,9 +319,11 @@ describe("sdkwork-order-pc-order service", () => {
     const failingService = createSdkworkOrderService({
       orderAppService: createOrderAppServiceMock({
         orders: {
-          pay: vi.fn().mockResolvedValue({
-            code: 50001,
-          }),
+          payments: {
+            create: vi.fn().mockResolvedValue({
+              code: 50001,
+            }),
+          },
         },
       }),
       messages: {

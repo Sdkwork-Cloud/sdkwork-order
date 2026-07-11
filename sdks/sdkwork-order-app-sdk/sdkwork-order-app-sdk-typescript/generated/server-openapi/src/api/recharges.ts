@@ -4,7 +4,33 @@ import type { HttpClient } from '../http/client';
 import type { CommerceOperationCommand, RechargeOrderCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
+export interface RechargesPlansListParams {
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export class RechargesPlansApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Token Bank plans list. */
+  async list(params?: RechargesPlansListParams): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/plans`), query));
+  }
+}
+
 export interface RechargesOrdersListParams {
+  subject?: string;
   status?: string;
   page?: number;
   pageSize?: number;
@@ -33,6 +59,7 @@ export class RechargesOrdersApi {
 /** Recharges orders list. */
   async list(params?: RechargesOrdersListParams): Promise<SdkWorkPageData> {
     const query = buildQueryString([
+      { name: 'subject', value: params?.subject, style: 'form', explode: true, allowReserved: false },
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
@@ -114,12 +141,14 @@ export class RechargesApi {
   public readonly packages: RechargesPackagesApi;
   public readonly settings: RechargesSettingsApi;
   public readonly orders: RechargesOrdersApi;
+  public readonly plans: RechargesPlansApi;
 
   constructor(client: HttpClient) {
     this.client = client;
     this.packages = new RechargesPackagesApi(client);
     this.settings = new RechargesSettingsApi(client);
     this.orders = new RechargesOrdersApi(client);
+    this.plans = new RechargesPlansApi(client);
   }
 
 }

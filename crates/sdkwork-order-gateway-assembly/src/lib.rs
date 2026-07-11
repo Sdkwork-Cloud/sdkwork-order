@@ -11,7 +11,3 @@ pub use contract_fallback::order_contract_fallback_config;
 pub fn assembly_route_count() -> usize {
     generated::ROUTE_CRATE_COUNT
 }
-
-pub fn assembly_route_packages() -> &'static [&'static str] {
-    generated::ROUTE_CRATE_PACKAGES
-}

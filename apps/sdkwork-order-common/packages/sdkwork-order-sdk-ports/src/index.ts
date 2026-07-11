@@ -3,7 +3,10 @@ export const APP_ORDER_METHOD_TREE = {
     list: true,
     create: true,
     retrieve: true,
-    pay: true,
+    payments: {
+      create: true,
+      webhooks: { receive: true },
+    },
     cancel: true,
     events: { list: true },
     cancellations: { create: true },

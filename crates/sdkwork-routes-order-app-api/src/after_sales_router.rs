@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    map_service_error, not_found, offset_list_page_params_from_query, success_item, success_items,
-    unauthorized, validation,
+    map_service_error, not_found, offset_list_page_params_from_query, success_created_item,
+    success_item, success_items, unauthorized, validation,
 };
 use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
 use crate::subject::app_runtime_subject_from_contexts;
@@ -324,7 +324,7 @@ async fn create_after_sales_request(
     };
 
     match state.store.create_after_sales_request(command).await {
-        Ok(request) => success_item(ctx, map_after_sales_request(request)),
+        Ok(request) => success_created_item(ctx, map_after_sales_request(request)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -415,7 +415,6 @@ async fn update_after_sales_request(
 #[serde(rename_all = "camelCase")]
 struct AfterSalesRequestListQueryParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
     after_sales_request_id: Option<String>,
     order_id: Option<String>,
@@ -426,7 +425,6 @@ struct AfterSalesRequestListQueryParams {
 #[derive(Debug, Deserialize)]
 struct AfterSalesEventListQueryParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
@@ -511,7 +509,6 @@ async fn list_after_sales_events(
 #[derive(Debug, Deserialize)]
 struct AfterSalesReturnShipmentListQueryParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
     status: Option<String>,
 }
@@ -603,7 +600,7 @@ async fn create_after_sales_return_shipment(
         .create_after_sales_return_shipment(command)
         .await
     {
-        Ok(shipment) => success_item(ctx, map_return_shipment(shipment)),
+        Ok(shipment) => success_created_item(ctx, map_return_shipment(shipment)),
         Err(error) => map_service_error(ctx, error),
     }
 }

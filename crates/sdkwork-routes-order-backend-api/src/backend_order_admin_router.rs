@@ -6,35 +6,32 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, SqliteCommerceOrderStore,
-};
-use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
-};
+use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
     OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
     OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
     OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
 };
-use sdkwork_iam_context_service::IamAppContext;
+use sdkwork_payment_repository_sqlx::{
+    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
     conflict as api_conflict, map_service_error, not_found as api_not_found,
-    offset_list_page_params_from_query, success_command, success_item, success_items,
-    validation,
+    offset_list_page_params_from_query, success_command, success_item, success_items, validation,
 };
 use crate::backend_acl::require_backend_operator;
+use crate::backend_command_headers::{
+    validate_backend_write_payload, write_payload_with_route_param,
+};
 use crate::backend_management_lifecycle::{
     cancel_management_order_with_payments, close_management_order_with_payments,
     BackendManagementOrderStore, BackendManagementPaymentStore,
-};
-use crate::backend_command_headers::{
-    validate_backend_write_payload, write_payload_with_route_param,
 };
 
 /// Permission codes enforced on the backend order admin API surface.
@@ -60,14 +57,12 @@ struct OrderListParams {
     status: Option<String>,
     q: Option<String>,
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OrderEventListParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
@@ -75,7 +70,6 @@ struct OrderEventListParams {
 struct CancellationListParams {
     status: Option<String>,
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
@@ -172,12 +166,10 @@ struct OrderCancellationResponse {
 
 pub fn backend_order_admin_router_with_sqlite_pool(pool: SqlitePool) -> Router {
     build_backend_order_admin_router(
-        BackendManagementOrderStore::Sqlite(Arc::new(SqliteCommerceOrderStore::new(
-            pool.clone(),
+        BackendManagementOrderStore::Sqlite(Arc::new(SqliteCommerceOrderStore::new(pool.clone()))),
+        BackendManagementPaymentStore::Sqlite(Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(
+            pool,
         ))),
-        BackendManagementPaymentStore::Sqlite(Arc::new(
-            SqliteCommerceOwnerOrderPaymentStore::new(pool),
-        )),
     )
 }
 
@@ -199,11 +191,20 @@ fn build_backend_order_admin_router(
     let state = BackendOrderAdminState { orders, payments };
     Router::new()
         .route("/backend/v3/api/orders", get(list_orders))
-        .route("/backend/v3/api/orders/cancellations", get(list_cancellations))
+        .route(
+            "/backend/v3/api/orders/cancellations",
+            get(list_cancellations),
+        )
         .route("/backend/v3/api/orders/{orderId}", get(retrieve_order))
-        .route("/backend/v3/api/orders/{orderId}/cancel", post(cancel_order))
+        .route(
+            "/backend/v3/api/orders/{orderId}/cancel",
+            post(cancel_order),
+        )
         .route("/backend/v3/api/orders/{orderId}/close", post(close_order))
-        .route("/backend/v3/api/orders/{orderId}/events", get(list_order_events))
+        .route(
+            "/backend/v3/api/orders/{orderId}/events",
+            get(list_order_events),
+        )
         .with_state(state)
 }
 
@@ -428,7 +429,11 @@ async fn list_order_events(
         Err(error) => return validation(ctx, error.message()),
     };
 
-    match state.orders.list_management_order_events(query.clone()).await {
+    match state
+        .orders
+        .list_management_order_events(query.clone())
+        .await
+    {
         Ok(page) => {
             let page_params = offset_list_page_params_from_query(query.page, query.page_size);
             success_items(

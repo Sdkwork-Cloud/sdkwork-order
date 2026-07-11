@@ -164,11 +164,15 @@ test("account value order specs define order orchestration boundary", () => {
   );
   assert.match(
     accountValueSpec,
-    /`sdkwork-payment` executes provider payment, refund, and payout channels only/,
+    /`sdkwork-payment` executes provider payment and refund channels today, and owns any future provider payout executor contract/,
   );
   assert.match(
     accountValueSpec,
     /`sdkwork-account` is the ledger truth source/,
+  );
+  assert.match(
+    accountValueSpec,
+    /current default runtime is fail-closed until `sdkwork-payment` exposes a concrete provider payout executor/,
   );
 
   assert.deepEqual(rechargeSpec.accountValueOrder, {
@@ -213,6 +217,257 @@ test("account value order specs define order orchestration boundary", () => {
     assert.ok(
       topology.subjectFulfillment.some((entry) => entry.subject === subject),
       `${subject} must declare an order-owned fulfillment path`,
+    );
+  }
+  assert.equal(
+    topology.subjectFulfillment.find((entry) => entry.subject === "cash_withdrawal")
+      ?.status,
+    "fail-closed-payout",
+    "cash withdrawal must not be documented as completed provider payout until payment publishes a concrete payout executor",
+  );
+});
+
+test("account value database and docs are aligned to implemented settlement paths", () => {
+  const requiredTables = [
+    "commerce_account_value_package",
+    "commerce_token_bank_plan",
+    "commerce_order_refund_request",
+    "commerce_order_withdrawal_request",
+  ];
+  const tableRegistry = JSON.parse(
+    fs.readFileSync(
+      path.join(repoRoot, "database/contract/table-registry.json"),
+      "utf8",
+    ),
+  );
+  const schemaYaml = fs.readFileSync(
+    path.join(repoRoot, "database/contract/schema.yaml"),
+    "utf8",
+  );
+
+  const registeredTables = new Set(
+    (tableRegistry.tables ?? []).map((entry) => entry.name),
+  );
+  for (const table of requiredTables) {
+    assert.ok(registeredTables.has(table), `${table} must be registered`);
+    assert.match(schemaYaml, new RegExp(`name: ${table}\\b`));
+  }
+
+  const prd = fs.readFileSync(
+    path.join(repoRoot, "docs/product/prd/PRD.md"),
+    "utf8",
+  );
+  for (const subject of [
+    "token_bank_recharge",
+    "token_bank_plan_purchase",
+    "token_bank_plan_renewal",
+    "account_recharge_package",
+    "coupon_recharge",
+  ]) {
+    assert.doesNotMatch(
+      prd,
+      new RegExp(`\\| \`${subject}\` \\| Planned`),
+      `${subject} fulfillment is implemented through AccountValueLedgerPort and must not be documented as Planned`,
+    );
+  }
+});
+
+test("account value app and backend APIs expose complete order-owned workflows", () => {
+  const appSpec = JSON.parse(
+    fs.readFileSync(
+      path.join(repoRoot, "apis/app-api/order/order-app-api.openapi.json"),
+      "utf8",
+    ),
+  );
+  const backendSpec = JSON.parse(
+    fs.readFileSync(
+      path.join(repoRoot, "apis/backend-api/order/order-backend-api.openapi.json"),
+      "utf8",
+    ),
+  );
+
+  const requiredAppOperations = [
+    ["/app/v3/api/recharges/plans", "get", "recharges.plans.list"],
+    [
+      "/app/v3/api/orders/refund_requests",
+      "get",
+      "orders.refundRequests.list",
+    ],
+    [
+      "/app/v3/api/orders/refund_requests",
+      "post",
+      "orders.refundRequests.create",
+    ],
+    [
+      "/app/v3/api/orders/refund_requests/{refundRequestId}",
+      "get",
+      "orders.refundRequests.retrieve",
+    ],
+    [
+      "/app/v3/api/withdrawals/requests",
+      "post",
+      "withdrawals.requests.create",
+    ],
+    [
+      "/app/v3/api/withdrawals/requests/{withdrawalRequestId}",
+      "get",
+      "withdrawals.requests.retrieve",
+    ],
+  ];
+
+  const requiredBackendOperations = [
+    [
+      "/backend/v3/api/account_value_packages",
+      "get",
+      "backend.accountValuePackages.list",
+    ],
+    [
+      "/backend/v3/api/account_value_packages",
+      "post",
+      "backend.accountValuePackages.create",
+    ],
+    [
+      "/backend/v3/api/account_value_packages/{packageId}",
+      "patch",
+      "backend.accountValuePackages.update",
+    ],
+    [
+      "/backend/v3/api/account_value_packages/{packageId}/retire",
+      "post",
+      "backend.accountValuePackages.retire",
+    ],
+    [
+      "/backend/v3/api/token_bank_plans",
+      "get",
+      "backend.tokenBankPlans.list",
+    ],
+    [
+      "/backend/v3/api/token_bank_plans",
+      "post",
+      "backend.tokenBankPlans.create",
+    ],
+    [
+      "/backend/v3/api/token_bank_plans/{planCode}",
+      "patch",
+      "backend.tokenBankPlans.update",
+    ],
+    [
+      "/backend/v3/api/token_bank_plans/{planCode}/retire",
+      "post",
+      "backend.tokenBankPlans.retire",
+    ],
+    [
+      "/backend/v3/api/refund_requests",
+      "get",
+      "backend.refundRequests.list",
+    ],
+    [
+      "/backend/v3/api/refund_requests/{refundRequestId}/approve",
+      "post",
+      "backend.refundRequests.approve",
+    ],
+    [
+      "/backend/v3/api/refund_requests/{refundRequestId}/reject",
+      "post",
+      "backend.refundRequests.reject",
+    ],
+    [
+      "/backend/v3/api/refund_requests/{refundRequestId}/retry",
+      "post",
+      "backend.refundRequests.retry",
+    ],
+    [
+      "/backend/v3/api/withdrawal_requests",
+      "get",
+      "backend.withdrawalRequests.list",
+    ],
+    [
+      "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/approve",
+      "post",
+      "backend.withdrawalRequests.approve",
+    ],
+    [
+      "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/reject",
+      "post",
+      "backend.withdrawalRequests.reject",
+    ],
+    [
+      "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/retry",
+      "post",
+      "backend.withdrawalRequests.retry",
+    ],
+  ];
+
+  for (const [apiPath, method, operationId] of requiredAppOperations) {
+    const operation = appSpec.paths?.[apiPath]?.[method];
+    assert.equal(
+      operation?.operationId,
+      operationId,
+      `${method.toUpperCase()} ${apiPath} must expose ${operationId}`,
+    );
+  }
+
+  for (const [apiPath, method, operationId] of requiredBackendOperations) {
+    const operation = backendSpec.paths?.[apiPath]?.[method];
+    assert.equal(
+      operation?.operationId,
+      operationId,
+      `${method.toUpperCase()} ${apiPath} must expose ${operationId}`,
+    );
+  }
+
+  for (const [apiPath, method] of requiredBackendOperations.filter(
+    ([, method, operationId]) =>
+      method === "get" && operationId.startsWith("backend."),
+  )) {
+    const schemaRef =
+      backendSpec.paths?.[apiPath]?.[method]?.responses?.["200"]?.content?.[
+        "application/json"
+      ]?.schema?.$ref;
+    assert.equal(
+      schemaRef,
+      "#/components/schemas/SdkWorkListResponse",
+      `${method.toUpperCase()} ${apiPath} must use the standard list response envelope`,
+    );
+    const listSchema = backendSpec.components?.schemas?.SdkWorkListResponse;
+    assert.ok(
+      listSchema?.allOf?.some(
+        (entry) => entry?.$ref === "#/components/schemas/SdkWorkApiResponse",
+      ),
+      "backend SdkWorkListResponse must extend SdkWorkApiResponse",
+    );
+  }
+
+  const createRechargeSchema =
+    appSpec.components?.schemas?.RechargeOrderCreateCommand?.properties ?? {};
+  for (const field of [
+    "subject",
+    "targetAsset",
+    "grantAmount",
+    "planCode",
+    "planPeriod",
+    "couponCode",
+  ]) {
+    assert.ok(
+      createRechargeSchema[field],
+      `RechargeOrderCreateCommand must include ${field}`,
+    );
+  }
+
+  for (const [label, spec] of [
+    ["app", appSpec],
+    ["backend", backendSpec],
+  ]) {
+    const accountValueRequest =
+      spec.components?.schemas?.AccountValueRequestResponse?.properties ?? {};
+    assert.ok(
+      accountValueRequest.accountValueRequestId,
+      `${label} AccountValueRequestResponse must expose accountValueRequestId`,
+    );
+    assert.equal(
+      accountValueRequest.requestId,
+      undefined,
+      `${label} AccountValueRequestResponse must not expose forbidden requestId`,
     );
   }
 });

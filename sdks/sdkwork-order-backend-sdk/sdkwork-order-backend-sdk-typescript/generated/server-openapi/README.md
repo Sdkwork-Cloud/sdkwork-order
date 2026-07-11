@@ -32,7 +32,7 @@ const params = {
   page: 2,
   page_size: 3,
 };
-const result = await client.orders.admin.cancellations.list(params);
+const result = await client.backend.tokenBankPlans.list(params);
 ```
 
 ## Authentication
@@ -62,6 +62,7 @@ const client = new SdkworkOrderBackendClient({
 - `client.orders` - orders API
 - `client.afterSales` - after_sales API
 - `client.shipments` - shipments API
+- `client.backend` - backend API
 
 ## Usage Examples
 
@@ -105,6 +106,18 @@ const params = {
 const result = await client.shipments.list(params);
 ```
 
+### backend
+
+```typescript
+// Token Bank plans list.
+const params = {
+  status: 'status',
+  page: 2,
+  page_size: 3,
+};
+const result = await client.backend.tokenBankPlans.list(params);
+```
+
 ## Error Handling
 
 ```typescript
@@ -116,7 +129,7 @@ try {
     page: 2,
     page_size: 3,
   };
-  const result = await client.orders.admin.cancellations.list(params);
+  const result = await client.backend.tokenBankPlans.list(params);
 } catch (error) {
   if (error instanceof AuthenticationError) {
     console.error('Authentication failed:', error.message);

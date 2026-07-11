@@ -1,4 +1,4 @@
-//! Backend admin routes for after-sales management and shipment operations.
+//! Backend admin routes for account value, after-sales, and shipment operations.
 
 use std::sync::Arc;
 
@@ -7,28 +7,43 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
-use sdkwork_contract_service::CommerceServiceError;
+use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::{
+    PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
+    SqliteCommerceRechargeStore,
+};
 use sdkwork_order_service::{
-    AfterSalesManagementDetailQuery, AfterSalesManagementListQuery, AfterSalesRequestView,
-    CreateShipmentPackageCommand, ReviewAfterSalesRequestCommand, ShipmentManagementDetailQuery,
-    ShipmentManagementListQuery, ShipmentPackageManagementListQuery, ShipmentPackageView,
-    ShipmentView, UpdateShipmentPackageCommand,
+    execute_account_value_request_review, AccountValueAssetCode, AccountValueCatalogListQuery,
+    AccountValueLedgerPort, AccountValueOrderSubject, AccountValuePackageItem,
+    AccountValuePackageListPage, AccountValueRequestListPage, AccountValueRequestListQuery,
+    AccountValueRequestReviewAction, AccountValueRequestView, AfterSalesManagementDetailQuery,
+    AfterSalesManagementListQuery, AfterSalesRequestView, CreateShipmentPackageCommand,
+    NoopAccountValueLedgerPort, NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort,
+    PaymentPayoutExecutorPort, PaymentRefundExecutorPort, RetireAccountValuePackageCommand,
+    RetireTokenBankPlanCommand, ReviewAccountValueRequestCommand, ReviewAfterSalesRequestCommand,
+    ShipmentManagementDetailQuery, ShipmentManagementListQuery, ShipmentPackageManagementListQuery,
+    ShipmentPackageView, ShipmentView, TokenBankPlanItem, TokenBankPlanListPage,
+    TokenBankPlanPeriod, UpdateShipmentPackageCommand, UpsertAccountValuePackageCommand,
+    UpsertTokenBankPlanCommand,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
-    map_service_error, parse_offset_list_params_validated, success_item, success_items,
+    map_service_error, parse_offset_list_params_validated, success_command, success_created_item,
+    success_item, success_items,
 };
+use crate::backend_acl::{require_backend_operator, BackendOperatorScope};
 use crate::backend_command_headers::{
     validate_backend_write_payload, write_payload_with_route_param,
 };
-use crate::backend_acl::require_backend_operator;
 
 mod permissions {
+    pub const ACCOUNT_VALUE_MANAGE: &str = "commerce.accountValue.manage";
+    pub const ACCOUNT_VALUE_READ: &str = "commerce.accountValue.read";
+    pub const ACCOUNT_VALUE_REVIEW: &str = "commerce.accountValue.review";
     pub const AFTER_SALES_READ: &str = "commerce.afterSales.read";
     pub const AFTER_SALES_REVIEW: &str = "commerce.afterSales.review";
     pub const ORDERS_READ: &str = "commerce.orders.read";
@@ -37,13 +52,22 @@ mod permissions {
 
 #[derive(Clone)]
 enum BackendCommerceAdminStore {
-    Postgres(Arc<PostgresCommerceOrderStore>),
-    Sqlite(Arc<SqliteCommerceOrderStore>),
+    Postgres {
+        orders: Arc<PostgresCommerceOrderStore>,
+        recharge: Arc<PostgresCommerceRechargeStore>,
+    },
+    Sqlite {
+        orders: Arc<SqliteCommerceOrderStore>,
+        recharge: Arc<SqliteCommerceRechargeStore>,
+    },
 }
 
 #[derive(Clone)]
 struct BackendCommerceAdminState {
     store: BackendCommerceAdminStore,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
+    payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,7 +78,6 @@ struct AfterSalesListParams {
     #[serde(rename = "orderId", alias = "order_id")]
     order_id: Option<String>,
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
@@ -66,14 +89,27 @@ struct ShipmentListParams {
     #[serde(rename = "fulfillmentId", alias = "fulfillment_id")]
     fulfillment_id: Option<String>,
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
 #[derive(Debug, Deserialize)]
 struct PackageListParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
+    page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AccountValueCatalogListParams {
+    target_asset: Option<String>,
+    status: Option<String>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AccountValueRequestListParams {
+    status: Option<String>,
+    page: Option<i64>,
     page_size: Option<i64>,
 }
 
@@ -109,6 +145,51 @@ struct UpdateShipmentPackageBody {
     status: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct AccountValuePackageWriteBody {
+    package_code: Option<String>,
+    display_name: Option<String>,
+    target_asset: Option<String>,
+    grant_amount: Option<String>,
+    bonus_amount: Option<String>,
+    price_amount: Option<String>,
+    currency_code: Option<String>,
+    status: Option<String>,
+    sort_weight: Option<i64>,
+    valid_from: Option<String>,
+    valid_to: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct TokenBankPlanWriteBody {
+    plan_code: Option<String>,
+    display_name: Option<String>,
+    plan_period: Option<String>,
+    grant_amount: Option<String>,
+    bonus_amount: Option<String>,
+    price_amount: Option<String>,
+    currency_code: Option<String>,
+    renewal_policy: Option<String>,
+    status: Option<String>,
+    sort_weight: Option<i64>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct AccountValueRequestReviewBody {
+    reason_code: Option<String>,
+    review_comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CommerceOperationCommandBody {
+    reason_code: Option<String>,
+    comment: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AfterSalesRequestResponse {
@@ -120,6 +201,53 @@ struct AfterSalesRequestResponse {
     requested_amount: String,
     currency_code: String,
     status: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountValuePackageResponse {
+    package_id: String,
+    package_code: String,
+    display_name: String,
+    target_asset: String,
+    grant_amount: String,
+    bonus_amount: String,
+    price_amount: String,
+    currency_code: String,
+    status: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TokenBankPlanResponse {
+    plan_code: String,
+    display_name: String,
+    plan_period: String,
+    grant_amount: String,
+    bonus_amount: String,
+    price_amount: String,
+    currency_code: String,
+    renewal_policy: String,
+    status: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AccountValueRequestResponse {
+    account_value_request_id: String,
+    request_no: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    original_order_id: Option<String>,
+    owner_user_id: String,
+    subject: String,
+    target_asset: String,
+    amount: String,
+    currency_code: String,
+    status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider_reference_id: Option<String>,
+    created_at: String,
+    updated_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -150,8 +278,10 @@ impl BackendCommerceAdminStore {
         query: AfterSalesManagementListQuery,
     ) -> Result<sdkwork_order_service::AfterSalesRequestPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_after_sales_requests(query).await,
-            Self::Sqlite(store) => store.list_management_after_sales_requests(query).await,
+            Self::Postgres { orders, .. } => {
+                orders.list_management_after_sales_requests(query).await
+            }
+            Self::Sqlite { orders, .. } => orders.list_management_after_sales_requests(query).await,
         }
     }
 
@@ -160,8 +290,12 @@ impl BackendCommerceAdminStore {
         query: AfterSalesManagementDetailQuery,
     ) -> Result<Option<AfterSalesRequestView>, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.retrieve_management_after_sales_request(query).await,
-            Self::Sqlite(store) => store.retrieve_management_after_sales_request(query).await,
+            Self::Postgres { orders, .. } => {
+                orders.retrieve_management_after_sales_request(query).await
+            }
+            Self::Sqlite { orders, .. } => {
+                orders.retrieve_management_after_sales_request(query).await
+            }
         }
     }
 
@@ -170,8 +304,8 @@ impl BackendCommerceAdminStore {
         command: ReviewAfterSalesRequestCommand,
     ) -> Result<AfterSalesRequestView, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.review_after_sales_request(command).await,
-            Self::Sqlite(store) => store.review_after_sales_request(command).await,
+            Self::Postgres { orders, .. } => orders.review_after_sales_request(command).await,
+            Self::Sqlite { orders, .. } => orders.review_after_sales_request(command).await,
         }
     }
 
@@ -180,8 +314,8 @@ impl BackendCommerceAdminStore {
         query: ShipmentManagementListQuery,
     ) -> Result<sdkwork_order_service::ShipmentManagementListPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_shipments(query).await,
-            Self::Sqlite(store) => store.list_management_shipments(query).await,
+            Self::Postgres { orders, .. } => orders.list_management_shipments(query).await,
+            Self::Sqlite { orders, .. } => orders.list_management_shipments(query).await,
         }
     }
 
@@ -190,8 +324,8 @@ impl BackendCommerceAdminStore {
         query: ShipmentManagementDetailQuery,
     ) -> Result<Option<ShipmentView>, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.retrieve_management_shipment(query).await,
-            Self::Sqlite(store) => store.retrieve_management_shipment(query).await,
+            Self::Postgres { orders, .. } => orders.retrieve_management_shipment(query).await,
+            Self::Sqlite { orders, .. } => orders.retrieve_management_shipment(query).await,
         }
     }
 
@@ -200,8 +334,8 @@ impl BackendCommerceAdminStore {
         query: ShipmentPackageManagementListQuery,
     ) -> Result<sdkwork_order_service::ShipmentPackagePage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_shipment_packages(query).await,
-            Self::Sqlite(store) => store.list_management_shipment_packages(query).await,
+            Self::Postgres { orders, .. } => orders.list_management_shipment_packages(query).await,
+            Self::Sqlite { orders, .. } => orders.list_management_shipment_packages(query).await,
         }
     }
 
@@ -210,8 +344,10 @@ impl BackendCommerceAdminStore {
         command: CreateShipmentPackageCommand,
     ) -> Result<ShipmentPackageView, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.create_management_shipment_package(command).await,
-            Self::Sqlite(store) => store.create_management_shipment_package(command).await,
+            Self::Postgres { orders, .. } => {
+                orders.create_management_shipment_package(command).await
+            }
+            Self::Sqlite { orders, .. } => orders.create_management_shipment_package(command).await,
         }
     }
 
@@ -220,26 +356,241 @@ impl BackendCommerceAdminStore {
         command: UpdateShipmentPackageCommand,
     ) -> Result<ShipmentPackageView, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.update_management_shipment_package(command).await,
-            Self::Sqlite(store) => store.update_management_shipment_package(command).await,
+            Self::Postgres { orders, .. } => {
+                orders.update_management_shipment_package(command).await
+            }
+            Self::Sqlite { orders, .. } => orders.update_management_shipment_package(command).await,
+        }
+    }
+
+    async fn list_account_value_packages(
+        &self,
+        query: AccountValueCatalogListQuery,
+    ) -> Result<AccountValuePackageListPage, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => recharge.list_account_value_packages(query).await,
+            Self::Sqlite { recharge, .. } => recharge.list_account_value_packages(query).await,
+        }
+    }
+
+    async fn upsert_account_value_package(
+        &self,
+        command: UpsertAccountValuePackageCommand,
+    ) -> Result<AccountValuePackageItem, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => recharge.upsert_account_value_package(command).await,
+            Self::Sqlite { recharge, .. } => recharge.upsert_account_value_package(command).await,
+        }
+    }
+
+    async fn retire_account_value_package(
+        &self,
+        command: RetireAccountValuePackageCommand,
+    ) -> Result<(), CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => recharge.retire_account_value_package(command).await,
+            Self::Sqlite { recharge, .. } => recharge.retire_account_value_package(command).await,
+        }
+    }
+
+    async fn list_token_bank_plans(
+        &self,
+        query: AccountValueCatalogListQuery,
+    ) -> Result<TokenBankPlanListPage, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => recharge.list_token_bank_plans(query).await,
+            Self::Sqlite { recharge, .. } => recharge.list_token_bank_plans(query).await,
+        }
+    }
+
+    async fn upsert_token_bank_plan(
+        &self,
+        command: UpsertTokenBankPlanCommand,
+    ) -> Result<TokenBankPlanItem, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => recharge.upsert_token_bank_plan(command).await,
+            Self::Sqlite { recharge, .. } => recharge.upsert_token_bank_plan(command).await,
+        }
+    }
+
+    async fn retire_token_bank_plan(
+        &self,
+        command: RetireTokenBankPlanCommand,
+    ) -> Result<(), CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => recharge.retire_token_bank_plan(command).await,
+            Self::Sqlite { recharge, .. } => recharge.retire_token_bank_plan(command).await,
+        }
+    }
+
+    async fn list_account_value_requests(
+        &self,
+        query: AccountValueRequestListQuery,
+        subject: AccountValueOrderSubject,
+    ) -> Result<AccountValueRequestListPage, CommerceServiceError> {
+        match (self, subject) {
+            (Self::Postgres { recharge, .. }, AccountValueOrderSubject::RefundRequest) => {
+                recharge.list_order_refund_requests(query).await
+            }
+            (Self::Sqlite { recharge, .. }, AccountValueOrderSubject::RefundRequest) => {
+                recharge.list_order_refund_requests(query).await
+            }
+            (Self::Postgres { recharge, .. }, AccountValueOrderSubject::CashWithdrawal) => {
+                recharge.list_cash_withdrawal_requests(query).await
+            }
+            (Self::Sqlite { recharge, .. }, AccountValueOrderSubject::CashWithdrawal) => {
+                recharge.list_cash_withdrawal_requests(query).await
+            }
+            _ => Err(CommerceServiceError::validation(
+                "unsupported account value request subject",
+            )),
+        }
+    }
+
+    async fn execute_account_value_request_review(
+        &self,
+        ledger_port: &dyn AccountValueLedgerPort,
+        refund_executor: &dyn PaymentRefundExecutorPort,
+        payout_executor: &dyn PaymentPayoutExecutorPort,
+        command: ReviewAccountValueRequestCommand,
+    ) -> Result<AccountValueRequestView, CommerceServiceError> {
+        match self {
+            Self::Postgres { recharge, .. } => {
+                execute_account_value_request_review(
+                    recharge.as_ref(),
+                    ledger_port,
+                    refund_executor,
+                    payout_executor,
+                    command,
+                )
+                .await
+            }
+            Self::Sqlite { recharge, .. } => {
+                execute_account_value_request_review(
+                    recharge.as_ref(),
+                    ledger_port,
+                    refund_executor,
+                    payout_executor,
+                    command,
+                )
+                .await
+            }
         }
     }
 }
 
 pub fn backend_commerce_admin_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_backend_commerce_admin_router(BackendCommerceAdminStore::Sqlite(Arc::new(
-        SqliteCommerceOrderStore::new(pool),
-    )))
+    backend_commerce_admin_router_with_sqlite_pool_and_ports(
+        pool,
+        Arc::new(NoopAccountValueLedgerPort),
+        Arc::new(NoopPaymentRefundExecutorPort),
+        Arc::new(NoopPaymentPayoutExecutorPort),
+    )
+}
+
+pub fn backend_commerce_admin_router_with_sqlite_pool_and_ports(
+    pool: SqlitePool,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
+    payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+) -> Router {
+    build_backend_commerce_admin_router(
+        BackendCommerceAdminStore::Sqlite {
+            orders: Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
+            recharge: Arc::new(SqliteCommerceRechargeStore::new(pool)),
+        },
+        account_value_ledger_port,
+        payment_refund_executor_port,
+        payment_payout_executor_port,
+    )
 }
 
 pub fn backend_commerce_admin_router_with_postgres_pool(pool: PgPool) -> Router {
-    build_backend_commerce_admin_router(BackendCommerceAdminStore::Postgres(Arc::new(
-        PostgresCommerceOrderStore::new(pool),
-    )))
+    backend_commerce_admin_router_with_postgres_pool_and_ports(
+        pool,
+        Arc::new(NoopAccountValueLedgerPort),
+        Arc::new(NoopPaymentRefundExecutorPort),
+        Arc::new(NoopPaymentPayoutExecutorPort),
+    )
 }
 
-fn build_backend_commerce_admin_router(store: BackendCommerceAdminStore) -> Router {
+pub fn backend_commerce_admin_router_with_postgres_pool_and_ports(
+    pool: PgPool,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
+    payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+) -> Router {
+    build_backend_commerce_admin_router(
+        BackendCommerceAdminStore::Postgres {
+            orders: Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
+            recharge: Arc::new(PostgresCommerceRechargeStore::new(pool)),
+        },
+        account_value_ledger_port,
+        payment_refund_executor_port,
+        payment_payout_executor_port,
+    )
+}
+
+fn build_backend_commerce_admin_router(
+    store: BackendCommerceAdminStore,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
+    payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+) -> Router {
     Router::new()
+        .route(
+            "/backend/v3/api/account_value_packages",
+            get(list_account_value_packages).post(create_account_value_package),
+        )
+        .route(
+            "/backend/v3/api/account_value_packages/{packageId}",
+            patch(update_account_value_package),
+        )
+        .route(
+            "/backend/v3/api/account_value_packages/{packageId}/retire",
+            post(retire_account_value_package),
+        )
+        .route(
+            "/backend/v3/api/token_bank_plans",
+            get(list_token_bank_plans).post(create_token_bank_plan),
+        )
+        .route(
+            "/backend/v3/api/token_bank_plans/{planCode}",
+            patch(update_token_bank_plan),
+        )
+        .route(
+            "/backend/v3/api/token_bank_plans/{planCode}/retire",
+            post(retire_token_bank_plan),
+        )
+        .route("/backend/v3/api/refund_requests", get(list_refund_requests))
+        .route(
+            "/backend/v3/api/refund_requests/{refundRequestId}/approve",
+            post(approve_refund_request),
+        )
+        .route(
+            "/backend/v3/api/refund_requests/{refundRequestId}/reject",
+            post(reject_refund_request),
+        )
+        .route(
+            "/backend/v3/api/refund_requests/{refundRequestId}/retry",
+            post(retry_refund_request),
+        )
+        .route(
+            "/backend/v3/api/withdrawal_requests",
+            get(list_withdrawal_requests),
+        )
+        .route(
+            "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/approve",
+            post(approve_withdrawal_request),
+        )
+        .route(
+            "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/reject",
+            post(reject_withdrawal_request),
+        )
+        .route(
+            "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/retry",
+            post(retry_withdrawal_request),
+        )
         .route(
             "/backend/v3/api/after_sales/requests",
             get(list_management_after_sales),
@@ -265,7 +616,765 @@ fn build_backend_commerce_admin_router(store: BackendCommerceAdminStore) -> Rout
             "/backend/v3/api/shipments/{shipmentId}/packages/{packageId}",
             patch(update_management_shipment_package),
         )
-        .with_state(BackendCommerceAdminState { store })
+        .with_state(BackendCommerceAdminState {
+            store,
+            account_value_ledger_port,
+            payment_refund_executor_port,
+            payment_payout_executor_port,
+        })
+}
+
+async fn list_account_value_packages(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Query(params): Query<AccountValueCatalogListParams>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_READ)
+    {
+        Ok(subject) => subject,
+        Err(response) => return response,
+    };
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let target_asset = match params
+        .target_asset
+        .as_deref()
+        .map(AccountValueAssetCode::parse)
+        .transpose()
+    {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    let query = match AccountValueCatalogListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        target_asset,
+        params.status.as_deref(),
+        Some(page_params.page),
+        Some(page_params.page_size),
+    ) {
+        Ok(query) => query,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state.store.list_account_value_packages(query).await {
+        Ok(page) => success_items(
+            ctx,
+            page.items
+                .into_iter()
+                .map(map_account_value_package)
+                .collect(),
+            page.total,
+            page_params,
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn create_account_value_package(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    body: Option<Json<AccountValuePackageWriteBody>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "backend.accountValuePackages.create",
+        &body,
+        |idempotency_key| format!("account-value-package-create-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match build_account_value_package_command(
+        &subject,
+        None,
+        &body,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.upsert_account_value_package(command).await {
+        Ok(item) => success_created_item(ctx, map_account_value_package(item)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn update_account_value_package(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(package_id): Path<String>,
+    body: Option<Json<AccountValuePackageWriteBody>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let payload = write_payload_with_route_param("packageId", &package_id, &body);
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "backend.accountValuePackages.update",
+        &payload,
+        |idempotency_key| format!("account-value-package-update-{package_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match build_account_value_package_command(
+        &subject,
+        Some(&package_id),
+        &body,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.upsert_account_value_package(command).await {
+        Ok(item) => success_item(ctx, map_account_value_package(item)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn retire_account_value_package(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(package_id): Path<String>,
+    body: Option<Json<CommerceOperationCommandBody>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let payload = write_payload_with_route_param("packageId", &package_id, &body);
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "backend.accountValuePackages.retire",
+        &payload,
+        |idempotency_key| format!("account-value-package-retire-{package_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match RetireAccountValuePackageCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &package_id,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.retire_account_value_package(command).await {
+        Ok(()) => success_command(ctx, Some(package_id), Some("retired".to_owned())),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn list_token_bank_plans(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Query(params): Query<AccountValueCatalogListParams>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_READ)
+    {
+        Ok(subject) => subject,
+        Err(response) => return response,
+    };
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let query = match AccountValueCatalogListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        Some(AccountValueAssetCode::TokenBank),
+        params.status.as_deref(),
+        Some(page_params.page),
+        Some(page_params.page_size),
+    ) {
+        Ok(query) => query,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state.store.list_token_bank_plans(query).await {
+        Ok(page) => success_items(
+            ctx,
+            page.items.into_iter().map(map_token_bank_plan).collect(),
+            page.total,
+            page_params,
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn create_token_bank_plan(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    body: Option<Json<TokenBankPlanWriteBody>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "backend.tokenBankPlans.create",
+        &body,
+        |idempotency_key| format!("token-bank-plan-create-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match build_token_bank_plan_command(
+        &subject,
+        None,
+        &body,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.upsert_token_bank_plan(command).await {
+        Ok(item) => success_created_item(ctx, map_token_bank_plan(item)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn update_token_bank_plan(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(plan_code): Path<String>,
+    body: Option<Json<TokenBankPlanWriteBody>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let payload = write_payload_with_route_param("planCode", &plan_code, &body);
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "backend.tokenBankPlans.update",
+        &payload,
+        |idempotency_key| format!("token-bank-plan-update-{plan_code}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match build_token_bank_plan_command(
+        &subject,
+        Some(&plan_code),
+        &body,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.upsert_token_bank_plan(command).await {
+        Ok(item) => success_item(ctx, map_token_bank_plan(item)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn retire_token_bank_plan(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(plan_code): Path<String>,
+    body: Option<Json<CommerceOperationCommandBody>>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let body = body.map(|Json(value)| value).unwrap_or_default();
+    let payload = write_payload_with_route_param("planCode", &plan_code, &body);
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        "backend.tokenBankPlans.retire",
+        &payload,
+        |idempotency_key| format!("token-bank-plan-retire-{plan_code}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match RetireTokenBankPlanCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &plan_code,
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state.store.retire_token_bank_plan(command).await {
+        Ok(()) => success_command(ctx, Some(plan_code), Some("retired".to_owned())),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn list_refund_requests(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Query(params): Query<AccountValueRequestListParams>,
+) -> Response {
+    list_account_value_requests_by_subject(
+        state,
+        runtime_context,
+        request_context,
+        params,
+        AccountValueOrderSubject::RefundRequest,
+    )
+    .await
+}
+
+async fn list_withdrawal_requests(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    Query(params): Query<AccountValueRequestListParams>,
+) -> Response {
+    list_account_value_requests_by_subject(
+        state,
+        runtime_context,
+        request_context,
+        params,
+        AccountValueOrderSubject::CashWithdrawal,
+    )
+    .await
+}
+
+async fn approve_refund_request(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(refund_request_id): Path<String>,
+    body: Option<Json<AccountValueRequestReviewBody>>,
+) -> Response {
+    review_account_value_request_by_action(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        refund_request_id,
+        body.map(|Json(value)| value).unwrap_or_default(),
+        AccountValueOrderSubject::RefundRequest,
+        AccountValueRequestReviewAction::Approve,
+        "refundRequestId",
+        "backend.refundRequests.approve",
+        "refund-approve",
+    )
+    .await
+}
+
+async fn reject_refund_request(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(refund_request_id): Path<String>,
+    body: Option<Json<AccountValueRequestReviewBody>>,
+) -> Response {
+    review_account_value_request_by_action(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        refund_request_id,
+        body.map(|Json(value)| value).unwrap_or_default(),
+        AccountValueOrderSubject::RefundRequest,
+        AccountValueRequestReviewAction::Reject,
+        "refundRequestId",
+        "backend.refundRequests.reject",
+        "refund-reject",
+    )
+    .await
+}
+
+async fn retry_refund_request(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(refund_request_id): Path<String>,
+    body: Option<Json<AccountValueRequestReviewBody>>,
+) -> Response {
+    review_account_value_request_by_action(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        refund_request_id,
+        body.map(|Json(value)| value).unwrap_or_default(),
+        AccountValueOrderSubject::RefundRequest,
+        AccountValueRequestReviewAction::Retry,
+        "refundRequestId",
+        "backend.refundRequests.retry",
+        "refund-retry",
+    )
+    .await
+}
+
+async fn approve_withdrawal_request(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(withdrawal_request_id): Path<String>,
+    body: Option<Json<AccountValueRequestReviewBody>>,
+) -> Response {
+    review_account_value_request_by_action(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        withdrawal_request_id,
+        body.map(|Json(value)| value).unwrap_or_default(),
+        AccountValueOrderSubject::CashWithdrawal,
+        AccountValueRequestReviewAction::Approve,
+        "withdrawalRequestId",
+        "backend.withdrawalRequests.approve",
+        "withdrawal-approve",
+    )
+    .await
+}
+
+async fn reject_withdrawal_request(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(withdrawal_request_id): Path<String>,
+    body: Option<Json<AccountValueRequestReviewBody>>,
+) -> Response {
+    review_account_value_request_by_action(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        withdrawal_request_id,
+        body.map(|Json(value)| value).unwrap_or_default(),
+        AccountValueOrderSubject::CashWithdrawal,
+        AccountValueRequestReviewAction::Reject,
+        "withdrawalRequestId",
+        "backend.withdrawalRequests.reject",
+        "withdrawal-reject",
+    )
+    .await
+}
+
+async fn retry_withdrawal_request(
+    State(state): State<BackendCommerceAdminState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Path(withdrawal_request_id): Path<String>,
+    body: Option<Json<AccountValueRequestReviewBody>>,
+) -> Response {
+    review_account_value_request_by_action(
+        state,
+        runtime_context,
+        request_context,
+        headers,
+        withdrawal_request_id,
+        body.map(|Json(value)| value).unwrap_or_default(),
+        AccountValueOrderSubject::CashWithdrawal,
+        AccountValueRequestReviewAction::Retry,
+        "withdrawalRequestId",
+        "backend.withdrawalRequests.retry",
+        "withdrawal-retry",
+    )
+    .await
+}
+
+async fn list_account_value_requests_by_subject(
+    state: BackendCommerceAdminState,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    params: AccountValueRequestListParams,
+    request_subject: AccountValueOrderSubject,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_READ)
+    {
+        Ok(subject) => subject,
+        Err(response) => return response,
+    };
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let query = match AccountValueRequestListQuery::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        None,
+        Some(request_subject),
+        params.status.as_deref(),
+        Some(page_params.page),
+        Some(page_params.page_size),
+    ) {
+        Ok(query) => query,
+        Err(error) => return crate::api_response::validation(ctx, error.message()),
+    };
+
+    match state
+        .store
+        .list_account_value_requests(query, request_subject)
+        .await
+    {
+        Ok(page) => success_items(
+            ctx,
+            page.items
+                .into_iter()
+                .map(map_account_value_request)
+                .collect(),
+            page.total,
+            page_params,
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn review_account_value_request_by_action(
+    state: BackendCommerceAdminState,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    request_id: String,
+    body: AccountValueRequestReviewBody,
+    request_subject: AccountValueOrderSubject,
+    action: AccountValueRequestReviewAction,
+    route_param_name: &'static str,
+    operation_id: &'static str,
+    fallback_scope: &'static str,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject =
+        match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_REVIEW) {
+            Ok(subject) => subject,
+            Err(response) => return response,
+        };
+    let payload = write_payload_with_route_param(route_param_name, &request_id, &body);
+    let write_headers = match validate_backend_write_payload(
+        ctx,
+        &headers,
+        operation_id,
+        &payload,
+        |idempotency_key| format!("{fallback_scope}-{request_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
+    let command = match ReviewAccountValueRequestCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        request_subject,
+        &request_id,
+        action,
+        body.reason_code.as_deref(),
+        body.review_comment.as_deref(),
+        &write_headers.request_no,
+        &write_headers.idempotency_key,
+    ) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    match state
+        .store
+        .execute_account_value_request_review(
+            state.account_value_ledger_port.as_ref(),
+            state.payment_refund_executor_port.as_ref(),
+            state.payment_payout_executor_port.as_ref(),
+            command,
+        )
+        .await
+    {
+        Ok(view) => success_command(ctx, Some(request_id), Some(view.status)),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+fn require_admin_subject(
+    ctx: Option<&WebRequestContext>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    permission: &'static str,
+) -> Result<BackendOperatorScope, Response> {
+    match runtime_context {
+        Some(Extension(context)) => require_backend_operator(ctx, context, permission),
+        None => Err(crate::api_response::unauthorized(
+            ctx,
+            "authentication is required",
+        )),
+    }
+}
+
+fn build_account_value_package_command(
+    subject: &BackendOperatorScope,
+    package_id: Option<&str>,
+    body: &AccountValuePackageWriteBody,
+    request_no: &str,
+    idempotency_key: &str,
+) -> Result<UpsertAccountValuePackageCommand, CommerceServiceError> {
+    let package_code = required_body_text(body.package_code.as_deref(), "packageCode")?;
+    let display_name = required_body_text(body.display_name.as_deref(), "displayName")?;
+    let target_asset = AccountValueAssetCode::parse(&required_body_text(
+        body.target_asset.as_deref(),
+        "targetAsset",
+    )?)?;
+    let grant_amount = required_money(body.grant_amount.as_deref(), "grantAmount")?;
+    let bonus_amount = optional_money(body.bonus_amount.as_deref(), "bonusAmount")?;
+    let price_amount = required_money(body.price_amount.as_deref(), "priceAmount")?;
+    let currency_code = required_body_text(body.currency_code.as_deref(), "currencyCode")?;
+
+    UpsertAccountValuePackageCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        package_id,
+        &package_code,
+        &display_name,
+        target_asset,
+        grant_amount,
+        bonus_amount,
+        price_amount,
+        &currency_code,
+        body.status.as_deref(),
+        body.sort_weight,
+        body.valid_from.as_deref(),
+        body.valid_to.as_deref(),
+        request_no,
+        idempotency_key,
+    )
+}
+
+fn build_token_bank_plan_command(
+    subject: &BackendOperatorScope,
+    route_plan_code: Option<&str>,
+    body: &TokenBankPlanWriteBody,
+    request_no: &str,
+    idempotency_key: &str,
+) -> Result<UpsertTokenBankPlanCommand, CommerceServiceError> {
+    let plan_code = route_plan_code
+        .map(str::to_owned)
+        .or_else(|| body.plan_code.as_deref().map(str::to_owned))
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| CommerceServiceError::validation("planCode is required"))?;
+    let display_name = required_body_text(body.display_name.as_deref(), "displayName")?;
+    let plan_period = TokenBankPlanPeriod::parse(&required_body_text(
+        body.plan_period.as_deref(),
+        "planPeriod",
+    )?)?;
+    let grant_amount = required_money(body.grant_amount.as_deref(), "grantAmount")?;
+    let bonus_amount = optional_money(body.bonus_amount.as_deref(), "bonusAmount")?;
+    let price_amount = required_money(body.price_amount.as_deref(), "priceAmount")?;
+    let currency_code = required_body_text(body.currency_code.as_deref(), "currencyCode")?;
+
+    UpsertTokenBankPlanCommand::new(
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &plan_code,
+        &display_name,
+        plan_period,
+        grant_amount,
+        bonus_amount,
+        price_amount,
+        &currency_code,
+        body.renewal_policy.as_deref(),
+        body.status.as_deref(),
+        body.sort_weight,
+        request_no,
+        idempotency_key,
+    )
+}
+
+fn required_body_text(
+    value: Option<&str>,
+    field_name: &'static str,
+) -> Result<String, CommerceServiceError> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .ok_or_else(|| CommerceServiceError::validation(format!("{field_name} is required")))
+}
+
+fn required_money(
+    value: Option<&str>,
+    field_name: &'static str,
+) -> Result<CommerceMoney, CommerceServiceError> {
+    let amount = required_body_text(value, field_name)?;
+    CommerceMoney::new(&amount)
+        .map_err(|message| CommerceServiceError::validation(format!("{field_name} {message}")))
+}
+
+fn optional_money(
+    value: Option<&str>,
+    field_name: &'static str,
+) -> Result<CommerceMoney, CommerceServiceError> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => CommerceMoney::new(value)
+            .map_err(|message| CommerceServiceError::validation(format!("{field_name} {message}"))),
+        None => CommerceMoney::new("0").map_err(CommerceServiceError::validation),
+    }
 }
 
 async fn list_management_after_sales(
@@ -284,8 +1393,7 @@ async fn list_management_after_sales(
     let Ok(subject) = subject else {
         return subject.err().expect("permission error response");
     };
-    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size)
-    {
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
         Err(response) => return response,
     };
@@ -306,8 +1414,7 @@ async fn list_management_after_sales(
     match state.store.list_management_after_sales(query).await {
         Ok(page) => success_items(
             ctx,
-            page
-                .items
+            page.items
                 .into_iter()
                 .map(map_after_sales_request)
                 .collect(),
@@ -395,14 +1502,12 @@ async fn review_after_sales_request(
             .with_exchange_status(body.exchange_status)
             .with_approved_amount(body.approved_amount)
             .with_reason_code(body.reason_code)
-            .with_review_comment(
-                body.review_comment.or(body.reason_detail),
-            ),
+            .with_review_comment(body.review_comment.or(body.reason_detail)),
         Err(error) => return crate::api_response::validation(ctx, error.message()),
     };
 
     match state.store.review_after_sales(command).await {
-        Ok(request) => success_item(ctx, map_after_sales_request(request)),
+        Ok(request) => success_created_item(ctx, map_after_sales_request(request)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -423,8 +1528,7 @@ async fn list_management_shipments(
     let Ok(subject) = subject else {
         return subject.err().expect("permission error response");
     };
-    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size)
-    {
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
         Err(response) => return response,
     };
@@ -501,8 +1605,7 @@ async fn list_management_shipment_packages(
     let Ok(subject) = subject else {
         return subject.err().expect("permission error response");
     };
-    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size)
-    {
+    let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
         Err(response) => return response,
     };
@@ -520,11 +1623,7 @@ async fn list_management_shipment_packages(
     match state.store.list_management_packages(query).await {
         Ok(page) => success_items(
             ctx,
-            page
-                .items
-                .into_iter()
-                .map(map_shipment_package)
-                .collect(),
+            page.items.into_iter().map(map_shipment_package).collect(),
             page.total,
             page_params,
         ),
@@ -577,7 +1676,7 @@ async fn create_management_shipment_package(
     command.status = body.status;
 
     match state.store.create_management_package(command).await {
-        Ok(package) => success_item(ctx, map_shipment_package(package)),
+        Ok(package) => success_created_item(ctx, map_shipment_package(package)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -600,8 +1699,7 @@ async fn update_management_shipment_package(
     let Ok(subject) = subject else {
         return subject.err().expect("permission error response");
     };
-    let payload =
-        write_payload_with_route_param("packageId", &package_id, &body);
+    let payload = write_payload_with_route_param("packageId", &package_id, &body);
     let mut payload = payload;
     if let serde_json::Value::Object(ref mut fields) = payload {
         fields.insert(
@@ -650,6 +1748,51 @@ fn map_after_sales_request(value: AfterSalesRequestView) -> AfterSalesRequestRes
         requested_amount: value.requested_amount.as_str().to_owned(),
         currency_code: value.currency_code,
         status: value.status,
+    }
+}
+
+fn map_account_value_package(value: AccountValuePackageItem) -> AccountValuePackageResponse {
+    AccountValuePackageResponse {
+        package_id: value.package_id,
+        package_code: value.package_code,
+        display_name: value.display_name,
+        target_asset: value.target_asset.as_str().to_owned(),
+        grant_amount: value.grant_amount.as_str().to_owned(),
+        bonus_amount: value.bonus_amount.as_str().to_owned(),
+        price_amount: value.price_amount.as_str().to_owned(),
+        currency_code: value.currency_code,
+        status: value.status,
+    }
+}
+
+fn map_token_bank_plan(value: TokenBankPlanItem) -> TokenBankPlanResponse {
+    TokenBankPlanResponse {
+        plan_code: value.plan_code,
+        display_name: value.display_name,
+        plan_period: value.plan_period.as_str().to_owned(),
+        grant_amount: value.grant_amount.as_str().to_owned(),
+        bonus_amount: value.bonus_amount.as_str().to_owned(),
+        price_amount: value.price_amount.as_str().to_owned(),
+        currency_code: value.currency_code,
+        renewal_policy: value.renewal_policy,
+        status: value.status,
+    }
+}
+
+fn map_account_value_request(value: AccountValueRequestView) -> AccountValueRequestResponse {
+    AccountValueRequestResponse {
+        account_value_request_id: value.request_id,
+        request_no: value.request_no,
+        original_order_id: value.original_order_id,
+        owner_user_id: value.owner_user_id,
+        subject: value.subject.as_str().to_owned(),
+        target_asset: value.target_asset.as_str().to_owned(),
+        amount: value.amount.as_str().to_owned(),
+        currency_code: value.currency_code,
+        status: value.status,
+        provider_reference_id: value.provider_reference_id,
+        created_at: value.created_at,
+        updated_at: value.updated_at,
     }
 }
 

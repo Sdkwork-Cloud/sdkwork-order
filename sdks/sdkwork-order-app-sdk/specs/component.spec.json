@@ -17,11 +17,15 @@
     "generated": true,
     "private": false,
     "manifests": [
-      ".sdkwork-assembly.json",
       "sdk-manifest.json"
     ]
   },
   "canonicalSpecs": [
+    {
+      "file": "SDK_MANIFEST_SPEC.md",
+      "path": "../../../sdkwork-specs/SDK_MANIFEST_SPEC.md",
+      "purpose": "SDK family manifest single-source-of-truth rules."
+    },
     {
       "file": "SDK_SPEC.md",
       "path": "../../../sdkwork-specs/SDK_SPEC.md",
@@ -73,7 +77,6 @@
     },
     "publicExports": [],
     "runtimeEntrypoints": [
-      ".sdkwork-assembly.json",
       "sdk-manifest.json"
     ],
     "routeManifest": null,
@@ -85,12 +88,17 @@
     ],
     "events": [],
     "configKeys": [
-      ".sdkwork-assembly.json",
       "sdk-manifest.json"
     ]
   },
   "metadata": {
     "managedBy": "sdkwork-order",
-    "standardVersion": "2026-07-07"
+    "standardVersion": "2026-07-08"
+  },
+  "verification": {
+    "commands": [
+      "node ../sdkwork-specs/tools/check-sdk-standard.mjs --workspace ..",
+      "node ../sdkwork-specs/tools/check-component-port-bindings.mjs --root ."
+    ]
   }
 }

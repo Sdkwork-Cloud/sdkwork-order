@@ -3,8 +3,9 @@ use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
 use sdkwork_order_service::{
-    AccountPointsCreditFuture, AccountPointsCreditPort, NoopMembershipPurchaseFulfillmentPort,
-    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    AccountPointsCreditFuture, AccountPointsCreditPort, NoopAccountValueLedgerPort,
+    NoopMembershipPurchaseFulfillmentPort, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_routes_order_app_api::{
@@ -71,6 +72,7 @@ fn build_test_app_router(pool: sqlx::SqlitePool) -> Router {
             .merge(app_payment_webhook_router_with_sqlite_pool(
                 pool,
                 Arc::new(NoopAccountPointsCreditPort),
+                Arc::new(NoopAccountValueLedgerPort),
                 Arc::new(NoopMembershipPurchaseFulfillmentPort),
             )),
     )
@@ -142,6 +144,8 @@ fn concrete_uri(template_path: &str) -> String {
         .replace("{orderId}", "order-1")
         .replace("{checkoutSessionId}", "session-1")
         .replace("{afterSalesRequestId}", "as-1")
+        .replace("{refundRequestId}", "refund-1")
+        .replace("{withdrawalRequestId}", "withdrawal-1")
         .replace("{shipmentId}", "shipment-1")
         .replace("{fulfillmentId}", "fulfillment-1")
         .replace("{providerCode}", "wechat_pay")

@@ -13,7 +13,7 @@ This spec defines the order-owned business layer for account value movement.
 
 Recharge, coupon redemption, refund, and withdrawal orchestration belong to `sdkwork-order`. Every value-changing user action that needs commercial evidence must create or reference a `commerce_order` or order-owned request record before money, coupon, payout, or account ledger effects happen.
 
-`sdkwork-payment` executes provider payment, refund, and payout channels only. `sdkwork-account` is the ledger truth source for balances, holds, settlement, reversal, and immutable journal entries.
+`sdkwork-payment` executes provider payment and refund channels today, and owns any future provider payout executor contract. `sdkwork-account` is the ledger truth source for balances, holds, settlement, reversal, and immutable journal entries.
 
 ## 2. Naming Model
 
@@ -45,7 +45,7 @@ Use `Token Bank` for the AI-era intermediate value capability and `token_bank` f
 | Capability | Owns | Must not own |
 | --- | --- | --- |
 | `sdkwork-order` | order records, account value packages, Token Bank plans, coupon redemption orders, refund request state, withdrawal request state, idempotency scopes, saga orchestration | provider SDK calls, direct account SQL writes |
-| `sdkwork-payment` | payment intent, payment attempt, provider refund execution, provider payout execution, provider channel config, provider webhook event persistence | recharge routes, refund business approval, withdrawal business approval, account ledger side effects |
+| `sdkwork-payment` | payment intent, payment attempt, provider refund execution, future provider payout execution, provider channel config, provider webhook event persistence | recharge routes, refund business approval, withdrawal business approval, account ledger side effects |
 | `sdkwork-account` | accounts, balances, ledger journal, holds, settlement, release, reversal, idempotent ledger commands | order creation, package or plan catalog, provider payment/refund/payout calls |
 
 Allowed dependency direction:
@@ -145,7 +145,7 @@ Continuous plans create a distinct `token_bank_plan_purchase` order for the firs
 
 ```text
 1. recharges.orders.create subject=token_bank_recharge
-2. orders.pay creates or reuses a payment intent through sdkwork-payment
+2. orders.payments.create creates or reuses a payment intent through sdkwork-payment
 3. PSP callback enters order-owned webhook route
 4. order settles payment state
 5. order calls sdkwork-account to credit asset_code=token_bank
@@ -185,8 +185,9 @@ Continuous plans create a distinct `token_bank_plan_purchase` order for the firs
 ```text
 1. user creates withdrawal request for asset_code=cash
 2. order asks sdkwork-account to hold withdrawable cash
-3. order asks sdkwork-payment to execute provider payout
+3. order asks the configured `PaymentPayoutExecutorPort` to execute provider payout
 4. success settles and debits the account hold; failure releases the hold
+5. current default runtime is fail-closed until `sdkwork-payment` exposes a concrete provider payout executor
 ```
 
 ## 8. Idempotency
@@ -226,16 +227,16 @@ Greenfield order-owned account value tables:
 | `commerce_account_value_package` | Recharge package catalog for points, Token Bank, or other account assets |
 | `commerce_token_bank_plan` | Token Bank one-time and continuous plan catalog |
 | `commerce_order_refund_request` | Refund request workflow and provider refund execution reference |
-| `commerce_order_withdrawal_request` | Cash withdrawal workflow and provider payout execution reference |
+| `commerce_order_withdrawal_request` | Cash withdrawal workflow, account hold reference, and provider payout execution reference when payout execution is available |
 
 Immutable commercial evidence must be copied into order rows or order item snapshots. Account ledger rows must store ledger facts, not package or plan catalog truth.
 
 ## 11. Security And Operations
 
 - Refund and withdrawal approval routes require backend IAM permissions and audit events.
-- Provider refund and payout retries must be idempotent and tied to order-owned request ids.
+- Provider refund and future payout retries must be idempotent and tied to order-owned request ids.
 - Ledger commands must be idempotent, tenant-scoped, and organization-scoped.
-- Failed ledger, refund, or payout steps must be recoverable through backend replay routes.
+- Failed ledger, refund, or fail-closed payout steps must be recoverable through backend replay routes.
 - Sensitive provider payloads must stay in payment-owned tables; order stores only execution references and business status.
 
 ## 12. Forbidden

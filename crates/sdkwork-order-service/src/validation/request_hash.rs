@@ -1,7 +1,5 @@
-use crate::{
-    CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand,
-};
 use crate::validation::write_command_hash::stable_command_request_hash;
+use crate::{CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand};
 
 pub fn checkout_session_request_hash(command: &CreateCheckoutSessionCommand) -> String {
     let lines = command

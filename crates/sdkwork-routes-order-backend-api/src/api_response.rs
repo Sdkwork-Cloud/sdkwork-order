@@ -16,13 +16,22 @@ pub fn resolve_trace_id(context: Option<&WebRequestContext>) -> String {
         .unwrap_or_else(|| sdkwork_utils_rust::uuid())
 }
 
-pub fn success_item<T: serde::Serialize>(
+pub fn success_item<T: serde::Serialize>(context: Option<&WebRequestContext>, item: T) -> Response {
+    let trace_id = resolve_trace_id(context);
+    let envelope = SdkWorkApiResponse::success(SdkWorkResourceData { item }, trace_id.clone());
+    attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
+}
+
+pub fn success_created_item<T: serde::Serialize>(
     context: Option<&WebRequestContext>,
     item: T,
 ) -> Response {
     let trace_id = resolve_trace_id(context);
     let envelope = SdkWorkApiResponse::success(SdkWorkResourceData { item }, trace_id.clone());
-    attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
+    attach_trace_header(
+        (StatusCode::CREATED, Json(envelope)).into_response(),
+        &trace_id,
+    )
 }
 
 pub fn success_command(
@@ -67,9 +76,7 @@ pub fn parse_offset_list_params_validated(
     validated_offset_list_params(page, page_size).map_err(|_| {
         validation(
             context,
-            format!(
-                "page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"
-            ),
+            format!("page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"),
         )
     })
 }
@@ -163,21 +170,15 @@ pub fn forbidden(context: Option<&WebRequestContext>, detail: impl Into<String>)
 
 pub fn not_found(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
-        SdkWorkResultCode::NotFound,
-        detail,
-        trace_id.clone(),
-    );
+    let problem =
+        SdkWorkProblemDetail::platform(SdkWorkResultCode::NotFound, detail, trace_id.clone());
     problem_response(StatusCode::NOT_FOUND, problem, &trace_id)
 }
 
 pub fn conflict(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
     let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
-        SdkWorkResultCode::Conflict,
-        detail,
-        trace_id.clone(),
-    );
+    let problem =
+        SdkWorkProblemDetail::platform(SdkWorkResultCode::Conflict, detail, trace_id.clone());
     problem_response(StatusCode::CONFLICT, problem, &trace_id)
 }
 
@@ -196,10 +197,9 @@ fn problem_response(status: StatusCode, problem: SdkWorkProblemDetail, trace_id:
 fn attach_trace_header(response: Response, trace_id: &str) -> Response {
     let mut response = response;
     if let Ok(value) = HeaderValue::from_str(trace_id) {
-        response.headers_mut().insert(
-            HeaderName::from_static("x-sdkwork-trace-id"),
-            value,
-        );
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static("x-sdkwork-trace-id"), value);
     }
     response
 }

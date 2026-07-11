@@ -44,7 +44,7 @@ OpenAPI marks these operations with `x-sdkwork-idempotent: true`. Generated Type
 
 | Hash style | Operations | Client helper |
 | --- | --- | --- |
-| Canonical JSON + route params | `orders.cancel`, `orders.cancellations.create`, `orders.pay`, `recharges.orders.create`, `memberships.orders.create`, after-sales, backend admin | `createSdkworkWriteCommandHeaders(operationId, payload)` |
+| Canonical JSON + route params | `orders.cancel`, `orders.cancellations.create`, `orders.payments.create`, `recharges.orders.create`, `memberships.orders.create`, after-sales, backend admin | `createSdkworkWriteCommandHeaders(operationId, payload)` |
 | Command digest (same operationId scope) | `checkout.sessions.create`, `checkout.sessions.quotes.create`, `checkout.sessions.orders.create` | `createCheckoutSessionWriteHeaders`, `createCheckoutQuoteWriteHeaders`, `createCheckoutOwnerOrderWriteHeaders` |
 
 Use the **operationId** as the hash scope for JSON-body writes. `/orders/{orderId}/cancel` (`orders.cancel`) and `/orders/{orderId}/cancellations` (`orders.cancellations.create`) are distinct routes with distinct scopes but identical behavior.
@@ -61,15 +61,15 @@ Full topology: `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md`.
 
 | Flow | Order operations | Payment |
 | --- | --- | --- |
-| Product checkout | `checkout.sessions.create` → `checkout.sessions.orders.create` → `orders.pay` | `@sdkwork/payment-app-sdk`; open `paymentParams.cashierUrl` |
-| Points recharge | `recharges.orders.create` → `orders.pay` | Same; settlement via order webhook + in-process saga |
-| Membership purchase | `memberships.orders.create` → `orders.pay` | Same; settlement activates subscription via membership fulfillment port |
+| Product checkout | `checkout.sessions.create` → `checkout.sessions.orders.create` → `orders.payments.create` | `@sdkwork/payment-app-sdk`; open `paymentParams.cashierUrl` |
+| Points recharge | `recharges.orders.create` → `orders.payments.create` | Same; settlement via order webhook + in-process saga |
+| Membership purchase | `memberships.orders.create` → `orders.payments.create` | Same; settlement activates subscription via membership fulfillment port |
 
 PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**. Legacy payment webhook path returns 410 Gone.
 
 Operator settlement replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
 
-Cashier URL is returned in `orders.pay` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://im.sdkwork.com/cashier`).
+Cashier URL is returned in `orders.payments.create` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://im.sdkwork.com/cashier`).
 
 **PC:** `sdkwork-order-pc` buyer surface at `/app/order`; operator admin at `/admin/orders` (`@sdkwork/order-backend-sdk`, permissions `commerce.orders.read` / `commerce.orders.manage`).  
 **H5 / Flutter:** consume `@sdkwork/order-app-sdk` and `@sdkwork/payment-app-sdk` from host shells; navigate to `cashierUrl` after pay.

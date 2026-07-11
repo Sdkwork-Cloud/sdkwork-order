@@ -16,6 +16,7 @@
       "@sdkwork/order-sdk-ports": ["apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports/src/index.ts"],
       "@sdkwork/order-app-sdk": ["sdks/sdkwork-order-app-sdk/sdkwork-order-app-sdk-typescript/src/index.ts"],
       "@sdkwork/order-pc-core": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-core/src/index.ts"],
+      "@sdkwork/order-pc-admin-core": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-admin-core/src/index.ts"],
       "@sdkwork/order-pc-shell": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-shell/src/index.tsx"],
       "@sdkwork/order-pc-order": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-order/src/index.ts"],
       "@sdkwork/order-pc-admin-orders": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-admin-orders/src/index.ts"],

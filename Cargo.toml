@@ -5,6 +5,7 @@ members = [
   "crates/sdkwork-order-service",
   "crates/sdkwork-order-repository-sqlx",
   "crates/sdkwork-order-integration-account",
+  "crates/sdkwork-order-integration-payment",
   "crates/sdkwork-order-integration-membership",
   "crates/sdkwork-routes-order-app-api",
   "crates/sdkwork-routes-order-backend-api",
@@ -52,9 +53,11 @@ sdkwork_payment_repository_sqlx = { path = "../sdkwork-payment/crates/sdkwork-pa
 sdkwork_payment_providers = { path = "../sdkwork-payment/crates/sdkwork-payment-providers", package = "sdkwork-payment-providers" }
 sdkwork_routes_order_app_api = { path = "crates/sdkwork-routes-order-app-api", package = "sdkwork-routes-order-app-api" }
 sdkwork_routes_order_backend_api = { path = "crates/sdkwork-routes-order-backend-api", package = "sdkwork-routes-order-backend-api" }
+sdkwork_order_gateway_assembly = { path = "crates/sdkwork-order-gateway-assembly", package = "sdkwork-order-gateway-assembly" }
 sdkwork_order_database_host = { path = "crates/sdkwork-order-database-host", package = "sdkwork-order-database-host" }
 sdkwork_order_service_host = { path = "crates/sdkwork-order-service-host", package = "sdkwork-order-service-host" }
 sdkwork_order_integration_account = { path = "crates/sdkwork-order-integration-account", package = "sdkwork-order-integration-account" }
+sdkwork_order_integration_payment = { path = "crates/sdkwork-order-integration-payment", package = "sdkwork-order-integration-payment" }
 sdkwork_order_integration_membership = { path = "crates/sdkwork-order-integration-membership", package = "sdkwork-order-integration-membership" }
 sdkwork_account_service = { path = "../sdkwork-account/crates/sdkwork-account-service", package = "sdkwork-account-service" }
 sdkwork_account_repository_sqlx = { path = "../sdkwork-account/crates/sdkwork-account-repository-sqlx", package = "sdkwork-account-repository-sqlx" }

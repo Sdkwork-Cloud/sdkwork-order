@@ -36,7 +36,7 @@ function createMissingOrdersTree(): SdkworkOrderAppService["orders"] {
     "list",
     "create",
     "retrieve",
-    "pay",
+    "payments.create",
     "cancel",
     "paymentSuccess.retrieve",
     "statistics.retrieve",

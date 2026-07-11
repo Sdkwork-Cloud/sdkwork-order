@@ -15,6 +15,7 @@ pub struct RechargePackageItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreatePointsRechargeOrderOutcome {
     pub success: bool,
+    pub order_id: String,
     pub order_no: String,
     pub out_trade_no: String,
     pub amount: CommerceMoney,
@@ -45,6 +46,7 @@ pub struct RechargeSettingsSnapshot {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CheckoutStatusSnapshot {
+    pub order_id: String,
     pub order_no: String,
     pub out_trade_no: String,
     pub amount: CommerceMoney,

@@ -3,11 +3,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use sdkwork_contract_service::{CommerceMoney, CommercePaymentStatus, CommerceServiceError};
 use sdkwork_order_service::{
-    CheckoutStatusQuery, CheckoutStatusSnapshot, CreatePointsRechargeOrderCommand,
-    CreatePointsRechargeOrderOutcome, FulfillPointsRechargeOrderCommand,
-    FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
-    PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore, RechargeGrantPreview,
-    RechargePackageItem, RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
+    AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueFulfillmentStore,
+    AccountValueOrderSubject, CheckoutStatusQuery, CheckoutStatusSnapshot,
+    CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome,
+    FulfillAccountValueOrderCommand, FulfillAccountValueOrderOutcome,
+    FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
+    MarkPointsRechargePaymentSucceededCommand, PointsRechargeFulfillmentContext,
+    PointsRechargeFulfillmentStore, RechargeGrantPreview, RechargePackageItem,
+    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
     RechargeSettingsSnapshot,
 };
 use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
@@ -245,7 +248,7 @@ LIMIT 1
 "#;
 
 const LOAD_RECHARGE_METHOD: &str = r#"
-SELECT method_key, provider AS provider_code
+SELECT method_key, provider_code
 FROM commerce_payment_method
 WHERE (
         (tenant_id = CAST(?1 AS TEXT) AND organization_id = CAST(?2 AS TEXT))
@@ -260,7 +263,7 @@ ORDER BY
         WHEN tenant_id = CAST(?1 AS TEXT) AND organization_id IS NULL THEN 1
         ELSE 2
     END ASC,
-    COALESCE(sort_weight, 0) ASC,
+    COALESCE(sort_order, 0) ASC,
     id ASC
 LIMIT 1
 "#;
@@ -337,8 +340,8 @@ SELECT
         NULLIF(json_extract(COALESCE(pa.callback_payload, '{}'), '$.points'), ''),
         '0'
     ) AS TEXT) AS points_value,
-    COALESCE(NULLIF(pi.payment_method, ''), NULLIF(pa.provider, ''), '-') AS payment_method,
-    COALESCE(NULLIF(pi.provider_code, ''), NULLIF(pi.provider, ''), NULLIF(pa.provider, ''), '-') AS provider_code,
+    COALESCE(NULLIF(pa.payment_method, ''), NULLIF(pi.payment_method, ''), '-') AS payment_method,
+    COALESCE(NULLIF(pa.provider_code, ''), NULLIF(pi.provider_code, ''), '-') AS provider_code,
     o.status AS order_status,
     pi.status AS payment_status,
     pa.status AS payment_attempt_status,
@@ -402,6 +405,76 @@ ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC, o.id DESC
 LIMIT 1
 "#;
 
+const LOAD_ACCOUNT_VALUE_FULFILLMENT_CONTEXT: &str = r#"
+SELECT
+    o.id AS order_id,
+    COALESCE(NULLIF(o.order_no, ''), '-') AS order_no,
+    COALESCE(o.subject, '') AS subject,
+    COALESCE(
+      NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.targetAsset'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.assetCode'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.targetAsset'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.assetCode'), ''),
+      CASE
+        WHEN o.subject IN ('token_bank_recharge', 'token_bank_plan_purchase', 'token_bank_plan_renewal') THEN 'token_bank'
+        ELSE ''
+      END
+    ) AS target_asset,
+    COALESCE(o.status, '') AS order_status,
+    COALESCE(o.fulfillment_status, '') AS fulfillment_status,
+    COALESCE(pi.status, '') AS payment_status,
+    COALESCE(pa.status, '') AS payment_attempt_status,
+    CAST(COALESCE(
+      NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.grantAmount'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.tokenBankAmount'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.points'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.grantAmount'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.tokenBankAmount'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.points'), ''),
+      '0'
+    ) AS TEXT) AS grant_amount,
+    COALESCE(
+      NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.assetUnitCode'), ''),
+      NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.assetUnitCode'), ''),
+      CASE
+        WHEN o.subject IN ('token_bank_recharge', 'token_bank_plan_purchase', 'token_bank_plan_renewal') THEN 'TOKEN_BANK'
+        WHEN COALESCE(
+          NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.targetAsset'), ''),
+          NULLIF(json_extract(COALESCE(NULLIF(pa.callback_payload, ''), '{}'), '$.assetCode'), ''),
+          NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.targetAsset'), ''),
+          NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.assetCode'), ''),
+          ''
+        ) = 'points' THEN 'POINT'
+        ELSE ''
+      END
+    ) AS asset_unit_code
+FROM commerce_order o
+LEFT JOIN commerce_order_item oi
+    ON oi.tenant_id = o.tenant_id
+   AND oi.order_id = o.id
+LEFT JOIN commerce_payment_intent pi
+    ON pi.tenant_id = o.tenant_id
+   AND (pi.organization_id IS NULL OR o.organization_id IS NULL OR pi.organization_id = o.organization_id)
+   AND pi.order_id = o.id
+LEFT JOIN commerce_payment_attempt pa
+    ON pa.tenant_id = o.tenant_id
+   AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
+   AND pa.order_id = o.id
+WHERE o.tenant_id = CAST(?1 AS TEXT)
+  AND ((o.organization_id = CAST(?2 AS TEXT)) OR (o.organization_id IS NULL AND ?2 IS NULL))
+  AND o.owner_user_id = CAST(?3 AS TEXT)
+  AND o.id = CAST(?4 AS TEXT)
+  AND o.subject IN (
+    'token_bank_recharge',
+    'token_bank_plan_purchase',
+    'token_bank_plan_renewal',
+    'account_recharge_package',
+    'coupon_recharge'
+  )
+ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC, o.id DESC
+LIMIT 1
+"#;
+
 const LOAD_REUSABLE_RECHARGE_CHECKOUT: &str = r#"
 SELECT
     o.id AS order_id,
@@ -415,8 +488,8 @@ SELECT
         NULLIF(json_extract(COALESCE(pa.callback_payload, '{}'), '$.points'), ''),
         '0'
     ) AS TEXT) AS points_value,
-    COALESCE(NULLIF(pi.payment_method, ''), NULLIF(pa.provider, ''), '-') AS payment_method,
-    COALESCE(NULLIF(pi.provider_code, ''), NULLIF(pi.provider, ''), NULLIF(pa.provider, ''), '-') AS provider_code,
+    COALESCE(NULLIF(pa.payment_method, ''), NULLIF(pi.payment_method, ''), '-') AS payment_method,
+    COALESCE(NULLIF(pa.provider_code, ''), NULLIF(pi.provider_code, ''), '-') AS provider_code,
     o.status AS order_status,
     pi.status AS payment_status,
     pa.status AS payment_attempt_status,
@@ -503,6 +576,10 @@ impl SqliteCommerceRechargeStore {
         Self { pool }
     }
 
+    pub(crate) fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     pub async fn list_recharge_packages(
         &self,
         query: RechargePackageListQuery,
@@ -586,8 +663,9 @@ impl SqliteCommerceRechargeStore {
         )
         .await?;
         let pack = load_recharge_pack(&mut tx, &command).await?;
+        let amount_major = minor_units_to_major_decimal(command.amount.as_str())?;
         let credited_points = compute_grant_amount(
-            command.amount.as_str(),
+            &amount_major,
             &command.currency_code,
             pack.as_ref().map(|item| item.bonus_points).unwrap_or(0),
             &settings,
@@ -624,6 +702,7 @@ impl SqliteCommerceRechargeStore {
 
         Ok(CreatePointsRechargeOrderOutcome {
             success: true,
+            order_id: command.order_id,
             order_no: command.order_no,
             out_trade_no: command.out_trade_no,
             amount: command.amount,
@@ -713,6 +792,27 @@ impl SqliteCommerceRechargeStore {
 
         row.as_ref()
             .map(map_points_recharge_fulfillment_context)
+            .transpose()
+    }
+
+    pub async fn load_account_value_fulfillment_context(
+        &self,
+        command: &FulfillAccountValueOrderCommand,
+    ) -> Result<Option<AccountValueFulfillmentContext>, CommerceServiceError> {
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        let row = sqlx::query(LOAD_ACCOUNT_VALUE_FULFILLMENT_CONTEXT)
+            .bind(&command.tenant_id)
+            .bind(&organization_id)
+            .bind(&command.owner_user_id)
+            .bind(&command.order_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|error| {
+                store_error("failed to load account value fulfillment context", error)
+            })?;
+
+        row.as_ref()
+            .map(map_account_value_fulfillment_context)
             .transpose()
     }
 
@@ -819,6 +919,86 @@ impl SqliteCommerceRechargeStore {
         Ok(())
     }
 
+    pub async fn reserve_account_value_fulfillment(
+        &self,
+        command: &FulfillAccountValueOrderCommand,
+        context: &AccountValueFulfillmentContext,
+    ) -> Result<(), CommerceServiceError> {
+        if context.already_fulfilled() || context.fulfillment_in_progress() {
+            return Ok(());
+        }
+
+        let now = current_query_timestamp();
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(|error| {
+                store_error(
+                    "failed to begin account value reservation transaction",
+                    error,
+                )
+            })?;
+
+        let updated = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET fulfillment_status = 'processing',
+                updated_at = ?
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+              AND owner_user_id = CAST(? AS TEXT)
+              AND id = CAST(? AS TEXT)
+              AND subject IN (
+                'token_bank_recharge',
+                'token_bank_plan_purchase',
+                'token_bank_plan_renewal',
+                'account_recharge_package',
+                'coupon_recharge'
+              )
+              AND LOWER(COALESCE(fulfillment_status, '')) NOT IN ('fulfilled', 'completed', 'processing')
+            "#,
+        )
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to reserve account value fulfillment", error))?;
+
+        if updated.rows_affected() == 0 {
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback account value reservation transaction",
+                    error,
+                )
+            })?;
+            let reloaded = self.load_account_value_fulfillment_context(command).await?;
+            if let Some(reloaded_context) = reloaded {
+                if reloaded_context.already_fulfilled()
+                    || reloaded_context.fulfillment_in_progress()
+                {
+                    return Ok(());
+                }
+            }
+            return Err(CommerceServiceError::conflict(
+                "account value fulfillment reservation could not be claimed",
+            ));
+        }
+
+        tx.commit().await.map_err(|error| {
+            store_error(
+                "failed to commit account value reservation transaction",
+                error,
+            )
+        })?;
+        Ok(())
+    }
+
     pub async fn release_points_recharge_fulfillment_reservation(
         &self,
         command: &FulfillPointsRechargeOrderCommand,
@@ -850,6 +1030,49 @@ impl SqliteCommerceRechargeStore {
         .map_err(|error| {
             store_error(
                 "failed to release points recharge fulfillment reservation",
+                error,
+            )
+        })?;
+        Ok(())
+    }
+
+    pub async fn release_account_value_fulfillment_reservation(
+        &self,
+        command: &FulfillAccountValueOrderCommand,
+        _context: &AccountValueFulfillmentContext,
+    ) -> Result<(), CommerceServiceError> {
+        let now = current_query_timestamp();
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET fulfillment_status = 'unfulfilled',
+                updated_at = ?
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+              AND owner_user_id = CAST(? AS TEXT)
+              AND id = CAST(? AS TEXT)
+              AND subject IN (
+                'token_bank_recharge',
+                'token_bank_plan_purchase',
+                'token_bank_plan_renewal',
+                'account_recharge_package',
+                'coupon_recharge'
+              )
+              AND LOWER(COALESCE(fulfillment_status, '')) = 'processing'
+            "#,
+        )
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| {
+            store_error(
+                "failed to release account value fulfillment reservation",
                 error,
             )
         })?;
@@ -945,6 +1168,91 @@ impl SqliteCommerceRechargeStore {
             &context.order_no,
             context.points,
         ))
+    }
+
+    pub async fn commit_account_value_fulfillment(
+        &self,
+        command: FulfillAccountValueOrderCommand,
+        context: &AccountValueFulfillmentContext,
+    ) -> Result<FulfillAccountValueOrderOutcome, CommerceServiceError> {
+        if context.already_fulfilled() {
+            return Ok(FulfillAccountValueOrderOutcome::replayed(context));
+        }
+
+        let now = current_query_timestamp();
+        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+        let mut tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(|error| {
+                store_error(
+                    "failed to begin account value fulfillment transaction",
+                    error,
+                )
+            })?;
+
+        let updated = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET status = 'paid',
+                payment_status = 'success',
+                fulfillment_status = 'fulfilled',
+                paid_at = COALESCE(NULLIF(paid_at, ''), ?),
+                updated_at = ?
+            WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
+              AND owner_user_id = CAST(? AS TEXT)
+              AND id = CAST(? AS TEXT)
+              AND subject IN (
+                'token_bank_recharge',
+                'token_bank_plan_purchase',
+                'token_bank_plan_renewal',
+                'account_recharge_package',
+                'coupon_recharge'
+              )
+              AND LOWER(COALESCE(fulfillment_status, '')) NOT IN ('fulfilled', 'completed')
+            "#,
+        )
+        .bind(&now)
+        .bind(&now)
+        .bind(&command.tenant_id)
+        .bind(&organization_id)
+        .bind(&organization_id)
+        .bind(&command.owner_user_id)
+        .bind(&command.order_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|error| store_error("failed to mark account value order fulfilled", error))?;
+
+        if updated.rows_affected() == 0 {
+            tx.rollback().await.map_err(|error| {
+                store_error(
+                    "failed to rollback account value fulfillment transaction",
+                    error,
+                )
+            })?;
+            let reloaded = self
+                .load_account_value_fulfillment_context(&command)
+                .await?;
+            if let Some(reloaded_context) = reloaded {
+                if reloaded_context.already_fulfilled() {
+                    return Ok(FulfillAccountValueOrderOutcome::replayed(&reloaded_context));
+                }
+            }
+            return Err(CommerceServiceError::conflict(
+                "account value order could not be marked fulfilled; verify payment state and ownership scope",
+            ));
+        }
+
+        tx.commit().await.map_err(|error| {
+            store_error(
+                "failed to commit account value fulfillment transaction",
+                error,
+            )
+        })?;
+
+        Ok(FulfillAccountValueOrderOutcome::fulfilled(context))
     }
 
     pub async fn rollback_points_recharge_fulfillment(
@@ -1228,7 +1536,7 @@ fn map_package_row(
         .to_ascii_uppercase();
     let bonus_points = required_non_negative_integer_cell(row, "bonus_points")?;
     let grant_amount = compute_grant_amount(
-        price_amount.as_str(),
+        &minor_units_to_major_decimal(price_amount.as_str())?,
         &currency_code,
         bonus_points,
         settings,
@@ -1542,7 +1850,7 @@ async fn insert_order_amount_breakdown(
         INSERT INTO commerce_order_amount_breakdown
             (id, tenant_id, order_id, original_amount, discount_amount, payable_amount, currency_code, created_at)
         VALUES
-            (?, CAST(? AS TEXT), ?, ?, '0.00', ?, ?, ?)
+            (?, CAST(? AS TEXT), ?, ?, '0', ?, ?, ?)
         "#,
     )
     .bind(format!("{}-amount", command.order_id))
@@ -1580,6 +1888,7 @@ fn recharge_outcome_from_checkout_status(
 ) -> CreatePointsRechargeOrderOutcome {
     CreatePointsRechargeOrderOutcome {
         success: true,
+        order_id: status.order_id,
         order_no: status.order_no,
         out_trade_no: status.out_trade_no,
         amount: status.amount,
@@ -1623,6 +1932,7 @@ fn map_checkout_status(
     let payment_method = normalize_method_key(&string_cell(row, "payment_method"));
 
     Ok(CheckoutStatusSnapshot {
+        order_id: string_cell(row, "order_id"),
         order_no: string_cell(row, "order_no"),
         out_trade_no: out_trade_no.clone(),
         amount: commerce_money_cell(row, "amount", "checkout amount")?,
@@ -1913,10 +2223,33 @@ fn commerce_money_cell(
     field_name: &str,
 ) -> Result<CommerceMoney, CommerceServiceError> {
     let value = string_cell(row, column);
-    let cents = money_cents(&value)
+    let normalized = normalize_money_minor_units(&value)
         .map_err(|_| CommerceServiceError::storage(format!("invalid {field_name}: {value}")))?;
-    CommerceMoney::new(&format_money_minor(cents))
+    CommerceMoney::new(&normalized)
         .map_err(|message| CommerceServiceError::storage(format!("{message}: {value}")))
+}
+
+fn normalize_money_minor_units(amount: &str) -> Result<String, CommerceServiceError> {
+    let value = amount.trim();
+    if value.contains('.') {
+        return money_cents(value).map(|cents| cents.to_string());
+    }
+    let parsed = value.parse::<i64>().map_err(|_| {
+        CommerceServiceError::storage(format!("invalid commerce money amount: {value}"))
+    })?;
+    if parsed < 0 {
+        return Err(CommerceServiceError::storage(format!(
+            "invalid commerce money amount: {value}"
+        )));
+    }
+    Ok(parsed.to_string())
+}
+
+fn minor_units_to_major_decimal(value: &str) -> Result<String, CommerceServiceError> {
+    let cents = value.trim().parse::<i64>().map_err(|_| {
+        CommerceServiceError::storage(format!("invalid commerce money minor amount: {value}"))
+    })?;
+    Ok(format_money_minor(cents))
 }
 
 fn format_money_minor(cents: i64) -> String {
@@ -2003,6 +2336,11 @@ struct DecimalSqlMatchKeys {
 }
 
 fn decimal_sql_match_keys(amount: &str) -> DecimalSqlMatchKeys {
+    let amount = if amount.contains('.') {
+        amount.to_string()
+    } else {
+        minor_units_to_major_decimal(amount).unwrap_or_else(|_| amount.to_string())
+    };
     let compact = amount
         .trim_end_matches('0')
         .trim_end_matches('.')
@@ -2102,10 +2440,28 @@ fn map_points_recharge_fulfillment_context(
         payment_status: string_cell(row, "payment_status"),
         payment_attempt_status: string_cell(row, "payment_attempt_status"),
         points,
-        amount: CommerceMoney::new(&string_cell(row, "amount"))
-            .map_err(CommerceServiceError::storage)?,
+        amount: commerce_money_cell(row, "amount", "points recharge amount")?,
         currency_code: string_cell(row, "currency_code"),
         billing_history_status: None,
+    })
+}
+
+fn map_account_value_fulfillment_context(
+    row: &sqlx::sqlite::SqliteRow,
+) -> Result<AccountValueFulfillmentContext, CommerceServiceError> {
+    let subject = AccountValueOrderSubject::parse(&string_cell(row, "subject"))?;
+    let target_asset = AccountValueAssetCode::parse(&string_cell(row, "target_asset"))?;
+    Ok(AccountValueFulfillmentContext {
+        order_id: string_cell(row, "order_id"),
+        order_no: string_cell(row, "order_no"),
+        subject,
+        target_asset,
+        order_status: string_cell(row, "order_status"),
+        fulfillment_status: string_cell(row, "fulfillment_status"),
+        payment_status: string_cell(row, "payment_status"),
+        payment_attempt_status: string_cell(row, "payment_attempt_status"),
+        grant_amount: commerce_money_cell(row, "grant_amount", "account value grant amount")?,
+        asset_unit_code: string_cell(row, "asset_unit_code"),
     })
 }
 
@@ -2170,6 +2526,52 @@ impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {
         command: MarkPointsRechargePaymentSucceededCommand,
     ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, ()> {
         Box::pin(async move { self.mark_points_recharge_payment_succeeded(command).await })
+    }
+}
+
+impl AccountValueFulfillmentStore for SqliteCommerceRechargeStore {
+    fn load_account_value_fulfillment_context<'a>(
+        &'a self,
+        command: &'a FulfillAccountValueOrderCommand,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<
+        'a,
+        Option<AccountValueFulfillmentContext>,
+    > {
+        Box::pin(async move { self.load_account_value_fulfillment_context(command).await })
+    }
+
+    fn reserve_account_value_fulfillment<'a>(
+        &'a self,
+        command: &'a FulfillAccountValueOrderCommand,
+        context: &'a AccountValueFulfillmentContext,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, ()> {
+        Box::pin(async move {
+            self.reserve_account_value_fulfillment(command, context)
+                .await
+        })
+    }
+
+    fn release_account_value_fulfillment_reservation<'a>(
+        &'a self,
+        command: &'a FulfillAccountValueOrderCommand,
+        context: &'a AccountValueFulfillmentContext,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, ()> {
+        Box::pin(async move {
+            self.release_account_value_fulfillment_reservation(command, context)
+                .await
+        })
+    }
+
+    fn commit_account_value_fulfillment<'a>(
+        &'a self,
+        command: FulfillAccountValueOrderCommand,
+        context: &'a AccountValueFulfillmentContext,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, FulfillAccountValueOrderOutcome>
+    {
+        Box::pin(async move {
+            self.commit_account_value_fulfillment(command, context)
+                .await
+        })
     }
 }
 

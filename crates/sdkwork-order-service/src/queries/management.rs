@@ -221,13 +221,7 @@ impl CancelManagementOrderCommand {
         order_id: &str,
         cancel_reason: Option<&str>,
     ) -> Result<Self, CommerceServiceError> {
-        Self::with_cancel_type(
-            tenant_id,
-            organization_id,
-            order_id,
-            cancel_reason,
-            None,
-        )
+        Self::with_cancel_type(tenant_id, organization_id, order_id, cancel_reason, None)
     }
 
     pub fn with_cancel_type(
@@ -256,13 +250,7 @@ impl CloseManagementOrderCommand {
         order_id: &str,
         close_reason: Option<&str>,
     ) -> Result<Self, CommerceServiceError> {
-        Self::with_close_type(
-            tenant_id,
-            organization_id,
-            order_id,
-            close_reason,
-            None,
-        )
+        Self::with_close_type(tenant_id, organization_id, order_id, close_reason, None)
     }
 
     pub fn with_close_type(
@@ -354,7 +342,9 @@ mod tests {
 
     #[test]
     fn list_query_rejects_invalid_page_size() {
-        assert!(OrderManagementListQuery::new("t1", None, None, None, Some(1), Some(1000)).is_err());
+        assert!(
+            OrderManagementListQuery::new("t1", None, None, None, Some(1), Some(1000)).is_err()
+        );
         assert!(OrderManagementListQuery::new("t1", None, None, None, Some(1), Some(0)).is_err());
     }
 

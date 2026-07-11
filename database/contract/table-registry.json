@@ -48,6 +48,51 @@
       "referenceOnly": true
     },
     {
+      "name": "commerce_recharge_package",
+      "owner": "sdkwork-order",
+      "profile": "reference_data",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-account-value",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_account_value_package",
+      "owner": "sdkwork-order",
+      "profile": "reference_data",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-account-value",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_token_bank_plan",
+      "owner": "sdkwork-order",
+      "profile": "reference_data",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-account-value",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_order_refund_request",
+      "owner": "sdkwork-order",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-account-value",
+      "referenceOnly": false
+    },
+    {
+      "name": "commerce_order_withdrawal_request",
+      "owner": "sdkwork-order",
+      "profile": "user_entity",
+      "complianceLevel": "L2",
+      "engine": ["postgres", "sqlite"],
+      "migration": "order-account-value",
+      "referenceOnly": false
+    },
+    {
       "name": "commerce_after_sales_request",
       "owner": "sdkwork-order",
       "profile": "user_entity",

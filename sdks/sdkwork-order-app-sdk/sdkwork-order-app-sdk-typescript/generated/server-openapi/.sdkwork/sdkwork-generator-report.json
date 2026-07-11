@@ -12,7 +12,7 @@
   "mode": "apply",
   "hasChanges": true,
   "hasDestructiveChanges": false,
-  "changeFingerprint": "6b56c447552c3b8891923e05fa538a39e4a6f8134cd51c060aeb18fc2f8ab8aa",
+  "changeFingerprint": "13aaf0e68664045cfb15892f4123c3692f7c496d9e681a815d9c6f332c0feb6b",
   "changeImpact": {
     "schemaVersion": 1,
     "areas": [
@@ -40,6 +40,7 @@
           "src/api/payments.ts",
           "src/api/recharges.ts",
           "src/api/shipments.ts",
+          "src/api/withdrawals.ts",
           "src/http/client.ts",
           "src/sdk.ts"
         ]
@@ -47,15 +48,16 @@
       {
         "area": "models",
         "paths": [
+          "src/types/account-value-request-response.ts",
           "src/types/after-sales-item.ts",
           "src/types/after-sales-request-response.ts",
           "src/types/after-sales-request.ts",
-          "src/types/after-sales-requests-create-response.ts",
+          "src/types/after-sales-requests-create-response201.ts",
           "src/types/after-sales-requests-retrieve-response.ts",
           "src/types/after-sales-requests-update-response.ts",
           "src/types/after-sales-return-shipment-response.ts",
           "src/types/after-sales-return-shipment.ts",
-          "src/types/after-sales-return-shipments-create-response.ts",
+          "src/types/after-sales-return-shipments-create-response201.ts",
           "src/types/commerce-operation-command.ts",
           "src/types/common.ts",
           "src/types/create-after-sales-request-item.ts",
@@ -68,6 +70,7 @@
           "src/types/page-info.ts",
           "src/types/problem-detail.ts",
           "src/types/recharge-order-create-command.ts",
+          "src/types/refund-request-create-command.ts",
           "src/types/sdk-work-api-response.ts",
           "src/types/sdk-work-command-data.ts",
           "src/types/sdk-work-command-response.ts",
@@ -78,7 +81,9 @@
           "src/types/sdk-work-resource-response.ts",
           "src/types/shop-readiness-item.ts",
           "src/types/shop-readiness.ts",
-          "src/types/update-after-sales-request.ts"
+          "src/types/token-bank-plan-response.ts",
+          "src/types/update-after-sales-request.ts",
+          "src/types/withdrawal-request-create-command.ts"
         ]
       },
       {
@@ -246,21 +251,21 @@
     "localVersions": []
   },
   "stats": {
-    "totalFiles": 61,
-    "models": 30,
-    "apis": 8,
-    "types": 32
+    "totalFiles": 66,
+    "models": 34,
+    "apis": 9,
+    "types": 36
   },
   "warnings": [],
   "syncSummary": {
     "dryRun": false,
     "controlPlaneEnabled": true,
-    "writtenFiles": 61,
+    "writtenFiles": 66,
     "skippedScaffoldFiles": 0,
     "skippedUnchangedGeneratedFiles": 0,
     "deletedGeneratedFiles": 0,
     "changeSummaryPath": ".sdkwork/sdkwork-generator-changes.json",
-    "changeFingerprint": "6b56c447552c3b8891923e05fa538a39e4a6f8134cd51c060aeb18fc2f8ab8aa",
+    "changeFingerprint": "13aaf0e68664045cfb15892f4123c3692f7c496d9e681a815d9c6f332c0feb6b",
     "changes": {
       "createdGeneratedFiles": [
         "bin/publish-core.mjs",
@@ -284,20 +289,22 @@
         "src/api/payments.ts",
         "src/api/recharges.ts",
         "src/api/shipments.ts",
+        "src/api/withdrawals.ts",
         "src/auth/index.ts",
         "src/http/client.ts",
         "src/http/index.ts",
         "src/index.ts",
         "src/sdk.ts",
+        "src/types/account-value-request-response.ts",
         "src/types/after-sales-item.ts",
         "src/types/after-sales-request-response.ts",
         "src/types/after-sales-request.ts",
-        "src/types/after-sales-requests-create-response.ts",
+        "src/types/after-sales-requests-create-response201.ts",
         "src/types/after-sales-requests-retrieve-response.ts",
         "src/types/after-sales-requests-update-response.ts",
         "src/types/after-sales-return-shipment-response.ts",
         "src/types/after-sales-return-shipment.ts",
-        "src/types/after-sales-return-shipments-create-response.ts",
+        "src/types/after-sales-return-shipments-create-response201.ts",
         "src/types/commerce-operation-command.ts",
         "src/types/common.ts",
         "src/types/create-after-sales-request-item.ts",
@@ -310,6 +317,7 @@
         "src/types/page-info.ts",
         "src/types/problem-detail.ts",
         "src/types/recharge-order-create-command.ts",
+        "src/types/refund-request-create-command.ts",
         "src/types/sdk-work-api-response.ts",
         "src/types/sdk-work-command-data.ts",
         "src/types/sdk-work-command-response.ts",
@@ -320,7 +328,9 @@
         "src/types/sdk-work-resource-response.ts",
         "src/types/shop-readiness-item.ts",
         "src/types/shop-readiness.ts",
+        "src/types/token-bank-plan-response.ts",
         "src/types/update-after-sales-request.ts",
+        "src/types/withdrawal-request-create-command.ts",
         "tsconfig.json"
       ],
       "updatedGeneratedFiles": [],
@@ -360,6 +370,7 @@
             "src/api/payments.ts",
             "src/api/recharges.ts",
             "src/api/shipments.ts",
+            "src/api/withdrawals.ts",
             "src/http/client.ts",
             "src/sdk.ts"
           ]
@@ -367,15 +378,16 @@
         {
           "area": "models",
           "paths": [
+            "src/types/account-value-request-response.ts",
             "src/types/after-sales-item.ts",
             "src/types/after-sales-request-response.ts",
             "src/types/after-sales-request.ts",
-            "src/types/after-sales-requests-create-response.ts",
+            "src/types/after-sales-requests-create-response201.ts",
             "src/types/after-sales-requests-retrieve-response.ts",
             "src/types/after-sales-requests-update-response.ts",
             "src/types/after-sales-return-shipment-response.ts",
             "src/types/after-sales-return-shipment.ts",
-            "src/types/after-sales-return-shipments-create-response.ts",
+            "src/types/after-sales-return-shipments-create-response201.ts",
             "src/types/commerce-operation-command.ts",
             "src/types/common.ts",
             "src/types/create-after-sales-request-item.ts",
@@ -388,6 +400,7 @@
             "src/types/page-info.ts",
             "src/types/problem-detail.ts",
             "src/types/recharge-order-create-command.ts",
+            "src/types/refund-request-create-command.ts",
             "src/types/sdk-work-api-response.ts",
             "src/types/sdk-work-command-data.ts",
             "src/types/sdk-work-command-response.ts",
@@ -398,7 +411,9 @@
             "src/types/sdk-work-resource-response.ts",
             "src/types/shop-readiness-item.ts",
             "src/types/shop-readiness.ts",
-            "src/types/update-after-sales-request.ts"
+            "src/types/token-bank-plan-response.ts",
+            "src/types/update-after-sales-request.ts",
+            "src/types/withdrawal-request-create-command.ts"
           ]
         },
         {

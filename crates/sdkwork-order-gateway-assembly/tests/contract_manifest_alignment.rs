@@ -18,7 +18,9 @@ fn order_service_contract_operations_are_declared_on_http_manifest() {
         .chain(contract.read_queries.iter())
     {
         assert!(
-            manifest_ops.iter().any(|candidate| candidate == operation_id),
+            manifest_ops
+                .iter()
+                .any(|candidate| candidate == operation_id),
             "contract operation {operation_id} must be declared on app or backend HTTP manifest"
         );
     }

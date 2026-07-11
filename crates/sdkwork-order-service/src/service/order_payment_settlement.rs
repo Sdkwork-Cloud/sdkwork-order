@@ -1,9 +1,11 @@
 use sdkwork_contract_service::CommerceServiceError;
 
 use crate::{
-    default_fulfill_points_recharge_command, fulfill_points_recharge_order,
+    default_fulfill_account_value_order_command, default_fulfill_points_recharge_command,
+    fulfill_account_value_order, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
     points_recharge_payment_success_idempotency_key, AccountPointsCreditPort,
+    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
     MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
     MembershipPurchaseFulfillmentRequest, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationPort, PointsRechargeFulfillmentStore,
@@ -12,6 +14,11 @@ use crate::{
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum OrderSubjectKind {
     PointsRecharge,
+    TokenBankRecharge,
+    TokenBankPlanPurchase,
+    TokenBankPlanRenewal,
+    AccountRechargePackage,
+    CouponRecharge,
     Product,
     VirtualGoods,
     Membership,
@@ -23,6 +30,19 @@ impl OrderSubjectKind {
     pub fn parse(subject: Option<&str>) -> Self {
         match subject.map(str::trim).filter(|value| !value.is_empty()) {
             Some(value) if value.eq_ignore_ascii_case("points_recharge") => Self::PointsRecharge,
+            Some(value) if value.eq_ignore_ascii_case("token_bank_recharge") => {
+                Self::TokenBankRecharge
+            }
+            Some(value) if value.eq_ignore_ascii_case("token_bank_plan_purchase") => {
+                Self::TokenBankPlanPurchase
+            }
+            Some(value) if value.eq_ignore_ascii_case("token_bank_plan_renewal") => {
+                Self::TokenBankPlanRenewal
+            }
+            Some(value) if value.eq_ignore_ascii_case("account_recharge_package") => {
+                Self::AccountRechargePackage
+            }
+            Some(value) if value.eq_ignore_ascii_case("coupon_recharge") => Self::CouponRecharge,
             Some(value) if value.eq_ignore_ascii_case("product") => Self::Product,
             Some(value) if value.eq_ignore_ascii_case("virtual_goods") => Self::VirtualGoods,
             Some(value) if value.eq_ignore_ascii_case("membership") => Self::Membership,
@@ -33,7 +53,27 @@ impl OrderSubjectKind {
     }
 
     pub fn is_fulfillment_implemented(self) -> bool {
-        matches!(self, Self::PointsRecharge | Self::Membership)
+        matches!(
+            self,
+            Self::PointsRecharge
+                | Self::TokenBankRecharge
+                | Self::TokenBankPlanPurchase
+                | Self::TokenBankPlanRenewal
+                | Self::AccountRechargePackage
+                | Self::CouponRecharge
+                | Self::Membership
+        )
+    }
+
+    fn account_value_subject(self) -> Option<AccountValueOrderSubject> {
+        match self {
+            Self::TokenBankRecharge => Some(AccountValueOrderSubject::TokenBankRecharge),
+            Self::TokenBankPlanPurchase => Some(AccountValueOrderSubject::TokenBankPlanPurchase),
+            Self::TokenBankPlanRenewal => Some(AccountValueOrderSubject::TokenBankPlanRenewal),
+            Self::AccountRechargePackage => Some(AccountValueOrderSubject::AccountRechargePackage),
+            Self::CouponRecharge => Some(AccountValueOrderSubject::CouponRecharge),
+            _ => None,
+        }
     }
 }
 
@@ -48,10 +88,12 @@ pub struct OwnerOrderSettlementOutcome {
     pub fulfillment_status: String,
 }
 
-pub async fn settle_owner_order_after_payment_success<S, P, M, Payment>(
+pub async fn settle_owner_order_after_payment_success<S, A, P, L, M, Payment>(
     payment_store: &Payment,
     recharge_store: &S,
+    account_value_store: &A,
     credit_port: &P,
+    account_value_ledger_port: &L,
     membership_port: &M,
     attempt: &OrderPaymentSettlementAttempt,
     order_subject: Option<&str>,
@@ -59,7 +101,9 @@ pub async fn settle_owner_order_after_payment_success<S, P, M, Payment>(
 ) -> Result<OwnerOrderSettlementOutcome, CommerceServiceError>
 where
     S: PointsRechargeFulfillmentStore,
+    A: AccountValueFulfillmentStore,
     P: AccountPointsCreditPort + ?Sized,
+    L: AccountValueLedgerPort + ?Sized,
     M: MembershipPurchaseFulfillmentPort + ?Sized,
     Payment: OwnerOrderPaymentConfirmationPort + ?Sized,
 {
@@ -76,7 +120,9 @@ where
     let fulfillment = dispatch_subject_fulfillment(
         subject_kind,
         recharge_store,
+        account_value_store,
         credit_port,
+        account_value_ledger_port,
         membership_port,
         attempt,
         &payment_outcome.paid_at,
@@ -103,10 +149,12 @@ struct SubjectFulfillmentOutcome {
     status: String,
 }
 
-async fn dispatch_subject_fulfillment<S, P, M>(
+async fn dispatch_subject_fulfillment<S, A, P, L, M>(
     subject: OrderSubjectKind,
     recharge_store: &S,
+    account_value_store: &A,
     credit_port: &P,
+    account_value_ledger_port: &L,
     membership_port: &M,
     attempt: &OrderPaymentSettlementAttempt,
     paid_at: &str,
@@ -114,18 +162,42 @@ async fn dispatch_subject_fulfillment<S, P, M>(
 ) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
 where
     S: PointsRechargeFulfillmentStore,
+    A: AccountValueFulfillmentStore,
     P: AccountPointsCreditPort + ?Sized,
+    L: AccountValueLedgerPort + ?Sized,
     M: MembershipPurchaseFulfillmentPort + ?Sized,
 {
     match subject {
         OrderSubjectKind::PointsRecharge => {
-            settle_points_recharge_subject(recharge_store, credit_port, attempt, paid_at, request_no)
-                .await
+            settle_points_recharge_subject(
+                recharge_store,
+                credit_port,
+                attempt,
+                paid_at,
+                request_no,
+            )
+            .await
+        }
+        OrderSubjectKind::TokenBankRecharge
+        | OrderSubjectKind::TokenBankPlanPurchase
+        | OrderSubjectKind::TokenBankPlanRenewal
+        | OrderSubjectKind::AccountRechargePackage
+        | OrderSubjectKind::CouponRecharge => {
+            settle_account_value_subject(
+                subject,
+                account_value_store,
+                account_value_ledger_port,
+                attempt,
+                request_no,
+            )
+            .await
         }
         OrderSubjectKind::Membership => {
             settle_membership_subject(membership_port, attempt, request_no).await
         }
-        OrderSubjectKind::Product | OrderSubjectKind::VirtualGoods | OrderSubjectKind::CouponPackage => {
+        OrderSubjectKind::Product
+        | OrderSubjectKind::VirtualGoods
+        | OrderSubjectKind::CouponPackage => {
             tracing::info!(
                 target = "order.settlement",
                 order_id = %attempt.order_id,
@@ -153,6 +225,40 @@ where
             })
         }
     }
+}
+
+async fn settle_account_value_subject<A, L>(
+    subject: OrderSubjectKind,
+    account_value_store: &A,
+    account_value_ledger_port: &L,
+    attempt: &OrderPaymentSettlementAttempt,
+    request_no: &str,
+) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
+where
+    A: AccountValueFulfillmentStore,
+    L: AccountValueLedgerPort + ?Sized,
+{
+    let account_value_subject = subject.account_value_subject().ok_or_else(|| {
+        CommerceServiceError::validation("order subject does not support account value fulfillment")
+    })?;
+    let command = default_fulfill_account_value_order_command(
+        account_value_subject,
+        &attempt.tenant_id,
+        attempt.organization_id.as_deref(),
+        &attempt.owner_user_id,
+        &attempt.order_id,
+        request_no,
+    )?;
+    let outcome =
+        fulfill_account_value_order(account_value_store, account_value_ledger_port, command)
+            .await?;
+
+    Ok(SubjectFulfillmentOutcome {
+        accepted: outcome.accepted,
+        replayed: outcome.replayed,
+        points_credited: 0,
+        status: outcome.fulfillment_status,
+    })
 }
 
 async fn settle_points_recharge_subject<S, P>(

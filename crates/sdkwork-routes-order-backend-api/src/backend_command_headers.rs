@@ -49,15 +49,12 @@ pub fn validate_backend_write_payload(
     payload: &impl Serialize,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<BackendWriteCommandHeaders, Response> {
-    let parsed =
-        parse_required_write_command_headers(headers, fallback_request_no)
-            .map_err(|error| write_command_header_error_to_response(context, error))?;
+    let parsed = parse_required_write_command_headers(headers, fallback_request_no)
+        .map_err(|error| write_command_header_error_to_response(context, error))?;
     let expected_hash = stable_json_request_hash(scope, payload).map_err(|_| {
         write_command_header_error_to_response(
             context,
-            WriteCommandHeaderError::InvalidHeader(
-                "command payload must serialize".to_string(),
-            ),
+            WriteCommandHeaderError::InvalidHeader("command payload must serialize".to_string()),
         )
     })?;
     if expected_hash.trim() != parsed.request_hash.trim() {
@@ -96,7 +93,9 @@ fn required_text_header(
         .ok_or(WriteCommandHeaderError::MissingHeader(name))?
         .to_str()
         .map(str::trim)
-        .map_err(|_| WriteCommandHeaderError::InvalidHeader(format!("{name} header value is invalid")))?;
+        .map_err(|_| {
+            WriteCommandHeaderError::InvalidHeader(format!("{name} header value is invalid"))
+        })?;
     if value.is_empty() {
         return Err(WriteCommandHeaderError::MissingHeader(name));
     }

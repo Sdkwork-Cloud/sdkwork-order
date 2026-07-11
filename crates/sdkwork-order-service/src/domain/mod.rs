@@ -1,10 +1,15 @@
+mod account_value;
 mod fulfillment;
 mod membership;
 mod recharge;
 
-pub use fulfillment::{
-    FulfillPointsRechargeOrderOutcome, PointsRechargeFulfillmentContext,
+pub use account_value::{
+    AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueOrderSubject,
+    AccountValuePackageItem, AccountValuePackageListPage, AccountValueRequestListPage,
+    AccountValueRequestView, CreateAccountRechargeOrderOutcome, FulfillAccountValueOrderOutcome,
+    TokenBankPlanItem, TokenBankPlanListPage, TokenBankPlanPeriod,
 };
+pub use fulfillment::{FulfillPointsRechargeOrderOutcome, PointsRechargeFulfillmentContext};
 pub use membership::CreateMembershipOrderOutcome;
 pub use recharge::{
     CheckoutStatusSnapshot, CreatePointsRechargeOrderOutcome, RechargeGrantPreview,
@@ -88,31 +93,31 @@ impl OrderAmountBreakdown {
             ));
         }
 
-        let total_cents = items.iter().try_fold(0_i64, |total, item| {
-            let unit_cents = money_to_cents(item.unit_price.as_str())?;
-            let line_cents = unit_cents
+        let total_amount = items.iter().try_fold(0_i64, |total, item| {
+            let unit_amount = money_to_minor_units(item.unit_price.as_str())?;
+            let line_amount = unit_amount
                 .checked_mul(i64::from(item.quantity))
                 .ok_or_else(|| {
                     CommerceServiceError::validation("order line amount is too large")
                 })?;
             total
-                .checked_add(line_cents)
+                .checked_add(line_amount)
                 .ok_or_else(|| CommerceServiceError::validation("order amount is too large"))
         })?;
-        let discount_cents = money_to_cents(discount_amount.as_str())?;
-        if discount_cents > total_cents {
+        let discount_amount_minor = money_to_minor_units(discount_amount.as_str())?;
+        if discount_amount_minor > total_amount {
             return Err(CommerceServiceError::validation(
                 "discount cannot exceed original amount",
             ));
         }
-        let payable_cents = total_cents
-            .checked_sub(discount_cents)
+        let payable_amount = total_amount
+            .checked_sub(discount_amount_minor)
             .ok_or_else(|| CommerceServiceError::validation("payable amount is invalid"))?;
 
         Ok(Self {
             discount_amount,
-            original_amount: cents_to_money(total_cents),
-            payable_amount: cents_to_money(payable_cents),
+            original_amount: minor_units_to_money(total_amount),
+            payable_amount: minor_units_to_money(payable_amount),
         })
     }
 }
@@ -161,42 +166,12 @@ impl PaidOrderReference {
     }
 }
 
-fn money_to_cents(value: &str) -> Result<i64, CommerceServiceError> {
-    let mut parts = value.split('.');
-    let integer = parts
-        .next()
-        .unwrap_or("0")
+fn money_to_minor_units(value: &str) -> Result<i64, CommerceServiceError> {
+    value
         .parse::<i64>()
-        .map_err(|_| CommerceServiceError::validation("money amount is too large"))?;
-    let fraction = parts.next().unwrap_or("0");
-    if parts.next().is_some() {
-        return Err(CommerceServiceError::validation(
-            "money amount must contain at most one decimal point",
-        ));
-    }
-    let cents = match fraction.len() {
-        0 => 0,
-        1 => fraction
-            .parse::<i64>()
-            .map_err(|_| CommerceServiceError::validation("money cents are invalid"))?
-            .checked_mul(10)
-            .ok_or_else(|| CommerceServiceError::validation("money amount is too large"))?,
-        2 => fraction
-            .parse::<i64>()
-            .map_err(|_| CommerceServiceError::validation("money cents are invalid"))?,
-        _ => {
-            return Err(CommerceServiceError::validation(
-                "money amount scale exceeds cents",
-            ))
-        }
-    };
-    integer
-        .checked_mul(100)
-        .and_then(|major_cents| major_cents.checked_add(cents))
-        .ok_or_else(|| CommerceServiceError::validation("money amount is too large"))
+        .map_err(|_| CommerceServiceError::validation("money amount is too large"))
 }
 
-fn cents_to_money(cents: i64) -> CommerceMoney {
-    CommerceMoney::new(&format!("{}.{:02}", cents / 100, cents % 100))
-        .expect("computed money should be valid")
+fn minor_units_to_money(amount: i64) -> CommerceMoney {
+    CommerceMoney::new(&amount.to_string()).expect("computed money should be valid")
 }

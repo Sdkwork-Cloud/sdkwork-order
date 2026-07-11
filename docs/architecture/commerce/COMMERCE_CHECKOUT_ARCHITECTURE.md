@@ -28,7 +28,7 @@ sequenceDiagram
 
     Client->>Order: checkout.sessions.create
     Client->>Order: checkout.sessions.orders.create
-    Client->>Order: orders.pay
+    Client->>Order: orders.payments.create
     Order->>Payment: pay_owner_order
     Payment-->>Client: paymentParams.cashierUrl
     Client->>Cashier: open cashierUrl
@@ -48,7 +48,7 @@ sequenceDiagram
     participant Account as account-backend
 
     Client->>Order: recharges.orders.create
-    Client->>Order: orders.pay
+    Client->>Order: orders.payments.create
     Order->>Payment: pay_owner_order
     Payment-->>Client: paymentParams.cashierUrl
     Note over Order: PSP webhook on order gateway
@@ -88,7 +88,7 @@ sequenceDiagram
     participant Payment as payment port
 
     Client->>Order: memberships.orders.create
-    Client->>Order: orders.pay
+    Client->>Order: orders.payments.create
     Order->>Payment: pay_owner_order
     Note over Order: PSP webhook on order gateway
     Order->>Payment: ingest webhook
@@ -108,7 +108,7 @@ Cashier deep-links are built by `sdkwork-utils-rust`:
 - `commerce_cashier_scene(order_subject)` — maps `points_recharge` → `recharge`, `product` → `checkout`
 - `build_commerce_cashier_url(scene, order_id, out_trade_no)`
 
-`orders.pay` and recharge pay outcomes expose:
+`orders.payments.create` and recharge pay outcomes expose:
 
 | `paymentParams` key | Meaning |
 | --- | --- |
@@ -131,7 +131,7 @@ All application packages **must** consume composed SDKs (`@sdkwork/order-app-sdk
 | Order center (standalone) | `apps/sdkwork-order-pc` — list, detail, pay, cancel |
 | Order center (composed) | `sdkwork-mall-pc-checkout`, `sdkwork-account-pc-wallet` embed `@sdkwork/order-app-sdk` |
 | Checkout | `sdkwork-mall-pc-checkout` — `checkout.*` + `recharges.*` |
-| Cashier | `sdkwork-payment-pc` or host shell route; navigate to `paymentParams.cashierUrl` after `orders.pay` |
+| Cashier | `sdkwork-payment-pc` or host shell route; navigate to `paymentParams.cashierUrl` after `orders.payments.create` |
 | Service wiring | `apps/sdkwork-order-common/packages/sdkwork-order-service` facade over SDK ports |
 
 ### 4.2 Backend / service-to-service

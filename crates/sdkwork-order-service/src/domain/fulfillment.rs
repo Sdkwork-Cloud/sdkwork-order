@@ -59,11 +59,7 @@ impl PointsRechargeFulfillmentContext {
 }
 
 impl FulfillPointsRechargeOrderOutcome {
-    pub fn replayed(
-        order_id: &str,
-        order_no: &str,
-        points_credited: i64,
-    ) -> Self {
+    pub fn replayed(order_id: &str, order_no: &str, points_credited: i64) -> Self {
         Self {
             accepted: true,
             replayed: true,
@@ -74,11 +70,7 @@ impl FulfillPointsRechargeOrderOutcome {
         }
     }
 
-    pub fn fulfilled(
-        order_id: &str,
-        order_no: &str,
-        points_credited: i64,
-    ) -> Self {
+    pub fn fulfilled(order_id: &str, order_no: &str, points_credited: i64) -> Self {
         Self {
             accepted: true,
             replayed: false,

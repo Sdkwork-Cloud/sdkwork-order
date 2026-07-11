@@ -19,9 +19,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sdkwork/order-pc-admin-core": "workspace:*",
     "@sdkwork/order-pc-core": "workspace:*",
-    "@sdkwork/order-service": "workspace:*",
-    "@sdkwork/order-backend-sdk": "workspace:*"
+    "@sdkwork/order-service": "workspace:*"
   },
   "devDependencies": {
     "@sdkwork/ui-pc-react": "workspace:*",

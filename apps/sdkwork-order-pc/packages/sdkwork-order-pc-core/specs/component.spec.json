@@ -17,15 +17,52 @@
     "sdkDependencies": [
       {
         "workspace": "sdkwork-iam-app-sdk",
+        "permissionModuleId": "iam-kernel",
         "surface": "app-api",
         "credentialMode": "authenticated-app-api"
       },
       {
         "workspace": "sdkwork-order-app-sdk",
+        "permissionModuleId": "commerce",
         "surface": "app-api",
         "credentialMode": "authenticated-app-api"
       }
     ],
+    "permissionComposition": {
+      "inheritanceMode": "module-catalog-with-overrides",
+      "moduleCatalogRefs": [
+        {
+          "moduleId": "commerce",
+          "manifestRef": "../../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json",
+          "inheritPermissions": true,
+          "inheritRoles": true
+        },
+        {
+          "moduleId": "iam-kernel",
+          "manifestRef": "../../../../../../sdkwork-iam/iam/modules/iam-kernel/iam.module.manifest.json",
+          "inheritPermissions": true,
+          "inheritRoles": false
+        }
+      ],
+      "bootstrapAccessTokenScope": {
+        "inheritFrom": "sdkwork.app.config.json#backend.accessTokenPermissionScope",
+        "supplement": [],
+        "overrideReplace": false
+      },
+      "routePermissionHints": {
+        "inheritFromOpenApi": true,
+        "inheritFromModuleManifests": true,
+        "overrides": []
+      },
+      "consumerPolicy": {
+        "forbidLocalPermissionCatalogForDependencyDomains": true,
+        "allowExplicitOverridesOnly": true,
+        "allowFrontendHintsWithoutServerDuplication": true
+      },
+      "applicationModule": {
+        "manifestRef": "../../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json"
+      }
+    },
     "dependencyApiExports": [],
     "dependencyApiSurfaces": []
   }

@@ -72,22 +72,21 @@ impl HttpMembershipPurchaseFulfillmentAdapter {
         }
 
         let response = builder.send().await.map_err(|error| {
-            CommerceServiceError::storage(format!(
-                "membership fulfillment request failed: {error}"
-            ))
+            CommerceServiceError::storage(format!("membership fulfillment request failed: {error}"))
         })?;
 
         let status = response.status();
         if status.is_success() {
-            let payload = response.json::<FulfillmentEnvelope>().await.map_err(|error| {
-                CommerceServiceError::storage(format!(
-                    "membership fulfillment response decode failed: {error}"
-                ))
-            })?;
+            let payload = response
+                .json::<FulfillmentEnvelope>()
+                .await
+                .map_err(|error| {
+                    CommerceServiceError::storage(format!(
+                        "membership fulfillment response decode failed: {error}"
+                    ))
+                })?;
             let item = payload.data.item.ok_or_else(|| {
-                CommerceServiceError::storage(
-                    "membership fulfillment response missing data.item",
-                )
+                CommerceServiceError::storage("membership fulfillment response missing data.item")
             })?;
             return Ok(MembershipPurchaseFulfillmentOutcome {
                 accepted: item.accepted,

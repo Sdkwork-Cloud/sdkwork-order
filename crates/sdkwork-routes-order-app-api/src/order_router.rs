@@ -29,7 +29,7 @@ use sqlx::{PgPool, SqlitePool};
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_command,
-    success_item, success_items, unauthorized, validation,
+    success_created_item, success_item, success_items, unauthorized, validation,
 };
 use crate::command_headers::{
     ensure_request_hash_matches, required_app_write_command_headers, validate_app_write_payload,
@@ -107,7 +107,6 @@ pub trait OwnerOrderPaymentStore: Send + Sync {
 #[derive(Debug, Deserialize)]
 struct OrderListQueryParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
     status: Option<String>,
 }
@@ -115,7 +114,6 @@ struct OrderListQueryParams {
 #[derive(Debug, Deserialize)]
 struct OrderPaymentListQueryParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
@@ -135,7 +133,6 @@ struct OrderPaymentRecordResponse {
 #[derive(Debug, Deserialize)]
 struct OrderEventListQueryParams {
     page: Option<i64>,
-    #[serde(rename = "pageSize", alias = "page_size")]
     page_size: Option<i64>,
 }
 
@@ -736,13 +733,16 @@ async fn pay_order(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let write_headers =
-        match validate_app_write_payload(ctx, &headers, "orders.pay", &body, |idempotency_key| {
-            format!("pay-{order_id}-{idempotency_key}")
-        }) {
-            Ok(value) => value,
-            Err(response) => return response,
-        };
+    let write_headers = match validate_app_write_payload(
+        ctx,
+        &headers,
+        "orders.payments.create",
+        &body,
+        |idempotency_key| format!("pay-{order_id}-{idempotency_key}"),
+    ) {
+        Ok(value) => value,
+        Err(response) => return response,
+    };
     let callback_payload = body
         .payment_password()
         .map(|password| serde_json::json!({ "paymentPassword": password }).to_string());
@@ -762,7 +762,7 @@ async fn pay_order(
     };
 
     match state.payments.pay_owner_order(command).await {
-        Ok(outcome) => success_item(ctx, map_pay_outcome(outcome)),
+        Ok(outcome) => success_created_item(ctx, map_pay_outcome(outcome)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -805,7 +805,7 @@ async fn create_order(
     }
 
     match state.store.create_owner_order(command).await {
-        Ok(outcome) => success_item(ctx, map_create_order(outcome)),
+        Ok(outcome) => success_created_item(ctx, map_create_order(outcome)),
         Err(error) => map_service_error(ctx, error),
     }
 }

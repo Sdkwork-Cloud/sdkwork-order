@@ -23,6 +23,18 @@ pub fn success_item<T: serde::Serialize>(context: Option<&WebRequestContext>, it
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
 }
 
+pub fn success_created_item<T: serde::Serialize>(
+    context: Option<&WebRequestContext>,
+    item: T,
+) -> Response {
+    let trace_id = resolve_trace_id(context);
+    let envelope = SdkWorkApiResponse::success(SdkWorkResourceData { item }, trace_id.clone());
+    attach_trace_header(
+        (StatusCode::CREATED, Json(envelope)).into_response(),
+        &trace_id,
+    )
+}
+
 /// 命令响应：`{ code: 0, data: { accepted: true, resourceId?, status? }, traceId }`。
 pub fn success_command(
     context: Option<&WebRequestContext>,

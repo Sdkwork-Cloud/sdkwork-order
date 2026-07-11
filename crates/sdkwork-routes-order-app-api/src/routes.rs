@@ -19,6 +19,7 @@ use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundl
 
 pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
     let credit_port = host.account_credit_port();
+    let account_value_ledger_port = host.account_value_ledger_port();
     let membership_port = host.membership_fulfillment_port();
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
@@ -46,6 +47,7 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
                 .merge(app_payment_webhook_router_with_postgres_pool(
                     pool,
                     credit_port,
+                    account_value_ledger_port,
                     membership_port,
                 ))
         }
@@ -70,6 +72,7 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
                 .merge(app_payment_webhook_router_with_sqlite_pool(
                     pool,
                     credit_port,
+                    account_value_ledger_port,
                     membership_port,
                 ))
         }

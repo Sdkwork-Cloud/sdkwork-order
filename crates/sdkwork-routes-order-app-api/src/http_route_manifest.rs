@@ -73,7 +73,7 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         HttpMethod::Post,
         "/app/v3/api/orders/{orderId}/payments",
         "orders",
-        "orders.pay",
+        "orders.payments.create",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
@@ -201,6 +201,12 @@ const HTTP_ROUTES: &[HttpRoute] = &[
     ),
     HttpRoute::dual_token(
         HttpMethod::Get,
+        "/app/v3/api/recharges/plans",
+        "recharges",
+        "recharges.plans.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
         "/app/v3/api/recharges/settings",
         "recharges",
         "recharges.settings.retrieve",
@@ -231,6 +237,38 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "recharges.orders.cancel",
     )
     .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/orders/refund_requests",
+        "orders",
+        "orders.refundRequests.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/orders/refund_requests",
+        "orders",
+        "orders.refundRequests.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/orders/refund_requests/{refundRequestId}",
+        "orders",
+        "orders.refundRequests.retrieve",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/withdrawals/requests",
+        "withdrawals",
+        "withdrawals.requests.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/withdrawals/requests/{withdrawalRequestId}",
+        "withdrawals",
+        "withdrawals.requests.retrieve",
+    ),
     // === Memberships ===
     HttpRoute::dual_token(
         HttpMethod::Post,

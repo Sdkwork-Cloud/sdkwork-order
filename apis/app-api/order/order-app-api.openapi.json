@@ -77,7 +77,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -303,7 +303,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -426,7 +426,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -665,7 +665,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -869,8 +869,8 @@
         "tags": [
           "orders"
         ],
-        "summary": "Orders pay.",
-        "operationId": "orders.pay",
+        "summary": "Orders payments create.",
+        "operationId": "orders.payments.create",
         "parameters": [
           {
             "name": "orderId",
@@ -891,7 +891,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -971,7 +971,7 @@
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-app-api",
         "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "orders",
+        "x-sdkwork-resource": "orders.payments",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
         "requestBody": {
@@ -1383,7 +1383,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -1985,7 +1985,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -2537,7 +2537,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -3446,12 +3446,6 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "recharges.packages",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
         "parameters": [
           {
             "name": "page",
@@ -3474,7 +3468,13 @@
               "default": 20
             }
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "recharges.packages",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/recharges/settings": {
@@ -3562,13 +3562,13 @@
             "AccessToken": []
           }
         ],
+        "parameters": [],
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-app-api",
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "recharges.settings",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "parameters": []
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/recharges/orders": {
@@ -3656,13 +3656,15 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "recharges.orders",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
         "parameters": [
+          {
+            "name": "subject",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "status",
             "in": "query",
@@ -3692,7 +3694,13 @@
               "default": 20
             }
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "recharges.orders",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
       },
       "post": {
         "tags": [
@@ -3701,8 +3709,8 @@
         "summary": "Recharges orders create.",
         "operationId": "recharges.orders.create",
         "responses": {
-          "200": {
-            "description": "Success",
+          "201": {
+            "description": "Created",
             "content": {
               "application/json": {
                 "schema": {
@@ -3778,12 +3786,6 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "recharges.orders",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
@@ -3805,7 +3807,13 @@
             }
           }
         },
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "recharges.orders",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/recharges/orders/{orderId}": {
@@ -3893,12 +3901,6 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "recharges.orders",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
         "parameters": [
           {
             "name": "orderId",
@@ -3908,7 +3910,13 @@
               "type": "string"
             }
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "recharges.orders",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/recharges/orders/{orderId}/cancel": {
@@ -3996,12 +4004,6 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "recharges.orders",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
         "parameters": [
           {
             "name": "orderId",
@@ -4031,7 +4033,13 @@
             }
           }
         },
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "recharges.orders",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
       }
     },
     "/app/v3/api/memberships/orders": {
@@ -4042,7 +4050,7 @@
         "summary": "Memberships orders create.",
         "operationId": "memberships.orders.create",
         "responses": {
-          "200": {
+          "201": {
             "description": "Success",
             "content": {
               "application/json": {
@@ -4147,6 +4155,688 @@
           }
         },
         "x-sdkwork-idempotent": true
+      }
+    },
+    "/app/v3/api/recharges/plans": {
+      "get": {
+        "tags": [
+          "recharges"
+        ],
+        "summary": "Token Bank plans list.",
+        "operationId": "recharges.plans.list",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "recharges.plans",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/orders/refund_requests": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Order refund requests list.",
+        "operationId": "orders.refundRequests.list",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 20
+            }
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "orders.refundRequests",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      },
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Order refund requests create.",
+        "operationId": "orders.refundRequests.create",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundRequestCreateCommand"
+              }
+            }
+          }
+        },
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "orders.refundRequests",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/orders/refund_requests/{refundRequestId}": {
+      "get": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Order refund requests retrieve.",
+        "operationId": "orders.refundRequests.retrieve",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "refundRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "orders.refundRequests",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/withdrawals/requests": {
+      "post": {
+        "tags": [
+          "withdrawals"
+        ],
+        "summary": "Withdrawal requests create.",
+        "operationId": "withdrawals.requests.create",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandRequestHash"
+          },
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequestCreateCommand"
+              }
+            }
+          }
+        },
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "withdrawals.requests",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
+    "/app/v3/api/withdrawals/requests/{withdrawalRequestId}": {
+      "get": {
+        "tags": [
+          "withdrawals"
+        ],
+        "summary": "Withdrawal requests retrieve.",
+        "operationId": "withdrawals.requests.retrieve",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "withdrawalRequestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "withdrawals.requests",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
       }
     }
   },
@@ -4860,7 +5550,37 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "subject": {
+            "type": "string",
+            "enum": [
+              "points_recharge",
+              "token_bank_recharge",
+              "token_bank_plan_purchase",
+              "token_bank_plan_renewal",
+              "account_recharge_package",
+              "coupon_recharge"
+            ],
+            "default": "points_recharge"
+          },
+          "targetAsset": {
+            "type": "string",
+            "enum": [
+              "points",
+              "token_bank",
+              "cash"
+            ]
+          },
           "amount": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "grantAmount": {
             "oneOf": [
               {
                 "type": "string"
@@ -4877,6 +5597,22 @@
             "type": "string"
           },
           "packageId": {
+            "type": "string"
+          },
+          "planCode": {
+            "type": "string"
+          },
+          "planPeriod": {
+            "type": "string",
+            "enum": [
+              "monthly",
+              "quarterly",
+              "yearly",
+              "continuous_monthly",
+              "continuous_yearly"
+            ]
+          },
+          "couponCode": {
             "type": "string"
           },
           "source": {
@@ -5096,6 +5832,162 @@
             }
           }
         ]
+      },
+      "RefundRequestCreateCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "originalOrderId",
+          "targetAsset",
+          "amount",
+          "currencyCode"
+        ],
+        "properties": {
+          "originalOrderId": {
+            "type": "string"
+          },
+          "targetAsset": {
+            "type": "string",
+            "enum": [
+              "points",
+              "token_bank",
+              "cash"
+            ]
+          },
+          "amount": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "reasonDetail": {
+            "type": "string"
+          }
+        }
+      },
+      "WithdrawalRequestCreateCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "amount",
+          "currencyCode"
+        ],
+        "properties": {
+          "asset": {
+            "type": "string",
+            "enum": [
+              "cash"
+            ],
+            "default": "cash"
+          },
+          "amount": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "payoutMethod": {
+            "type": "string"
+          },
+          "payoutAccountRef": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          }
+        }
+      },
+      "AccountValueRequestResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountValueRequestId": {
+            "type": "string"
+          },
+          "requestNo": {
+            "type": "string"
+          },
+          "originalOrderId": {
+            "type": "string"
+          },
+          "ownerUserId": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "targetAsset": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "providerReferenceId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenBankPlanResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "planCode": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "planPeriod": {
+            "type": "string"
+          },
+          "grantAmount": {
+            "type": "string"
+          },
+          "bonusAmount": {
+            "type": "string"
+          },
+          "priceAmount": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "renewalPolicy": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
       }
     },
     "parameters": {

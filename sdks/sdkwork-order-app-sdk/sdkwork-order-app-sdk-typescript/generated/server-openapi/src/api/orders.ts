@@ -1,32 +1,56 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, OrdersPaymentsWebhooksReceiveRequest, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
-export class OrdersPaymentsWebhooksApi {
-  private client: HttpClient;
-
-  constructor(client: HttpClient) {
-    this.client = client;
-  }
-
-
-/** Receive PSP payment webhook */
-  async receive(providerCode: string, body: OrdersPaymentsWebhooksReceiveRequest): Promise<SdkWorkCommandData> {
-    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), body, undefined, undefined, 'application/json');
-  }
+export interface OrdersRefundRequestsListParams {
+  status?: string;
+  page?: number;
+  pageSize?: number;
 }
 
-export class OrdersPaymentsApi {
+export interface OrdersRefundRequestsCreateParams {
+  idempotencyKey: string;
+  sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
+}
+
+export class OrdersRefundRequestsApi {
   private client: HttpClient;
-  public readonly webhooks: OrdersPaymentsWebhooksApi;
 
   constructor(client: HttpClient) {
     this.client = client;
-    this.webhooks = new OrdersPaymentsWebhooksApi(client);
   }
 
+
+/** Order refund requests list. */
+  async list(params?: OrdersRefundRequestsListParams): Promise<SdkWorkPageData> {
+    const query = buildQueryString([
+      { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
+      { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
+      { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
+    ]);
+    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query));
+  }
+
+/** Order refund requests create. */
+  async create(body: RefundRequestCreateCommand, params: OrdersRefundRequestsCreateParams): Promise<Record<string, unknown>> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.post<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), body, undefined, requestHeaders, 'application/json');
+  }
+
+/** Order refund requests retrieve. */
+  async retrieve(refundRequestId: string): Promise<Record<string, unknown>> {
+    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`));
+  }
 }
 
 export class OrdersStatusApi {
@@ -122,6 +146,50 @@ export class OrdersEventsApi {
   }
 }
 
+export class OrdersPaymentsWebhooksApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Receive PSP payment webhook */
+  async receive(providerCode: string, body: OrdersPaymentsWebhooksReceiveRequest): Promise<SdkWorkCommandData> {
+    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), body, undefined, undefined, 'application/json');
+  }
+}
+
+export interface OrdersPaymentsCreateParams {
+  idempotencyKey: string;
+  sdkworkRequestHash: string;
+  xIdempotencyFingerprint: string;
+}
+
+export class OrdersPaymentsApi {
+  private client: HttpClient;
+  public readonly webhooks: OrdersPaymentsWebhooksApi;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+    this.webhooks = new OrdersPaymentsWebhooksApi(client);
+  }
+
+
+/** Orders payments create. */
+  async create(orderId: string, body: CommerceOperationCommand, params: OrdersPaymentsCreateParams): Promise<Record<string, unknown>> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
+        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.post<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), body, undefined, requestHeaders, 'application/json');
+  }
+}
+
 export interface OrdersListParams {
   status?: string;
   page?: number;
@@ -129,12 +197,6 @@ export interface OrdersListParams {
 }
 
 export interface OrdersCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
-}
-
-export interface OrdersPayParams {
   idempotencyKey: string;
   sdkworkRequestHash: string;
   xIdempotencyFingerprint: string;
@@ -148,21 +210,23 @@ export interface OrdersCancelParams {
 
 export class OrdersApi {
   private client: HttpClient;
+  public readonly payments: OrdersPaymentsApi;
   public readonly events: OrdersEventsApi;
   public readonly cancellations: OrdersCancellationsApi;
   public readonly paymentSuccess: OrdersPaymentSuccessApi;
   public readonly statistics: OrdersStatisticsApi;
   public readonly status: OrdersStatusApi;
-  public readonly payments: OrdersPaymentsApi;
+  public readonly refundRequests: OrdersRefundRequestsApi;
 
   constructor(client: HttpClient) {
     this.client = client;
+    this.payments = new OrdersPaymentsApi(client);
     this.events = new OrdersEventsApi(client);
     this.cancellations = new OrdersCancellationsApi(client);
     this.paymentSuccess = new OrdersPaymentSuccessApi(client);
     this.statistics = new OrdersStatisticsApi(client);
     this.status = new OrdersStatusApi(client);
-    this.payments = new OrdersPaymentsApi(client);
+    this.refundRequests = new OrdersRefundRequestsApi(client);
   }
 
 
@@ -192,19 +256,6 @@ export class OrdersApi {
 /** Orders retrieve. */
   async retrieve(orderId: string): Promise<Record<string, unknown>> {
     return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
-  }
-
-/** Orders pay. */
-  async pay(orderId: string, body: CommerceOperationCommand, params: OrdersPayParams): Promise<Record<string, unknown>> {
-    const requestHeaders = buildRequestHeaders(
-      {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
-      },
-      {}
-    );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), body, undefined, requestHeaders, 'application/json');
   }
 
 /** Orders cancel. */

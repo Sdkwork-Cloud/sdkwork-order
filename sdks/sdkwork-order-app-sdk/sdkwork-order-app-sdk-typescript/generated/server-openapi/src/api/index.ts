@@ -8,3 +8,4 @@ export { FulfillmentsApi, createFulfillmentsApi } from './fulfillments';
 export { ShipmentsApi, createShipmentsApi } from './shipments';
 export { RechargesApi, createRechargesApi } from './recharges';
 export { MembershipsApi, createMembershipsApi } from './memberships';
+export { WithdrawalsApi, createWithdrawalsApi } from './withdrawals';

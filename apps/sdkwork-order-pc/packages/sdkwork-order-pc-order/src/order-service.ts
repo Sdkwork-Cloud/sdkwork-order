@@ -559,9 +559,9 @@ export function createSdkworkOrderService(
         paymentMethod: toSdkworkOrderOptionalString(input.paymentMethod),
         paymentPassword: toSdkworkOrderOptionalString(input.paymentPassword),
       };
-      const writeHeaders = createSdkworkWriteCommandHeaders("orders.pay", body);
+      const writeHeaders = createSdkworkWriteCommandHeaders("orders.payments.create", body);
       const result = unwrapSdkworkOrderResponse<RemotePaymentParams>(
-        await getOrderAppService().orders.pay(input.orderId, body, writeHeaders),
+        await getOrderAppService().orders.payments.create(input.orderId, body, writeHeaders),
         copy.payFailed,
       );
 

@@ -6,10 +6,10 @@ use sdkwork_order_service::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, points_recharge_fulfillment_idempotency_key,
     points_recharge_fulfillment_transaction_no, points_recharge_payment_success_idempotency_key,
-    AccountPointsCreditPort, FulfillPointsRechargeOrderCommand,
-    FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
-    OrderSubjectKind, POINTS_RECHARGE_LEDGER_BUSINESS_TYPE, PointsRechargeCreditOutcome,
+    AccountPointsCreditPort, FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
+    MarkPointsRechargePaymentSucceededCommand, OrderSubjectKind, PointsRechargeCreditOutcome,
     PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore,
+    POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
 };
 
 #[test]
@@ -39,7 +39,7 @@ fn fulfillment_context_rejects_unpaid_orders() {
         payment_status: "pending".to_owned(),
         payment_attempt_status: "pending".to_owned(),
         points: 100,
-        amount: CommerceMoney::new("10.00").expect("money"),
+        amount: CommerceMoney::new("1000").expect("money"),
         currency_code: "CNY".to_owned(),
         billing_history_status: Some("pending".to_owned()),
     };
@@ -57,7 +57,7 @@ fn fulfillment_context_accepts_succeeded_payment() {
         payment_status: "pending".to_owned(),
         payment_attempt_status: "succeeded".to_owned(),
         points: 100,
-        amount: CommerceMoney::new("10.00").expect("money"),
+        amount: CommerceMoney::new("1000").expect("money"),
         currency_code: "CNY".to_owned(),
         billing_history_status: Some("pending".to_owned()),
     };
@@ -81,7 +81,7 @@ async fn fulfill_points_recharge_order_compensates_when_commit_fails_after_credi
         payment_status: "success".to_owned(),
         payment_attempt_status: "succeeded".to_owned(),
         points: 80,
-        amount: CommerceMoney::new("8.00").expect("money"),
+        amount: CommerceMoney::new("800").expect("money"),
         currency_code: "CNY".to_owned(),
         billing_history_status: Some("pending".to_owned()),
     });
@@ -118,7 +118,7 @@ async fn fulfill_points_recharge_order_credits_account_then_commits_order() {
         payment_status: "success".to_owned(),
         payment_attempt_status: "succeeded".to_owned(),
         points: 250,
-        amount: CommerceMoney::new("25.00").expect("money"),
+        amount: CommerceMoney::new("2500").expect("money"),
         currency_code: "CNY".to_owned(),
         billing_history_status: Some("pending".to_owned()),
     });
@@ -156,7 +156,7 @@ async fn fulfill_points_recharge_order_replays_when_already_fulfilled() {
         payment_status: "success".to_owned(),
         payment_attempt_status: "succeeded".to_owned(),
         points: 120,
-        amount: CommerceMoney::new("12.00").expect("money"),
+        amount: CommerceMoney::new("1200").expect("money"),
         currency_code: "CNY".to_owned(),
         billing_history_status: Some("completed".to_owned()),
     });
@@ -229,7 +229,10 @@ impl PointsRechargeFulfillmentStore for MockFulfillmentStore {
     fn load_points_recharge_fulfillment_context<'a>(
         &'a self,
         command: &'a FulfillPointsRechargeOrderCommand,
-    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, Option<PointsRechargeFulfillmentContext>> {
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<
+        'a,
+        Option<PointsRechargeFulfillmentContext>,
+    > {
         let context = self
             .contexts
             .lock()
@@ -259,7 +262,8 @@ impl PointsRechargeFulfillmentStore for MockFulfillmentStore {
         &'a self,
         command: FulfillPointsRechargeOrderCommand,
         context: &'a PointsRechargeFulfillmentContext,
-    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome> {
+    ) -> sdkwork_order_service::PointsRechargeFulfillmentFuture<'a, FulfillPointsRechargeOrderOutcome>
+    {
         *self.commit_calls.lock().expect("commit lock") += 1;
         if *self.commit_should_fail.lock().expect("commit fail lock") {
             return Box::pin(async move {

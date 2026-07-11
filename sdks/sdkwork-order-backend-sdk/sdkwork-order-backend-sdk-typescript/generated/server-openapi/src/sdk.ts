@@ -5,6 +5,7 @@ import type { AuthTokenManager } from '@sdkwork/sdk-common';
 import { OrdersApi, createOrdersApi } from './api/orders';
 import { AfterSalesApi, createAfterSalesApi } from './api/after-sales';
 import { ShipmentsApi, createShipmentsApi } from './api/shipments';
+import { BackendApi, createBackendApi } from './api/backend';
 
 export class SdkworkOrderBackendClient {
   private httpClient: HttpClient;
@@ -12,6 +13,7 @@ export class SdkworkOrderBackendClient {
   public readonly orders: OrdersApi;
   public readonly afterSales: AfterSalesApi;
   public readonly shipments: ShipmentsApi;
+  public readonly backend: BackendApi;
 
   constructor(config: SdkworkBackendConfig) {
     this.httpClient = createHttpClient(config);
@@ -20,6 +22,8 @@ export class SdkworkOrderBackendClient {
     this.afterSales = createAfterSalesApi(this.httpClient);
 
     this.shipments = createShipmentsApi(this.httpClient);
+
+    this.backend = createBackendApi(this.httpClient);
   }
   setAuthToken(token: string): this {
     this.httpClient.setAuthToken(token);

@@ -4,7 +4,7 @@ import type {
   OrderDetail,
   OrderSummary,
   SdkworkOrderBackendClient,
-} from "@sdkwork/order-backend-sdk";
+} from "@sdkwork/order-pc-admin-core";
 import {
   createSdkworkWriteCommandHeaders,
   resolveSdkworkOffsetPagination,

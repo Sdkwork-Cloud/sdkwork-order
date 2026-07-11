@@ -56,6 +56,114 @@ const HTTP_ROUTES: &[HttpRoute] = &[
     .with_idempotent(true),
     HttpRoute::dual_token(
         HttpMethod::Get,
+        "/backend/v3/api/account_value_packages",
+        "backend",
+        "backend.accountValuePackages.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/account_value_packages",
+        "backend",
+        "backend.accountValuePackages.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Patch,
+        "/backend/v3/api/account_value_packages/{packageId}",
+        "backend",
+        "backend.accountValuePackages.update",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/account_value_packages/{packageId}/retire",
+        "backend",
+        "backend.accountValuePackages.retire",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/token_bank_plans",
+        "backend",
+        "backend.tokenBankPlans.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/token_bank_plans",
+        "backend",
+        "backend.tokenBankPlans.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Patch,
+        "/backend/v3/api/token_bank_plans/{planCode}",
+        "backend",
+        "backend.tokenBankPlans.update",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/token_bank_plans/{planCode}/retire",
+        "backend",
+        "backend.tokenBankPlans.retire",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/refund_requests",
+        "backend",
+        "backend.refundRequests.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/refund_requests/{refundRequestId}/approve",
+        "backend",
+        "backend.refundRequests.approve",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/refund_requests/{refundRequestId}/reject",
+        "backend",
+        "backend.refundRequests.reject",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/refund_requests/{refundRequestId}/retry",
+        "backend",
+        "backend.refundRequests.retry",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/backend/v3/api/withdrawal_requests",
+        "backend",
+        "backend.withdrawalRequests.list",
+    ),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/approve",
+        "backend",
+        "backend.withdrawalRequests.approve",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/reject",
+        "backend",
+        "backend.withdrawalRequests.reject",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/retry",
+        "backend",
+        "backend.withdrawalRequests.retry",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
+        HttpMethod::Get,
         "/backend/v3/api/after_sales/requests",
         "afterSales",
         "afterSales.management.list",
@@ -153,14 +261,12 @@ mod tests {
 
         for route in manifest.routes() {
             let wire_method = manifest_method_wire(route.method);
-            let methods = openapi["paths"][route.path]
-                .as_object()
-                .unwrap_or_else(|| {
-                    panic!(
-                        "manifest route {:?} {} missing from OpenAPI paths",
-                        route.method, route.path
-                    )
-                });
+            let methods = openapi["paths"][route.path].as_object().unwrap_or_else(|| {
+                panic!(
+                    "manifest route {:?} {} missing from OpenAPI paths",
+                    route.method, route.path
+                )
+            });
             assert!(
                 methods.contains_key(wire_method),
                 "manifest route {:?} {} must declare {wire_method} in OpenAPI",

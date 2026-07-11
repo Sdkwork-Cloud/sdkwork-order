@@ -2,11 +2,11 @@ use sdkwork_contract_service::CommerceServiceError;
 
 use crate::{
     points_recharge_compensation_idempotency_key, points_recharge_compensation_transaction_no,
+    points_recharge_fulfillment_idempotency_key, points_recharge_fulfillment_transaction_no,
     AccountPointsCreditPort, FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
     MarkPointsRechargePaymentSucceededCommand, PointsRechargeCreditRequest,
     PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore,
-    POINTS_RECHARGE_LEDGER_BUSINESS_TYPE, points_recharge_fulfillment_idempotency_key,
-    points_recharge_fulfillment_transaction_no,
+    POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
 };
 
 pub async fn mark_points_recharge_payment_succeeded<S>(
@@ -52,7 +52,10 @@ where
         .await?;
 
     let credit_request = build_credit_request(&command, &context);
-    let credit_outcome = match credit_port.credit_points_recharge(credit_request.clone()).await {
+    let credit_outcome = match credit_port
+        .credit_points_recharge(credit_request.clone())
+        .await
+    {
         Ok(outcome) => outcome,
         Err(error) => {
             let _ = store
@@ -76,8 +79,9 @@ where
             );
             if !credit_outcome.replayed {
                 let compensation = build_compensation_request(&credit_request);
-                if let Err(compensation_error) =
-                    credit_port.reverse_points_recharge_credit(compensation).await
+                if let Err(compensation_error) = credit_port
+                    .reverse_points_recharge_credit(compensation)
+                    .await
                 {
                     tracing::error!(
                         target = "order.fulfillment",

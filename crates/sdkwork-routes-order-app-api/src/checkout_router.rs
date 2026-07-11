@@ -20,7 +20,9 @@ use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
 
-use crate::api_response::{map_service_error, not_found, success_item, unauthorized, validation};
+use crate::api_response::{
+    map_service_error, not_found, success_created_item, success_item, unauthorized, validation,
+};
 use crate::command_headers::{ensure_request_hash_matches, required_app_write_command_headers};
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
@@ -242,7 +244,7 @@ async fn create_checkout_session(
     }
 
     match state.store.create_checkout_session(command).await {
-        Ok(session) => success_item(ctx, map_checkout_session(session)),
+        Ok(session) => success_created_item(ctx, map_checkout_session(session)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -313,7 +315,7 @@ async fn create_checkout_quote(
     }
 
     match state.store.create_checkout_quote(command).await {
-        Ok(quote) => success_item(ctx, map_checkout_quote(quote)),
+        Ok(quote) => success_created_item(ctx, map_checkout_quote(quote)),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -356,7 +358,7 @@ async fn create_checkout_order(
     }
 
     match state.store.create_owner_order(command).await {
-        Ok(outcome) => success_item(ctx, map_checkout_order(outcome)),
+        Ok(outcome) => success_created_item(ctx, map_checkout_order(outcome)),
         Err(error) => map_service_error(ctx, error),
     }
 }

@@ -24,3 +24,18 @@ tables:
   - name: commerce_order_cancellation
     write_owner: sdkwork-commerce-platform
     reference_only: true
+  - name: commerce_recharge_package
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_account_value_package
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_token_bank_plan
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order_refund_request
+    write_owner: sdkwork-order
+    reference_only: false
+  - name: commerce_order_withdrawal_request
+    write_owner: sdkwork-order
+    reference_only: false

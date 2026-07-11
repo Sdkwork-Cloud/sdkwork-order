@@ -75,7 +75,7 @@ LIMIT 1
 "#;
 
 const LOAD_MEMBERSHIP_PAYMENT_METHOD: &str = r#"
-SELECT method_key, provider AS provider_code
+SELECT method_key, provider_code
 FROM commerce_payment_method
 WHERE (
         (tenant_id = CAST(?1 AS TEXT) AND organization_id = CAST(?2 AS TEXT))
@@ -90,7 +90,7 @@ ORDER BY
         WHEN tenant_id = CAST(?1 AS TEXT) AND organization_id IS NULL THEN 1
         ELSE 2
     END ASC,
-    COALESCE(sort_weight, 0) ASC,
+    COALESCE(sort_order, 0) ASC,
     id ASC
 LIMIT 1
 "#;

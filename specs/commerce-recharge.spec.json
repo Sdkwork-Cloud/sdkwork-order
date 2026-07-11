@@ -108,14 +108,14 @@
       "orders.list",
       "orders.retrieve",
       "orders.create",
-      "orders.pay",
+      "orders.payments.create",
       "orders.cancel"
     ]
   },
   "upstreamDependencies": [
     {
       "capability": "payment",
-      "purpose": "Payment intent, provider refund, and provider payout execution for existing order-owned records"
+      "purpose": "Payment intent and provider refund execution for existing order-owned records; future provider payout execution must be exposed by payment before withdrawal payout can leave fail-closed runtime"
     }
   ],
   "downstreamConsumers": [
@@ -129,7 +129,7 @@
     },
     {
       "capability": "mall-pc-checkout",
-      "purpose": "Product checkout via checkout.* and orders.pay"
+      "purpose": "Product checkout via checkout.* and orders.payments.create"
     },
     {
       "capability": "payment-pc",
@@ -199,7 +199,7 @@
     },
     {
       "id": "O4",
-      "title": "orders.pay saga + account adjustment integration test",
+      "title": "orders.payments.create saga + account adjustment integration test",
       "status": "complete",
       "blockedBy": ["O3"]
     },
@@ -307,14 +307,17 @@
     {
       "id": "O15",
       "title": "Account value orders for Token Bank, package, coupon, refund, and withdrawal",
-      "status": "active-contract",
+      "status": "active-implementation-with-payout-gap",
       "blockedBy": ["O14"],
       "deliverables": [
         "specs/ACCOUNT_VALUE_ORDER_SPEC.md",
         "commerce_account_value_package",
         "commerce_token_bank_plan",
         "commerce_order_refund_request",
-        "commerce_order_withdrawal_request"
+        "commerce_order_withdrawal_request",
+        "AccountValueFulfillmentStore settlement for Token Bank, package, and coupon recharge orders",
+        "PaymentRefundExecutorPort integration through sdkwork-order-integration-payment",
+        "cash withdrawal account hold lifecycle with fail-closed payout boundary"
       ]
     }
   ],
