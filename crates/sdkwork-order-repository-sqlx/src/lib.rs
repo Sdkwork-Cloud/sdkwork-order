@@ -1,5 +1,6 @@
 pub mod order_lifecycle;
 pub mod order_limits;
+pub mod order_payment_settlement;
 pub mod order_settlement_context;
 pub mod postgres_account_value;
 pub mod postgres_after_sales;
@@ -31,6 +32,9 @@ mod order_lifecycle_audit_tests;
 
 #[cfg(test)]
 mod order_management_parity_tests;
+
+#[cfg(test)]
+mod order_payment_settlement_tests;
 
 #[cfg(any(test, feature = "test-support"))]
 pub use test_sqlite_pool::{

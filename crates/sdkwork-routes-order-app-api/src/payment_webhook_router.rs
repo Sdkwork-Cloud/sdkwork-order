@@ -15,7 +15,7 @@ use sdkwork_order_repository_sqlx::{
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
     MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts,
 };
 use sdkwork_payment_providers::{
     normalize_provider_code, peek_webhook_routing_fields, provider_registry_for_account,
@@ -204,7 +204,7 @@ where
     Pool: WebhookIngestPool + WebhookCredentialPool + Send + Sync,
     R: sdkwork_order_service::PointsRechargeFulfillmentStore
         + sdkwork_order_service::AccountValueFulfillmentStore,
-    O: OrderSubjectLoader,
+    O: OrderSubjectLoader + OwnerOrderPaymentStatePort,
     P: AccountPointsCreditPort + ?Sized,
     L: AccountValueLedgerPort + ?Sized,
     M: MembershipPurchaseFulfillmentPort + ?Sized,
@@ -307,12 +307,15 @@ where
                 let request_no = format!("webhook:{}", ingest.webhook_event_id);
                 let settlement_attempt = order_payment_settlement_attempt_from_webhook(attempt);
                 if let Err(error) = settle_owner_order_after_payment_success(
-                    payment_store,
-                    recharge_store,
-                    recharge_store,
-                    credit_port,
-                    account_value_ledger_port,
-                    membership_port,
+                    OwnerOrderSettlementPorts {
+                        payment_store,
+                        order_state_store: order_store,
+                        recharge_store,
+                        account_value_store: recharge_store,
+                        credit_port,
+                        account_value_ledger_port,
+                        membership_port,
+                    },
                     &settlement_attempt,
                     Some(subject.as_str()),
                     &request_no,
@@ -355,6 +358,8 @@ fn order_payment_settlement_attempt_from_webhook(
         organization_id: attempt.organization_id.clone(),
         owner_user_id: attempt.owner_user_id.clone(),
         order_id: attempt.order_id.clone(),
+        payment_attempt_id: Some(attempt.payment_attempt_id.clone()),
+        out_trade_no: Some(attempt.out_trade_no.clone()),
     }
 }
 

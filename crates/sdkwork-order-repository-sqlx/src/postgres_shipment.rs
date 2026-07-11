@@ -232,7 +232,7 @@ impl PostgresCommerceOrderStore {
             .unwrap_or(0);
         let items = rows
             .into_iter()
-            .map(|row| map_shipment_row(row))
+            .map(map_shipment_row)
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(ShipmentManagementListPage {

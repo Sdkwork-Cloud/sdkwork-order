@@ -14,7 +14,7 @@ pub async fn mark_points_recharge_payment_succeeded<S>(
     command: MarkPointsRechargePaymentSucceededCommand,
 ) -> Result<(), CommerceServiceError>
 where
-    S: PointsRechargeFulfillmentStore,
+    S: PointsRechargeFulfillmentStore + ?Sized,
 {
     store.mark_points_recharge_payment_succeeded(command).await
 }
@@ -25,7 +25,7 @@ pub async fn fulfill_points_recharge_order<S, P>(
     command: FulfillPointsRechargeOrderCommand,
 ) -> Result<FulfillPointsRechargeOrderOutcome, CommerceServiceError>
 where
-    S: PointsRechargeFulfillmentStore,
+    S: PointsRechargeFulfillmentStore + ?Sized,
     P: AccountPointsCreditPort + ?Sized,
 {
     let Some(context) = store

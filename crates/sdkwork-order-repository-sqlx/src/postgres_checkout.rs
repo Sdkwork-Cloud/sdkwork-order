@@ -381,7 +381,13 @@ async fn resolve_checkout_lines(
         let unit_price = string_cell(&row, "price_amount");
         let line_total = multiply_money_amount(&unit_price, line.quantity);
         let title = string_cell(&row, "title");
-        let snapshot = serde_json::json!({ "title": title }).to_string();
+        let fulfillment_type = string_cell(&row, "fulfillment_type");
+        let snapshot = serde_json::json!({
+            "title": title.as_str(),
+            "fulfillment_type": fulfillment_type.as_str(),
+            "product_type": fulfillment_type.as_str(),
+        })
+        .to_string();
         resolved.push(ResolvedCheckoutLine {
             sku_id: line.sku_id.clone(),
             product_id: optional_string_cell(&row, "spu_id"),
@@ -390,7 +396,7 @@ async fn resolve_checkout_lines(
             quantity: line.quantity,
             line_total,
             sku_snapshot_json: snapshot,
-            fulfillment_type: string_cell(&row, "fulfillment_type"),
+            fulfillment_type,
         });
     }
     Ok(resolved)

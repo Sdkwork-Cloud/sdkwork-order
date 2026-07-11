@@ -37,7 +37,7 @@ pub use owner::{
     CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,
     OrderOwnerDetailQuery, OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView,
     OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics,
-    OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderOutcome,
+    OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 pub use shipment::{
     CreateShipmentPackageCommand, ShipmentDetailQuery, ShipmentManagementDetailQuery,

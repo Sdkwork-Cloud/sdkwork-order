@@ -14,8 +14,9 @@ use sdkwork_order_service::{
     MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
     MembershipPurchaseFulfillmentRequest, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
-    PointsRechargeCreditOutcome, PointsRechargeCreditRequest, PointsRechargeFulfillmentContext,
-    PointsRechargeFulfillmentFuture, PointsRechargeFulfillmentStore,
+    OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentFuture,
+    PointsRechargeFulfillmentStore,
 };
 
 #[tokio::test]
@@ -114,6 +115,7 @@ async fn fulfill_account_value_order_replays_without_duplicate_ledger_credit() {
 #[tokio::test]
 async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_value_ledger() {
     let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
+    let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::default());
     let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
     let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
     let points_store = Arc::new(UnsupportedPointsRechargeStore);
@@ -138,15 +140,20 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
         organization_id: Some("org-1".to_owned()),
         owner_user_id: "user-1".to_owned(),
         order_id: "order-token-settle".to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
     };
 
     let outcome = settle_owner_order_after_payment_success(
-        payment_store.as_ref(),
-        points_store.as_ref(),
-        account_value_store.as_ref(),
-        points_port.as_ref(),
-        account_value_ledger.as_ref(),
-        membership_port.as_ref(),
+        OwnerOrderSettlementPorts {
+            payment_store: payment_store.as_ref(),
+            order_state_store: order_state_store.as_ref(),
+            recharge_store: points_store.as_ref(),
+            account_value_store: account_value_store.as_ref(),
+            credit_port: points_port.as_ref(),
+            account_value_ledger_port: account_value_ledger.as_ref(),
+            membership_port: membership_port.as_ref(),
+        },
         &attempt,
         Some("token_bank_recharge"),
         "req-token-settle-1",
@@ -160,6 +167,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
     assert_eq!(outcome.points_credited, 0);
     assert_eq!(outcome.fulfillment_status, "fulfilled");
     assert_eq!(payment_store.confirm_calls(), 1);
+    assert_eq!(order_state_store.mark_calls(), 1);
     assert_eq!(account_value_store.reserve_calls(), 1);
     assert_eq!(account_value_store.commit_calls(), 1);
 
@@ -168,6 +176,49 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
     assert_eq!(commands[0].asset, AccountValueAssetCode::TokenBank);
     assert_eq!(commands[0].amount.as_str(), "120000");
     assert_eq!(commands[0].currency_code, "TOKEN_BANK");
+}
+
+#[tokio::test]
+async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillment() {
+    let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
+    let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::default());
+    let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
+    let points_store = Arc::new(UnsupportedPointsRechargeStore);
+    let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
+    let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let membership_port = Arc::new(UnsupportedMembershipPurchaseFulfillmentPort);
+    let attempt = OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("org-1".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-product-settle".to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
+    };
+
+    let outcome = settle_owner_order_after_payment_success(
+        OwnerOrderSettlementPorts {
+            payment_store: payment_store.as_ref(),
+            order_state_store: order_state_store.as_ref(),
+            recharge_store: points_store.as_ref(),
+            account_value_store: account_value_store.as_ref(),
+            credit_port: points_port.as_ref(),
+            account_value_ledger_port: account_value_ledger.as_ref(),
+            membership_port: membership_port.as_ref(),
+        },
+        &attempt,
+        Some("physical_shipment"),
+        "req-product-settle-1",
+    )
+    .await
+    .expect("product settlement");
+
+    assert!(outcome.payment_confirmed);
+    assert!(!outcome.fulfillment_accepted);
+    assert_eq!(outcome.fulfillment_status, "awaiting_external_fulfillment");
+    assert_eq!(payment_store.confirm_calls(), 1);
+    assert_eq!(order_state_store.mark_calls(), 1);
+    assert!(account_value_ledger.commands().is_empty());
 }
 
 #[derive(Default)]
@@ -200,6 +251,28 @@ struct MockOwnerOrderPaymentStore {
     confirm_calls: Mutex<u32>,
 }
 
+#[derive(Default)]
+struct MockOwnerOrderPaymentStateStore {
+    mark_calls: Mutex<u32>,
+}
+
+impl MockOwnerOrderPaymentStateStore {
+    fn mark_calls(&self) -> u32 {
+        *self.mark_calls.lock().expect("mark lock")
+    }
+}
+
+impl OwnerOrderPaymentStatePort for MockOwnerOrderPaymentStateStore {
+    fn mark_owner_order_payment_succeeded<'a>(
+        &'a self,
+        _attempt: &'a OrderPaymentSettlementAttempt,
+        _paid_at: &'a str,
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, ()> {
+        *self.mark_calls.lock().expect("mark lock") += 1;
+        Box::pin(async { Ok(()) })
+    }
+}
+
 impl MockOwnerOrderPaymentStore {
     fn confirm_calls(&self) -> u32 {
         *self.confirm_calls.lock().expect("confirm lock")
@@ -209,19 +282,16 @@ impl MockOwnerOrderPaymentStore {
 impl OwnerOrderPaymentConfirmationPort for MockOwnerOrderPaymentStore {
     fn confirm_owner_order_payment<'a>(
         &'a self,
-        tenant_id: &'a str,
-        organization_id: Option<&'a str>,
-        owner_user_id: &'a str,
-        order_id: &'a str,
+        attempt: &'a OrderPaymentSettlementAttempt,
     ) -> OwnerOrderPaymentConfirmationFuture<'a, ConfirmOwnerOrderPaymentOutcome> {
         *self.confirm_calls.lock().expect("confirm lock") += 1;
         Box::pin(async move {
             Ok(ConfirmOwnerOrderPaymentOutcome {
-                tenant_id: tenant_id.to_owned(),
-                organization_id: organization_id.map(str::to_owned),
-                owner_user_id: owner_user_id.to_owned(),
-                order_id: order_id.to_owned(),
-                paid_at: "2026-07-08 00:00:00".to_owned(),
+                tenant_id: attempt.tenant_id.clone(),
+                organization_id: attempt.organization_id.clone(),
+                owner_user_id: attempt.owner_user_id.clone(),
+                order_id: attempt.order_id.clone(),
+                paid_at: "2026-07-08T00:00:00Z".to_owned(),
                 replayed: false,
             })
         })

@@ -14,7 +14,8 @@ use sdkwork_order_service::{
     checkout_owner_order_request_hash, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
     CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
     OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
-    OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderOutcome,
+    OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderCommandInput,
+    PayOwnerOrderOutcome,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
@@ -746,17 +747,17 @@ async fn pay_order(
     let callback_payload = body
         .payment_password()
         .map(|password| serde_json::json!({ "paymentPassword": password }).to_string());
-    let command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
-        &subject.tenant_id,
-        subject.organization_id.as_deref(),
-        &subject.user_id,
-        &order_id,
-        &payment_method,
-        None,
-        callback_payload,
-        &write_headers.request_no,
-        &write_headers.idempotency_key,
-    ) {
+    let command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
+        tenant_id: subject.tenant_id.clone(),
+        organization_id: subject.organization_id.clone(),
+        owner_user_id: subject.user_id.clone(),
+        order_id: order_id.clone(),
+        payment_method,
+        payment_scene: None,
+        payment_attempt_callback_payload: callback_payload,
+        request_no: write_headers.request_no.clone(),
+        idempotency_key: write_headers.idempotency_key.clone(),
+    }) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
     };

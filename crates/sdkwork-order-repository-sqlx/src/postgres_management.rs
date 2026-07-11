@@ -125,6 +125,7 @@ impl PostgresCommerceOrderStore {
                 o.id AS order_id,
                 o.order_no AS order_sn,
                 o.status,
+                o.payment_status,
                 o.subject,
                 o.created_at,
                 o.paid_at AS pay_time,
@@ -199,6 +200,7 @@ impl PostgresCommerceOrderStore {
             load_management_order_items(self.pool(), &query.tenant_id, &query.order_id).await?;
         Ok(Some(OrderOwnerDetail {
             summary,
+            payment_status: optional_string_cell(&row, "payment_status"),
             items,
             out_trade_no: optional_string_cell(&row, "out_trade_no"),
             transaction_id: optional_string_cell(&row, "transaction_id"),

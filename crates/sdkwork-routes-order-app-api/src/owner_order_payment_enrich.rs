@@ -5,7 +5,8 @@ use std::sync::Arc;
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
     enrich_owner_order_payment_postgres, enrich_owner_order_payment_sqlite,
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+    OwnerOrderPaymentEnrichmentContext, PostgresCommerceOwnerOrderPaymentStore,
+    SqliteCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_payment_service::{
     CancelOrderPaymentsCommand, PayOwnerOrderCommand, PayOwnerOrderOutcome,
@@ -72,13 +73,15 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
             let outcome = inner.pay_owner_order(command).await?;
             enrich_owner_order_payment_sqlite(
                 &pool,
-                &registry,
-                &credentials,
-                &tenant_id,
-                organization_id.as_deref(),
-                &order_id,
-                &idempotency_key,
-                payment_scene.as_deref(),
+                OwnerOrderPaymentEnrichmentContext {
+                    deployment_registry: &registry,
+                    credentials: &credentials,
+                    tenant_id: &tenant_id,
+                    organization_id: organization_id.as_deref(),
+                    order_id: &order_id,
+                    idempotency_key: &idempotency_key,
+                    payment_scene: payment_scene.as_deref(),
+                },
                 outcome,
             )
             .await
@@ -120,13 +123,15 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
             let outcome = inner.pay_owner_order(command).await?;
             enrich_owner_order_payment_postgres(
                 &pool,
-                &registry,
-                &credentials,
-                &tenant_id,
-                organization_id.as_deref(),
-                &order_id,
-                &idempotency_key,
-                payment_scene.as_deref(),
+                OwnerOrderPaymentEnrichmentContext {
+                    deployment_registry: &registry,
+                    credentials: &credentials,
+                    tenant_id: &tenant_id,
+                    organization_id: organization_id.as_deref(),
+                    order_id: &order_id,
+                    idempotency_key: &idempotency_key,
+                    payment_scene: payment_scene.as_deref(),
+                },
                 outcome,
             )
             .await

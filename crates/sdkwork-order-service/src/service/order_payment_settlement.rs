@@ -8,7 +8,7 @@ use crate::{
     AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
     MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
     MembershipPurchaseFulfillmentRequest, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort, PointsRechargeFulfillmentStore,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, PointsRechargeFulfillmentStore,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -23,6 +23,7 @@ pub enum OrderSubjectKind {
     VirtualGoods,
     Membership,
     CouponPackage,
+    External,
     Unknown,
 }
 
@@ -44,9 +45,16 @@ impl OrderSubjectKind {
             }
             Some(value) if value.eq_ignore_ascii_case("coupon_recharge") => Self::CouponRecharge,
             Some(value) if value.eq_ignore_ascii_case("product") => Self::Product,
+            Some(value) if value.eq_ignore_ascii_case("physical") => Self::Product,
+            Some(value) if value.eq_ignore_ascii_case("physical_shipment") => Self::Product,
             Some(value) if value.eq_ignore_ascii_case("virtual_goods") => Self::VirtualGoods,
+            Some(value) if value.eq_ignore_ascii_case("virtual") => Self::VirtualGoods,
+            Some(value) if value.eq_ignore_ascii_case("virtual_delivery") => Self::VirtualGoods,
             Some(value) if value.eq_ignore_ascii_case("membership") => Self::Membership,
+            Some(value) if value.eq_ignore_ascii_case("membership_activation") => Self::Membership,
             Some(value) if value.eq_ignore_ascii_case("coupon_package") => Self::CouponPackage,
+            Some(value) if value.eq_ignore_ascii_case("points_credit") => Self::PointsRecharge,
+            Some(value) if is_machine_subject(value) => Self::External,
             Some(_) => Self::Unknown,
             None => Self::Unknown,
         }
@@ -77,6 +85,68 @@ impl OrderSubjectKind {
     }
 }
 
+/// Resolve a checkout/order subject from machine-readable merchandise facts.
+/// Display titles are intentionally ignored because they are localized and mutable.
+pub fn stable_checkout_order_subject(
+    fulfillment_type: Option<&str>,
+    sku_snapshot_json: Option<&str>,
+) -> String {
+    normalized_machine_subject(fulfillment_type)
+        .or_else(|| stable_subject_from_snapshot(sku_snapshot_json))
+        .unwrap_or_else(|| "product".to_owned())
+}
+
+/// Resolve the subject used by payment settlement for existing and new orders.
+/// Snapshot metadata wins for checkout orders; canonical header subjects remain
+/// the fallback for recharge and membership orders that do not use SKU snapshots.
+pub fn stable_order_settlement_subject(
+    stored_subject: Option<&str>,
+    sku_snapshot_json: Option<&str>,
+) -> String {
+    stable_subject_from_snapshot(sku_snapshot_json)
+        .or_else(|| canonical_stored_order_subject(stored_subject))
+        .unwrap_or_else(|| "product".to_owned())
+}
+
+fn canonical_stored_order_subject(subject: Option<&str>) -> Option<String> {
+    let subject = normalized_machine_subject(subject)?;
+    match OrderSubjectKind::parse(Some(&subject)) {
+        OrderSubjectKind::External | OrderSubjectKind::Unknown => None,
+        _ => Some(subject),
+    }
+}
+
+fn stable_subject_from_snapshot(sku_snapshot_json: Option<&str>) -> Option<String> {
+    let snapshot = sku_snapshot_json
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let value = serde_json::from_str::<serde_json::Value>(snapshot).ok()?;
+    [
+        "fulfillment_type",
+        "fulfillmentType",
+        "product_type",
+        "productType",
+    ]
+    .into_iter()
+    .find_map(|key| value.get(key).and_then(serde_json::Value::as_str))
+    .and_then(|subject| normalized_machine_subject(Some(subject)))
+}
+
+fn normalized_machine_subject(subject: Option<&str>) -> Option<String> {
+    let subject = subject?.trim();
+    if !is_machine_subject(subject) {
+        return None;
+    }
+    Some(subject.to_ascii_lowercase())
+}
+
+fn is_machine_subject(subject: &str) -> bool {
+    !subject.is_empty()
+        && subject
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b':'))
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct OwnerOrderSettlementOutcome {
     pub payment_confirmed: bool,
@@ -88,42 +158,36 @@ pub struct OwnerOrderSettlementOutcome {
     pub fulfillment_status: String,
 }
 
-pub async fn settle_owner_order_after_payment_success<S, A, P, L, M, Payment>(
-    payment_store: &Payment,
-    recharge_store: &S,
-    account_value_store: &A,
-    credit_port: &P,
-    account_value_ledger_port: &L,
-    membership_port: &M,
+pub struct OwnerOrderSettlementPorts<'a> {
+    pub payment_store: &'a dyn OwnerOrderPaymentConfirmationPort,
+    pub order_state_store: &'a dyn OwnerOrderPaymentStatePort,
+    pub recharge_store: &'a dyn PointsRechargeFulfillmentStore,
+    pub account_value_store: &'a dyn AccountValueFulfillmentStore,
+    pub credit_port: &'a dyn AccountPointsCreditPort,
+    pub account_value_ledger_port: &'a dyn AccountValueLedgerPort,
+    pub membership_port: &'a dyn MembershipPurchaseFulfillmentPort,
+}
+
+pub async fn settle_owner_order_after_payment_success(
+    ports: OwnerOrderSettlementPorts<'_>,
     attempt: &OrderPaymentSettlementAttempt,
     order_subject: Option<&str>,
     request_no: &str,
-) -> Result<OwnerOrderSettlementOutcome, CommerceServiceError>
-where
-    S: PointsRechargeFulfillmentStore,
-    A: AccountValueFulfillmentStore,
-    P: AccountPointsCreditPort + ?Sized,
-    L: AccountValueLedgerPort + ?Sized,
-    M: MembershipPurchaseFulfillmentPort + ?Sized,
-    Payment: OwnerOrderPaymentConfirmationPort + ?Sized,
-{
-    let payment_outcome = payment_store
-        .confirm_owner_order_payment(
-            &attempt.tenant_id,
-            attempt.organization_id.as_deref(),
-            &attempt.owner_user_id,
-            &attempt.order_id,
-        )
+) -> Result<OwnerOrderSettlementOutcome, CommerceServiceError> {
+    let payment_outcome = ports
+        .payment_store
+        .confirm_owner_order_payment(attempt)
+        .await?;
+
+    ports
+        .order_state_store
+        .mark_owner_order_payment_succeeded(attempt, &payment_outcome.paid_at)
         .await?;
 
     let subject_kind = OrderSubjectKind::parse(order_subject);
     let fulfillment = dispatch_subject_fulfillment(
+        &ports,
         subject_kind,
-        recharge_store,
-        account_value_store,
-        credit_port,
-        account_value_ledger_port,
-        membership_port,
         attempt,
         &payment_outcome.paid_at,
         request_no,
@@ -149,29 +213,18 @@ struct SubjectFulfillmentOutcome {
     status: String,
 }
 
-async fn dispatch_subject_fulfillment<S, A, P, L, M>(
+async fn dispatch_subject_fulfillment(
+    ports: &OwnerOrderSettlementPorts<'_>,
     subject: OrderSubjectKind,
-    recharge_store: &S,
-    account_value_store: &A,
-    credit_port: &P,
-    account_value_ledger_port: &L,
-    membership_port: &M,
     attempt: &OrderPaymentSettlementAttempt,
     paid_at: &str,
     request_no: &str,
-) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
-where
-    S: PointsRechargeFulfillmentStore,
-    A: AccountValueFulfillmentStore,
-    P: AccountPointsCreditPort + ?Sized,
-    L: AccountValueLedgerPort + ?Sized,
-    M: MembershipPurchaseFulfillmentPort + ?Sized,
-{
+) -> Result<SubjectFulfillmentOutcome, CommerceServiceError> {
     match subject {
         OrderSubjectKind::PointsRecharge => {
             settle_points_recharge_subject(
-                recharge_store,
-                credit_port,
+                ports.recharge_store,
+                ports.credit_port,
                 attempt,
                 paid_at,
                 request_no,
@@ -185,19 +238,20 @@ where
         | OrderSubjectKind::CouponRecharge => {
             settle_account_value_subject(
                 subject,
-                account_value_store,
-                account_value_ledger_port,
+                ports.account_value_store,
+                ports.account_value_ledger_port,
                 attempt,
                 request_no,
             )
             .await
         }
         OrderSubjectKind::Membership => {
-            settle_membership_subject(membership_port, attempt, request_no).await
+            settle_membership_subject(ports.membership_port, attempt, request_no).await
         }
         OrderSubjectKind::Product
         | OrderSubjectKind::VirtualGoods
-        | OrderSubjectKind::CouponPackage => {
+        | OrderSubjectKind::CouponPackage
+        | OrderSubjectKind::External => {
             tracing::info!(
                 target = "order.settlement",
                 order_id = %attempt.order_id,
@@ -235,7 +289,7 @@ async fn settle_account_value_subject<A, L>(
     request_no: &str,
 ) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
 where
-    A: AccountValueFulfillmentStore,
+    A: AccountValueFulfillmentStore + ?Sized,
     L: AccountValueLedgerPort + ?Sized,
 {
     let account_value_subject = subject.account_value_subject().ok_or_else(|| {
@@ -269,7 +323,7 @@ async fn settle_points_recharge_subject<S, P>(
     request_no: &str,
 ) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
 where
-    S: PointsRechargeFulfillmentStore,
+    S: PointsRechargeFulfillmentStore + ?Sized,
     P: AccountPointsCreditPort + ?Sized,
 {
     let idempotency_key = points_recharge_payment_success_idempotency_key(&attempt.order_id);

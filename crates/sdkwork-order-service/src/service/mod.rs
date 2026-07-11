@@ -8,7 +8,9 @@ pub use account_value_fulfillment::{
 };
 pub use account_value_request_execution::execute_account_value_request_review;
 pub use order_payment_settlement::{
-    settle_owner_order_after_payment_success, OrderSubjectKind, OwnerOrderSettlementOutcome,
+    settle_owner_order_after_payment_success, stable_checkout_order_subject,
+    stable_order_settlement_subject, OrderSubjectKind, OwnerOrderSettlementOutcome,
+    OwnerOrderSettlementPorts,
 };
 pub use points_recharge_fulfillment::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
@@ -92,6 +94,7 @@ pub fn order_service_contract() -> CommerceServiceContract {
             crate::ports::PAYMENT_PAYOUT_EXECUTOR_PORT,
             crate::ports::COUPON_REDEMPTION_PORT,
             crate::ports::OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
+            crate::ports::OWNER_ORDER_PAYMENT_STATE_PORT,
             crate::ports::MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
         ],
         true,

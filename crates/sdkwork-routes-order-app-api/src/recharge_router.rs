@@ -24,9 +24,9 @@ use sdkwork_order_service::{
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
     CreateOrderRefundRequestCommand, CreatePointsRechargeOrderCommand,
     CreatePointsRechargeOrderOutcome, OrderOwnerListQuery, PayOwnerOrderCommand,
-    PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem, RechargePackageListPage,
-    RechargePackageListQuery, RechargeSettingsQuery, RechargeSettingsSnapshot, TokenBankPlanItem,
-    TokenBankPlanListPage, TokenBankPlanPeriod,
+    PayOwnerOrderCommandInput, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
+    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
+    RechargeSettingsSnapshot, TokenBankPlanItem, TokenBankPlanListPage, TokenBankPlanPeriod,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
@@ -1291,17 +1291,17 @@ async fn pay_coupon_recharge_order(
     outcome: CreateAccountRechargeOrderOutcome,
 ) -> Response {
     let callback_payload = coupon_recharge_callback_payload(command, payment_password);
-    let pay_command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
-        &subject.tenant_id,
-        subject.organization_id.as_deref(),
-        &subject.user_id,
-        &command.order_id,
-        method,
-        None,
-        Some(callback_payload),
-        &format!("{request_no}:pay"),
-        &format!("{idempotency_key}:pay"),
-    ) {
+    let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
+        tenant_id: subject.tenant_id.clone(),
+        organization_id: subject.organization_id.clone(),
+        owner_user_id: subject.user_id.clone(),
+        order_id: command.order_id.clone(),
+        payment_method: method.to_owned(),
+        payment_scene: None,
+        payment_attempt_callback_payload: Some(callback_payload),
+        request_no: format!("{request_no}:pay"),
+        idempotency_key: format!("{idempotency_key}:pay"),
+    }) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
     };
@@ -1368,17 +1368,17 @@ async fn submit_points_recharge_order(
                 "paymentPassword": request.payment_password(),
             })
             .to_string();
-            let pay_command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
-                &subject.tenant_id,
-                subject.organization_id.as_deref(),
-                &subject.user_id,
-                &command.order_id,
-                method,
-                None,
-                Some(callback_payload),
-                &format!("{request_no}:pay"),
-                &format!("{idempotency_key}:pay"),
-            ) {
+            let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
+                tenant_id: subject.tenant_id.clone(),
+                organization_id: subject.organization_id.clone(),
+                owner_user_id: subject.user_id.clone(),
+                order_id: command.order_id.clone(),
+                payment_method: method.to_owned(),
+                payment_scene: None,
+                payment_attempt_callback_payload: Some(callback_payload),
+                request_no: format!("{request_no}:pay"),
+                idempotency_key: format!("{idempotency_key}:pay"),
+            }) {
                 Ok(command) => command,
                 Err(error) => return map_service_error(ctx, error),
             };
@@ -1424,17 +1424,17 @@ async fn pay_account_value_order(
     outcome: CreateAccountRechargeOrderOutcome,
 ) -> Response {
     let callback_payload = account_value_callback_payload(command, payment_password);
-    let pay_command = match PayOwnerOrderCommand::with_payment_attempt_callback_payload(
-        &subject.tenant_id,
-        subject.organization_id.as_deref(),
-        &subject.user_id,
-        &command.order_id,
-        method,
-        None,
-        Some(callback_payload),
-        &format!("{request_no}:pay"),
-        &format!("{idempotency_key}:pay"),
-    ) {
+    let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
+        tenant_id: subject.tenant_id.clone(),
+        organization_id: subject.organization_id.clone(),
+        owner_user_id: subject.user_id.clone(),
+        order_id: command.order_id.clone(),
+        payment_method: method.to_owned(),
+        payment_scene: None,
+        payment_attempt_callback_payload: Some(callback_payload),
+        request_no: format!("{request_no}:pay"),
+        idempotency_key: format!("{idempotency_key}:pay"),
+    }) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
     };

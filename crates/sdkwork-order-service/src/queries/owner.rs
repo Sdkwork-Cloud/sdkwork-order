@@ -1,6 +1,8 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 
-pub use sdkwork_payment_service::{PayOwnerOrderCommand, PayOwnerOrderOutcome};
+pub use sdkwork_payment_service::{
+    PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderOwnerListQuery {
@@ -172,6 +174,7 @@ pub struct OrderOwnerItem {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderOwnerDetail {
     pub summary: OrderOwnerSummary,
+    pub payment_status: Option<String>,
     pub items: Vec<OrderOwnerItem>,
     pub out_trade_no: Option<String>,
     pub transaction_id: Option<String>,

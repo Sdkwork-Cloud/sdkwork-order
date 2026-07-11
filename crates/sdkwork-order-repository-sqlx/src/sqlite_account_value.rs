@@ -924,7 +924,7 @@ impl SqliteCommerceRechargeStore {
         tx.commit()
             .await
             .map_err(|error| store_error("failed to commit account recharge order", error))?;
-        Ok(account_value_order_outcome_from_command(&command, false))
+        Ok(account_value_order_outcome_from_command(&command))
     }
 
     pub async fn create_coupon_recharge_order(
@@ -1599,7 +1599,6 @@ fn account_value_order_title(subject: AccountValueOrderSubject) -> &'static str 
 
 fn account_value_order_outcome_from_command(
     command: &CreateAccountRechargeOrderCommand,
-    replayed: bool,
 ) -> CreateAccountRechargeOrderOutcome {
     CreateAccountRechargeOrderOutcome {
         success: true,
@@ -1614,7 +1613,7 @@ fn account_value_order_outcome_from_command(
         provider_code: String::new(),
         payment_method: String::new(),
         payment_product: String::new(),
-        status: if replayed { "pending" } else { "pending" }.to_string(),
+        status: "pending".to_string(),
         next_action: "pay".to_string(),
         cashier_url: String::new(),
         qr_code_payload: String::new(),

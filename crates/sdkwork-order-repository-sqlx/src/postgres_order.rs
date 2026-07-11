@@ -1,9 +1,9 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
-    CancelOwnerOrderCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail,
-    OrderOwnerDetailQuery, OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView,
-    OrderOwnerItem, OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics,
-    OrderOwnerSummary,
+    stable_checkout_order_subject, stable_order_settlement_subject, CancelOwnerOrderCommand,
+    CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery,
+    OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerItem,
+    OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics, OrderOwnerSummary,
 };
 use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -20,6 +20,7 @@ SELECT
     o.id AS order_id,
     o.order_no AS order_sn,
     o.status,
+    o.payment_status,
     o.subject,
     o.created_at,
     o.paid_at AS pay_time,
@@ -124,6 +125,7 @@ SELECT
     o.id AS order_id,
     o.order_no AS order_sn,
     o.status,
+    o.payment_status,
     o.subject,
     o.created_at,
     o.paid_at AS pay_time,
@@ -299,11 +301,20 @@ impl PostgresCommerceOrderStore {
     ) -> Result<Option<OrderPaymentSettlementContext>, CommerceServiceError> {
         let row = sqlx::query(
             r#"
-            SELECT owner_user_id, subject
-            FROM commerce_order
-            WHERE tenant_id = CAST($1 AS TEXT)
-              AND id = CAST($2 AS TEXT)
-              AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
+            SELECT o.owner_user_id,
+                   o.subject,
+                   (
+                       SELECT oi.sku_snapshot_json
+                       FROM commerce_order_item oi
+                       WHERE oi.tenant_id = o.tenant_id
+                         AND oi.order_id = o.id
+                       ORDER BY oi.created_at ASC, oi.id ASC
+                       LIMIT 1
+                   ) AS sku_snapshot_json
+            FROM commerce_order o
+            WHERE o.tenant_id = CAST($1 AS TEXT)
+              AND o.id = CAST($2 AS TEXT)
+              AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $3 IS NULL))
             LIMIT 1
             "#,
         )
@@ -314,9 +325,19 @@ impl PostgresCommerceOrderStore {
         .await
         .map_err(|error| store_error("failed to load order payment settlement context", error))?;
 
-        Ok(row.map(|row| OrderPaymentSettlementContext {
-            owner_user_id: string_cell(&row, "owner_user_id"),
-            subject: row.try_get("subject").ok().flatten().unwrap_or_default(),
+        Ok(row.map(|row| {
+            let stored_subject = row.try_get::<Option<String>, _>("subject").ok().flatten();
+            let snapshot = row
+                .try_get::<Option<String>, _>("sku_snapshot_json")
+                .ok()
+                .flatten();
+            OrderPaymentSettlementContext {
+                owner_user_id: string_cell(&row, "owner_user_id"),
+                subject: stable_order_settlement_subject(
+                    stored_subject.as_deref(),
+                    snapshot.as_deref(),
+                ),
+            }
         }))
     }
 
@@ -418,6 +439,7 @@ impl PostgresCommerceOrderStore {
         let items = load_order_items(&self.pool, &query.tenant_id, &query.order_id).await?;
         Ok(Some(OrderOwnerDetail {
             summary,
+            payment_status: optional_string_cell(&row, "payment_status"),
             items,
             out_trade_no: optional_string_cell(&row, "out_trade_no"),
             transaction_id: optional_string_cell(&row, "transaction_id"),
@@ -862,10 +884,16 @@ fn map_order_summary_row(
     let discount_amount = CommerceMoney::new(&string_cell(row, "discount_amount"))
         .map_err(CommerceServiceError::storage)?;
     let status = string_cell(row, "status");
+    let payment_status = optional_string_cell(row, "payment_status");
     let paid_amount = if status.eq_ignore_ascii_case("paid")
         || status.eq_ignore_ascii_case("completed")
         || status.eq_ignore_ascii_case("fulfilled")
-    {
+        || payment_status.is_some_and(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "success" | "succeeded" | "paid"
+            )
+        }) {
         Some(total_amount.clone())
     } else {
         None
@@ -940,7 +968,8 @@ async fn load_checkout_lines_for_order(
 ) -> Result<Vec<sqlx::postgres::PgRow>, CommerceServiceError> {
     sqlx::query(
         r#"
-        SELECT id, product_id, shop_id, sku_id, sku_snapshot_json, quantity, price_amount_snapshot
+        SELECT id, product_id, shop_id, sku_id, sku_snapshot_json, quantity, price_amount_snapshot,
+               fulfillment_type
         FROM commerce_checkout_line
         WHERE tenant_id = CAST($1 AS TEXT)
           AND checkout_session_id = $2
@@ -980,11 +1009,14 @@ async fn load_checkout_quote_for_order(
 }
 
 fn checkout_order_subject(lines: &[sqlx::postgres::PgRow]) -> String {
-    lines
-        .first()
-        .map(checkout_line_title)
-        .filter(|title| !title.is_empty())
-        .unwrap_or_else(|| "Checkout order".to_owned())
+    lines.first().map_or_else(
+        || "product".to_owned(),
+        |line| {
+            let fulfillment_type = optional_string_cell(line, "fulfillment_type");
+            let snapshot = optional_string_cell(line, "sku_snapshot_json");
+            stable_checkout_order_subject(fulfillment_type.as_deref(), snapshot.as_deref())
+        },
+    )
 }
 
 fn checkout_line_title(row: &sqlx::postgres::PgRow) -> String {

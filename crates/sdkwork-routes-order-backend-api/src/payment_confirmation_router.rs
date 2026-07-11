@@ -14,7 +14,7 @@ use sdkwork_order_repository_sqlx::{
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
     MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts,
 };
 use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
@@ -204,7 +204,7 @@ async fn confirm_order_payment_inner(
     payment_store: &impl OwnerOrderPaymentConfirmationPort,
     recharge_store: &(impl sdkwork_order_service::PointsRechargeFulfillmentStore
           + sdkwork_order_service::AccountValueFulfillmentStore),
-    order_store: &impl OrderSettlementContextLoader,
+    order_store: &(impl OrderSettlementContextLoader + OwnerOrderPaymentStatePort),
     credit_port: &dyn AccountPointsCreditPort,
     account_value_ledger_port: &dyn AccountValueLedgerPort,
     membership_port: &dyn MembershipPurchaseFulfillmentPort,
@@ -227,15 +227,20 @@ async fn confirm_order_payment_inner(
         organization_id: subject.organization_id.clone(),
         owner_user_id: order_context.owner_user_id,
         order_id: order_id.to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
     };
 
     let settlement_outcome = match settle_owner_order_after_payment_success(
-        payment_store,
-        recharge_store,
-        recharge_store,
-        credit_port,
-        account_value_ledger_port,
-        membership_port,
+        OwnerOrderSettlementPorts {
+            payment_store,
+            order_state_store: order_store,
+            recharge_store,
+            account_value_store: recharge_store,
+            credit_port,
+            account_value_ledger_port,
+            membership_port,
+        },
         &attempt,
         Some(order_context.subject.as_str()),
         request_no,

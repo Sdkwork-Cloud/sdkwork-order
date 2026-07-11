@@ -35,7 +35,8 @@ pub use membership_fulfillment::{
 pub use owner_order_payment::{
     ConfirmOwnerOrderPaymentOutcome, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
-    OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
+    OwnerOrderPaymentStatePort, OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
+    OWNER_ORDER_PAYMENT_STATE_PORT,
 };
 pub use points_recharge_fulfillment::{
     PointsRechargeFulfillmentFuture, PointsRechargeFulfillmentStore,

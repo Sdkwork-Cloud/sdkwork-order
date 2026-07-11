@@ -12,7 +12,7 @@ pub async fn fulfill_account_value_order<S, L>(
     command: FulfillAccountValueOrderCommand,
 ) -> Result<FulfillAccountValueOrderOutcome, CommerceServiceError>
 where
-    S: AccountValueFulfillmentStore,
+    S: AccountValueFulfillmentStore + ?Sized,
     L: AccountValueLedgerPort + ?Sized,
 {
     let Some(context) = store

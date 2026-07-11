@@ -6,7 +6,8 @@ use sdkwork_order_service::{
     default_fulfill_points_recharge_command, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, points_recharge_fulfillment_idempotency_key,
     points_recharge_fulfillment_transaction_no, points_recharge_payment_success_idempotency_key,
-    AccountPointsCreditPort, FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
+    stable_checkout_order_subject, stable_order_settlement_subject, AccountPointsCreditPort,
+    FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
     MarkPointsRechargePaymentSucceededCommand, OrderSubjectKind, PointsRechargeCreditOutcome,
     PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentStore,
     POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
@@ -352,6 +353,47 @@ fn order_subject_kind_parses_checkout_subjects_case_insensitively() {
         OrderSubjectKind::parse(Some("PRODUCT")),
         OrderSubjectKind::Product
     );
+    assert_eq!(
+        OrderSubjectKind::parse(Some("physical_shipment")),
+        OrderSubjectKind::Product
+    );
+    assert_eq!(
+        OrderSubjectKind::parse(Some("notary")),
+        OrderSubjectKind::External
+    );
     assert!(OrderSubjectKind::PointsRecharge.is_fulfillment_implemented());
     assert!(!OrderSubjectKind::Product.is_fulfillment_implemented());
+}
+
+#[test]
+fn checkout_subject_uses_machine_metadata_and_never_the_display_title() {
+    assert_eq!(
+        stable_checkout_order_subject(
+            Some("notary"),
+            Some(r#"{"title":"Localized matter title"}"#),
+        ),
+        "notary"
+    );
+    assert_eq!(
+        stable_order_settlement_subject(
+            Some("Localized matter title"),
+            Some(r#"{"title":"Localized matter title","product_type":"virtual_goods"}"#),
+        ),
+        "virtual_goods"
+    );
+    assert_eq!(
+        stable_order_settlement_subject(
+            Some("Localized matter title"),
+            Some(r#"{"title":"Localized matter title"}"#),
+        ),
+        "product"
+    );
+    assert_eq!(
+        stable_order_settlement_subject(Some("Notary"), None),
+        "product"
+    );
+    assert_eq!(
+        stable_order_settlement_subject(Some("points_recharge"), None),
+        "points_recharge"
+    );
 }
