@@ -157,7 +157,7 @@ async fn create_membership_order(
         |idempotency_key| fallback_request_no(&subject, &package_id, &method, idempotency_key),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match build_create_membership_command(CreateMembershipCommandInput {
         subject: &subject,

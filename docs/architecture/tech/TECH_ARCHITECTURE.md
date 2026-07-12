@@ -170,7 +170,9 @@ Settlement orchestration is owned by order, not payment:
 
 Configure PSP notify URL as `{ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}`.
 
-Duplicate webhook deliveries return `replayed: true` without re-running settlement. Operators use `payment_confirmations` for recovery.
+Duplicate webhook deliveries remain correlated to the exact persisted payment attempt and may re-enter settlement. Payment confirmation, Order state updates, fulfillment, and late-payment audit writes are idempotent, so retries do not duplicate effects. Operators use `payment_confirmations` for recovery; because its public request does not select an attempt, it proceeds only when the order has one unambiguous matching payment attempt.
+
+A successful payment that arrives after an Order is terminal does not reopen or advance the Order lifecycle. Order preserves the terminal status, records `payment_status=success` and the first `paid_at`, and writes one idempotent `payment_succeeded_after_terminal` event.
 
 ## 7. Existing Fulfillment
 

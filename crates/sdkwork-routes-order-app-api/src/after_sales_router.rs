@@ -298,7 +298,7 @@ async fn create_after_sales_request(
         |idempotency_key| format!("after-sales-{}-{}", subject.user_id, idempotency_key),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let after_sales_type = body.after_sales_type.unwrap_or_else(|| "refund".to_owned());
     let items = match map_after_sales_request_items(body.items.as_deref()) {
@@ -386,7 +386,7 @@ async fn update_after_sales_request(
         |idempotency_key| format!("after-sales-update-{}-{}", subject.user_id, idempotency_key),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match UpdateAfterSalesRequestCommand::new_for_owner(
         &subject.tenant_id,
@@ -579,7 +579,7 @@ async fn create_after_sales_return_shipment(
         |idempotency_key| format!("after-sales-return-{}-{}", subject.user_id, idempotency_key),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match CreateAfterSalesReturnShipmentCommand::new(
         &subject.tenant_id,

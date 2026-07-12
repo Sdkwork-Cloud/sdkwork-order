@@ -2,7 +2,7 @@
 
 Status: active  
 Owner: SDKWork maintainers  
-Updated: 2026-07-07  
+Updated: 2026-07-12
 Machine contracts: `specs/commerce-checkout-topology.spec.json`, `specs/commerce-payment-webhook.spec.json`
 
 ## 1. Capability Boundaries
@@ -99,6 +99,14 @@ sequenceDiagram
 **Dependency:** `sdkwork-order` → `sdkwork-membership` via fulfillment port at gateway assembly (same pattern as order → account for points recharge). Payment remains a foundation module with no order or membership dependencies.
 
 Authority: `../sdkwork-membership/specs/COMMERCE_ORDER_BOUNDARY_SPEC.md`, `../sdkwork-membership/specs/commerce-order-membership-boundary.spec.json`.
+
+### 2.5 Checkout money and merchandise scope
+
+- `CommerceMoney`, merchandise `price_amount`, checkout snapshots, quotes, order items, and order amount breakdowns use non-negative integer smallest-unit strings. For example, CNY `69.90` is stored and processed as `"6990"`.
+- Checkout copies the merchandise SKU price snapshot without major-unit conversion. Application boundaries such as Notary may convert display major units to and from minor units, but Order never performs that conversion internally.
+- Line multiplication and quote summation use checked integer arithmetic. Invalid decimals, non-positive quantities, and `i64` overflow fail the transaction without partial checkout or idempotency rows; amounts are never rounded, saturated, or converted through `f64`.
+- Canonical zero is `"0"`, including discount and tax defaults. Decimal zero strings such as `"0.00"` are not valid `CommerceMoney` values.
+- SKU resolution is scoped by `tenant_id` and exact-or-null `organization_id` before the price is snapshotted. A checkout cannot consume another organization's SKU even when the tenant is the same.
 
 ## 3. Cashier URL Contract
 

@@ -10,12 +10,12 @@ pub(crate) fn require_backend_operator(
     ctx: Option<&WebRequestContext>,
     context: IamAppContext,
     required_permission: &str,
-) -> Result<BackendOperatorScope, Response> {
+) -> Result<BackendOperatorScope, Box<Response>> {
     if !context.can_access_backend_api() {
-        return Err(api_forbidden(
+        return Err(Box::new(api_forbidden(
             ctx,
             "backend api access requires an organization-scoped session",
-        ));
+        )));
     }
     if !context.has_permission(required_permission) {
         tracing::warn!(
@@ -25,13 +25,13 @@ pub(crate) fn require_backend_operator(
             required_permission,
             "backend permission denied"
         );
-        return Err(api_forbidden(
+        return Err(Box::new(api_forbidden(
             ctx,
             format!("missing required permission: {required_permission}"),
-        ));
+        )));
     }
     match backend_operator_scope_from_iam(&context) {
         Ok(subject) => Ok(subject),
-        Err(message) => Err(api_unauthorized(ctx, message)),
+        Err(message) => Err(Box::new(api_unauthorized(ctx, message))),
     }
 }

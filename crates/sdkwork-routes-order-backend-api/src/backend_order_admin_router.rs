@@ -259,7 +259,7 @@ async fn list_orders(
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match OrderManagementListQuery::new(
         &subject.tenant_id,
@@ -296,7 +296,7 @@ async fn retrieve_order(
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match OrderManagementDetailQuery::new(
         &subject.tenant_id,
@@ -325,7 +325,7 @@ async fn cancel_order(
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let body = body.map(|Json(value)| value).unwrap_or(CancelOrderBody {
         reason: None,
@@ -340,7 +340,7 @@ async fn cancel_order(
         |idempotency_key| format!("admin-cancel-{order_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match CancelManagementOrderCommand::with_cancel_type(
         &subject.tenant_id,
@@ -371,7 +371,7 @@ async fn close_order(
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::MANAGE) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let body = body.map(|Json(value)| value).unwrap_or(CloseOrderBody {
         reason: None,
@@ -386,7 +386,7 @@ async fn close_order(
         |idempotency_key| format!("admin-close-{order_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match CloseManagementOrderCommand::with_close_type(
         &subject.tenant_id,
@@ -416,7 +416,7 @@ async fn list_order_events(
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match OrderManagementEventListQuery::new(
         &subject.tenant_id,
@@ -456,7 +456,7 @@ async fn list_cancellations(
     let ctx = Some(&request_context.0);
     let subject = match require_backend_operator(ctx, runtime_context, permissions::READ) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match OrderCancellationListQuery::new(
         &subject.tenant_id,

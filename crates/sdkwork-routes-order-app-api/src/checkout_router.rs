@@ -210,7 +210,7 @@ async fn create_checkout_session(
         fallback_request_no(&subject, "checkout-session", idempotency_key)
     }) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let request = body.0;
     let lines = match parse_checkout_lines(&request) {
@@ -240,7 +240,7 @@ async fn create_checkout_session(
         &checkout_session_request_hash(&command),
         &write_headers.request_hash,
     ) {
-        return response;
+        return *response;
     }
 
     match state.store.create_checkout_session(command).await {
@@ -293,7 +293,7 @@ async fn create_checkout_quote(
         fallback_request_no(&subject, &checkout_session_id, idempotency_key)
     }) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match CreateCheckoutQuoteCommand::new(
         &subject.tenant_id,
@@ -311,7 +311,7 @@ async fn create_checkout_quote(
         &checkout_quote_request_hash(&command),
         &write_headers.request_hash,
     ) {
-        return response;
+        return *response;
     }
 
     match state.store.create_checkout_quote(command).await {
@@ -336,7 +336,7 @@ async fn create_checkout_order(
         fallback_request_no(&subject, &checkout_session_id, idempotency_key)
     }) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match CreateOwnerOrderCommand::new(
         &subject.tenant_id,
@@ -354,7 +354,7 @@ async fn create_checkout_order(
         &checkout_owner_order_request_hash(&command),
         &write_headers.request_hash,
     ) {
-        return response;
+        return *response;
     }
 
     match state.store.create_owner_order(command).await {

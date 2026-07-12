@@ -23,7 +23,6 @@ pub(crate) enum WriteCommandHeaderError {
     InvalidHeader(String),
 }
 
-#[allow(clippy::result_large_err)]
 pub(crate) fn validate_write_payload(
     headers: &HeaderMap,
     scope: &str,
@@ -44,16 +43,15 @@ pub(crate) fn validate_write_payload(
     Ok(write_headers)
 }
 
-#[allow(clippy::result_large_err)]
 pub(crate) fn validate_app_write_payload(
     context: Option<&WebRequestContext>,
     headers: &HeaderMap,
     scope: &str,
     body: &impl Serialize,
     fallback_request_no: impl FnOnce(&str) -> String,
-) -> Result<AppWriteCommandHeaders, Response> {
+) -> Result<AppWriteCommandHeaders, Box<Response>> {
     validate_write_payload(headers, scope, body, fallback_request_no)
-        .map_err(|error| write_command_header_error_to_app_response(context, error))
+        .map_err(|error| Box::new(write_command_header_error_to_app_response(context, error)))
 }
 
 pub(crate) fn write_payload_with_route_param(
@@ -71,7 +69,6 @@ pub(crate) fn write_payload_with_route_param(
     payload
 }
 
-#[allow(clippy::result_large_err)]
 pub(crate) fn parse_required_write_command_headers(
     headers: &HeaderMap,
     fallback_request_no: impl FnOnce(&str) -> String,
@@ -89,14 +86,13 @@ pub(crate) fn parse_required_write_command_headers(
     })
 }
 
-#[allow(clippy::result_large_err)]
 pub(crate) fn required_app_write_command_headers(
     context: Option<&WebRequestContext>,
     headers: &HeaderMap,
     fallback_request_no: impl FnOnce(&str) -> String,
-) -> Result<AppWriteCommandHeaders, Response> {
+) -> Result<AppWriteCommandHeaders, Box<Response>> {
     parse_required_write_command_headers(headers, fallback_request_no)
-        .map_err(|error| write_command_header_error_to_app_response(context, error))
+        .map_err(|error| Box::new(write_command_header_error_to_app_response(context, error)))
 }
 
 fn write_command_header_error_to_app_response(
@@ -106,7 +102,7 @@ fn write_command_header_error_to_app_response(
     let trace_id = context
         .and_then(|ctx| ctx.trace_id.clone())
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| sdkwork_utils_rust::uuid());
+        .unwrap_or_else(sdkwork_utils_rust::uuid);
     match error {
         WriteCommandHeaderError::MissingHeader(name) => problem_response(
             StatusCode::BAD_REQUEST,
@@ -123,12 +119,11 @@ fn write_command_header_error_to_app_response(
     }
 }
 
-#[allow(clippy::result_large_err)]
 pub(crate) fn ensure_request_hash_matches(
     context: Option<&WebRequestContext>,
     expected_hash: &str,
     provided_hash: &str,
-) -> Result<(), Response> {
+) -> Result<(), Box<Response>> {
     if expected_hash.trim() == provided_hash.trim() {
         return Ok(());
     }
@@ -136,23 +131,22 @@ pub(crate) fn ensure_request_hash_matches(
     let trace_id = context
         .and_then(|ctx| ctx.trace_id.clone())
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| sdkwork_utils_rust::uuid());
-    Err(problem_response(
+        .unwrap_or_else(sdkwork_utils_rust::uuid);
+    Err(Box::new(problem_response(
         StatusCode::BAD_REQUEST,
         SdkWorkResultCode::ValidationError,
         "Sdkwork-Request-Hash does not match the command payload",
         &trace_id,
-    ))
+    )))
 }
 
-#[allow(clippy::result_large_err)]
 fn required_text_header(
     headers: &HeaderMap,
     name: &'static str,
 ) -> Result<String, WriteCommandHeaderError> {
     let value = headers
         .get(name)
-        .ok_or_else(|| WriteCommandHeaderError::MissingHeader(name))?
+        .ok_or(WriteCommandHeaderError::MissingHeader(name))?
         .to_str()
         .map(str::trim)
         .map_err(|_| {

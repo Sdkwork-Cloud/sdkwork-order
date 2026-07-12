@@ -634,11 +634,11 @@ async fn list_account_value_packages(
     let subject = match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_READ)
     {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let target_asset = match params
         .target_asset
@@ -686,7 +686,7 @@ async fn create_account_value_package(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let write_headers = match validate_backend_write_payload(
@@ -697,7 +697,7 @@ async fn create_account_value_package(
         |idempotency_key| format!("account-value-package-create-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match build_account_value_package_command(
         &subject,
@@ -728,7 +728,7 @@ async fn update_account_value_package(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let payload = write_payload_with_route_param("packageId", &package_id, &body);
@@ -740,7 +740,7 @@ async fn update_account_value_package(
         |idempotency_key| format!("account-value-package-update-{package_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match build_account_value_package_command(
         &subject,
@@ -771,7 +771,7 @@ async fn retire_account_value_package(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let payload = write_payload_with_route_param("packageId", &package_id, &body);
@@ -783,7 +783,7 @@ async fn retire_account_value_package(
         |idempotency_key| format!("account-value-package-retire-{package_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match RetireAccountValuePackageCommand::new(
         &subject.tenant_id,
@@ -812,11 +812,11 @@ async fn list_token_bank_plans(
     let subject = match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_READ)
     {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match AccountValueCatalogListQuery::new(
         &subject.tenant_id,
@@ -852,7 +852,7 @@ async fn create_token_bank_plan(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let write_headers = match validate_backend_write_payload(
@@ -863,7 +863,7 @@ async fn create_token_bank_plan(
         |idempotency_key| format!("token-bank-plan-create-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match build_token_bank_plan_command(
         &subject,
@@ -894,7 +894,7 @@ async fn update_token_bank_plan(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let payload = write_payload_with_route_param("planCode", &plan_code, &body);
@@ -906,7 +906,7 @@ async fn update_token_bank_plan(
         |idempotency_key| format!("token-bank-plan-update-{plan_code}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match build_token_bank_plan_command(
         &subject,
@@ -937,7 +937,7 @@ async fn retire_token_bank_plan(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_MANAGE) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let payload = write_payload_with_route_param("planCode", &plan_code, &body);
@@ -949,7 +949,7 @@ async fn retire_token_bank_plan(
         |idempotency_key| format!("token-bank-plan-retire-{plan_code}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match RetireTokenBankPlanCommand::new(
         &subject.tenant_id,
@@ -1155,11 +1155,11 @@ async fn list_account_value_requests_by_subject(
     let subject = match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_READ)
     {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match AccountValueRequestListQuery::new(
         &subject.tenant_id,
@@ -1210,7 +1210,7 @@ async fn review_account_value_request_by_action(
     let subject =
         match require_admin_subject(ctx, runtime_context, permissions::ACCOUNT_VALUE_REVIEW) {
             Ok(subject) => subject,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let payload = write_payload_with_route_param(route_param_name, &request_id, &body);
     let write_headers = match validate_backend_write_payload(
@@ -1221,7 +1221,7 @@ async fn review_account_value_request_by_action(
         |idempotency_key| format!("{fallback_scope}-{request_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match ReviewAccountValueRequestCommand::new(
         &subject.tenant_id,
@@ -1257,13 +1257,13 @@ fn require_admin_subject(
     ctx: Option<&WebRequestContext>,
     runtime_context: Option<Extension<IamAppContext>>,
     permission: &'static str,
-) -> Result<BackendOperatorScope, Response> {
+) -> Result<BackendOperatorScope, Box<Response>> {
     match runtime_context {
         Some(Extension(context)) => require_backend_operator(ctx, context, permission),
-        None => Err(crate::api_response::unauthorized(
+        None => Err(Box::new(crate::api_response::unauthorized(
             ctx,
             "authentication is required",
-        )),
+        ))),
     }
 }
 
@@ -1384,18 +1384,13 @@ async fn list_management_after_sales(
     Query(params): Query<AfterSalesListParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::AFTER_SALES_READ)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::AFTER_SALES_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match AfterSalesManagementListQuery::new(
         &subject.tenant_id,
@@ -1432,14 +1427,9 @@ async fn retrieve_management_after_sales(
     Path(after_sales_request_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::AFTER_SALES_READ)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::AFTER_SALES_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let query = match AfterSalesManagementDetailQuery::new(
         &subject.tenant_id,
@@ -1466,14 +1456,10 @@ async fn review_after_sales_request(
     Json(body): Json<ReviewAfterSalesRequestBody>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::AFTER_SALES_REVIEW)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::AFTER_SALES_REVIEW)
+    {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let payload =
         write_payload_with_route_param("afterSalesRequestId", &after_sales_request_id, &body);
@@ -1485,7 +1471,7 @@ async fn review_after_sales_request(
         |idempotency_key| format!("review-{after_sales_request_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match ReviewAfterSalesRequestCommand::new(
         &subject.tenant_id,
@@ -1519,18 +1505,13 @@ async fn list_management_shipments(
     Query(params): Query<ShipmentListParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::ORDERS_READ)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match ShipmentManagementListQuery::new(
         &subject.tenant_id,
@@ -1563,14 +1544,9 @@ async fn retrieve_management_shipment(
     Path(shipment_id): Path<String>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::ORDERS_READ)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let query = match ShipmentManagementDetailQuery::new(
         &subject.tenant_id,
@@ -1596,18 +1572,13 @@ async fn list_management_shipment_packages(
     Query(params): Query<PackageListParams>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::ORDERS_READ)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_READ) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match ShipmentPackageManagementListQuery::new(
         &subject.tenant_id,
@@ -1640,14 +1611,9 @@ async fn create_management_shipment_package(
     Json(body): Json<CreateShipmentPackageBody>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::ORDERS_MANAGE)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let payload = write_payload_with_route_param("shipmentId", &shipment_id, &body);
     let write_headers = match validate_backend_write_payload(
@@ -1658,7 +1624,7 @@ async fn create_management_shipment_package(
         |idempotency_key| format!("pkg-{shipment_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let mut command = match CreateShipmentPackageCommand::new(
         &subject.tenant_id,
@@ -1690,14 +1656,9 @@ async fn update_management_shipment_package(
     Json(body): Json<UpdateShipmentPackageBody>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match runtime_context {
-        Some(Extension(context)) => {
-            require_backend_operator(ctx, context, permissions::ORDERS_MANAGE)
-        }
-        None => return crate::api_response::unauthorized(ctx, "authentication is required"),
-    };
-    let Ok(subject) = subject else {
-        return subject.err().expect("permission error response");
+    let subject = match require_admin_subject(ctx, runtime_context, permissions::ORDERS_MANAGE) {
+        Ok(subject) => subject,
+        Err(response) => return *response,
     };
     let payload = write_payload_with_route_param("packageId", &package_id, &body);
     let mut payload = payload;
@@ -1715,7 +1676,7 @@ async fn update_management_shipment_package(
         |idempotency_key| format!("pkg-update-{package_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let mut command = match UpdateShipmentPackageCommand::new(
         &subject.tenant_id,

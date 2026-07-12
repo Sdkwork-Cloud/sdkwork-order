@@ -658,7 +658,7 @@ async fn list_token_bank_plans(
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match AccountValueCatalogListQuery::new(
         &subject.tenant_id,
@@ -695,7 +695,7 @@ async fn list_refund_requests(
     };
     let page_params = match parse_offset_list_params_validated(ctx, params.page, params.page_size) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let query = match AccountValueRequestListQuery::new(
         &subject.tenant_id,
@@ -743,7 +743,7 @@ async fn create_refund_request(
         |idempotency_key| format!("refund-request-{}-{idempotency_key}", subject.user_id),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let target_asset = match body
         .target_asset
@@ -845,7 +845,7 @@ async fn create_withdrawal_request(
         |idempotency_key| format!("withdrawal-request-{}-{idempotency_key}", subject.user_id),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let asset = match body
         .asset
@@ -1053,7 +1053,7 @@ async fn cancel_recharge_order(
         |idempotency_key| format!("recharge-cancel-{order_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let cancel_reason = body
         .cancel_reason
@@ -1151,7 +1151,7 @@ async fn submit_recharge(
         },
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     if matches!(order_subject, AccountValueOrderSubject::PointsRecharge) {

@@ -9,6 +9,7 @@ use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentM
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::money_amount::{commerce_money, multiply_money_amount, normalize_money_amount};
 use crate::order_limits::MAX_ORDER_LINE_ITEMS;
 use crate::read_model::{
     empty_rows_when_read_model_is_missing, none_when_read_model_is_missing,
@@ -207,23 +208,25 @@ SELECT
     SUM(CASE WHEN LOWER(o.status) IN ('paid', 'fulfilled') THEN 1 ELSE 0 END) AS pending_shipment,
     SUM(CASE WHEN LOWER(o.status) IN ('shipped', 'delivered') THEN 1 ELSE 0 END) AS pending_receipt,
     SUM(CASE WHEN LOWER(o.status) IN ('completed', 'finished') THEN 1 ELSE 0 END) AS completed,
-    COALESCE(
-        SUM(
-            CAST(
-                COALESCE(
-                    (
-                        SELECT b.payable_amount
-                        FROM commerce_order_amount_breakdown b
-                        WHERE b.tenant_id = o.tenant_id
-                          AND b.order_id = o.id
-                          AND b.allocation_type = 'order_total'
-                        LIMIT 1
-                    ),
-                    '0'
-                ) AS NUMERIC
-            )
-        ),
-        0
+    CAST(
+        COALESCE(
+            SUM(
+                CAST(
+                    COALESCE(
+                        (
+                            SELECT b.payable_amount
+                            FROM commerce_order_amount_breakdown b
+                            WHERE b.tenant_id = o.tenant_id
+                              AND b.order_id = o.id
+                              AND b.allocation_type = 'order_total'
+                            LIMIT 1
+                        ),
+                        '0'
+                    ) AS BIGINT
+                )
+            ),
+            0
+        ) AS TEXT
     ) AS total_amount
 FROM commerce_order o
 WHERE o.tenant_id = CAST($1 AS TEXT)
@@ -466,8 +469,8 @@ impl PostgresCommerceOrderStore {
                 pending_receipt: row.try_get::<i64, _>("pending_receipt").unwrap_or(0),
                 completed: row.try_get::<i64, _>("completed").unwrap_or(0),
                 total_amount: {
-                    // NUMERIC is read as text and re-validated through CommerceMoney
-                    // to avoid f64 precision drift.
+                    // The aggregate is projected as text after integer-unit summation
+                    // and re-validated through CommerceMoney.
                     let raw = row
                         .try_get::<String, _>("total_amount")
                         .unwrap_or_else(|_| "0".to_owned());
@@ -553,8 +556,7 @@ impl PostgresCommerceOrderStore {
             tx.commit().await.map_err(|error| {
                 store_error("failed to commit existing owner order lookup", error)
             })?;
-            let total_amount = CommerceMoney::new(&string_cell(&row, "total_amount"))
-                .map_err(CommerceServiceError::storage)?;
+            let total_amount = commerce_money(&string_cell(&row, "total_amount"))?;
             return Ok(CreateOwnerOrderOutcome {
                 order_id: string_cell(&row, "order_id"),
                 order_sn: string_cell(&row, "order_sn"),
@@ -575,9 +577,10 @@ impl PostgresCommerceOrderStore {
         let order_sn = command.request_no.clone();
         let subject = checkout_order_subject(&lines);
         let currency_code = string_cell(&session, "currency_code");
-        let payable_amount = string_cell(&quote, "payable_amount");
-        let original_amount = string_cell(&quote, "original_amount");
-        let discount_amount = string_cell(&quote, "discount_amount");
+        let payable_amount = normalize_money_amount(&string_cell(&quote, "payable_amount"))?;
+        let original_amount = normalize_money_amount(&string_cell(&quote, "original_amount"))?;
+        let discount_amount = normalize_money_amount(&string_cell(&quote, "discount_amount"))?;
+        let total_amount = commerce_money(&payable_amount)?;
         let expires_at =
             optional_string_cell(&session, "expires_at").unwrap_or_else(|| now.clone());
 
@@ -611,9 +614,11 @@ impl PostgresCommerceOrderStore {
         for line in &lines {
             let line_id = string_cell(line, "id");
             let item_id = format!("{order_id}-item-{line_id}");
-            let quantity = line.try_get::<i64, _>("quantity").unwrap_or(1).max(1);
+            let quantity = line
+                .try_get::<i64, _>("quantity")
+                .map_err(|error| store_error("failed to decode checkout line quantity", error))?;
             let unit_price = string_cell(line, "price_amount_snapshot");
-            let total_amount = multiply_money_amount(&unit_price, quantity);
+            let total_amount = multiply_money_amount(&unit_price, quantity)?;
             sqlx::query(
                 r#"
                 INSERT INTO commerce_order_item
@@ -621,7 +626,7 @@ impl PostgresCommerceOrderStore {
                      title, quantity, unit_price_amount, discount_amount, tax_amount,
                      total_amount, fulfillment_status, refund_status, created_at)
                 VALUES
-                    ($1, CAST($2 AS TEXT), $3, $4, $5, $6, $7, $8, $9, $10, '0.00', '0.00', $11,
+                    ($1, CAST($2 AS TEXT), $3, $4, $5, $6, $7, $8, $9, $10, '0', '0', $11,
                      'unfulfilled', 'none', $12)
                 "#,
             )
@@ -686,8 +691,6 @@ impl PostgresCommerceOrderStore {
             store_error("failed to commit create owner order transaction", error)
         })?;
 
-        let total_amount =
-            CommerceMoney::new(&payable_amount).map_err(CommerceServiceError::storage)?;
         Ok(CreateOwnerOrderOutcome {
             order_id,
             order_sn,
@@ -1031,34 +1034,6 @@ fn checkout_line_title(row: &sqlx::postgres::PgRow) -> String {
     string_cell(row, "sku_id")
 }
 
-fn multiply_money_amount(amount: &str, quantity: i64) -> String {
-    let Ok(cents) = money_cents(amount) else {
-        return amount.to_owned();
-    };
-    let total_cents = cents.saturating_mul(quantity.max(1));
-    format!("{}.{:02}", total_cents / 100, total_cents.rem_euclid(100))
-}
-
-fn money_cents(value: &str) -> Result<i64, CommerceServiceError> {
-    CommerceMoney::new(value)
-        .map(|money| {
-            let parts: Vec<_> = money.as_str().split('.').collect();
-            let integer = parts
-                .first()
-                .and_then(|part| part.parse::<i64>().ok())
-                .unwrap_or(0);
-            let fraction = parts
-                .get(1)
-                .map(|part| {
-                    let padded = format!("{part:0<2}");
-                    padded[..2.min(padded.len())].parse::<i64>().unwrap_or(0)
-                })
-                .unwrap_or(0);
-            integer * 100 + fraction
-        })
-        .map_err(CommerceServiceError::storage)
-}
-
 fn current_command_timestamp() -> String {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1074,6 +1049,18 @@ fn empty_order_statistics() -> OrderOwnerStatistics {
         pending_shipment: 0,
         pending_receipt: 0,
         completed: 0,
-        total_amount: CommerceMoney::new("0.00").expect("zero money should be valid"),
+        total_amount: CommerceMoney::new("0").expect("zero money should be valid"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::empty_order_statistics;
+
+    #[test]
+    fn empty_order_statistics_uses_smallest_unit_zero() {
+        let statistics = empty_order_statistics();
+
+        assert_eq!(statistics.total_amount.as_str(), "0");
     }
 }

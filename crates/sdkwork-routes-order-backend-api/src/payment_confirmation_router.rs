@@ -13,8 +13,7 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
-    MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts,
+    MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts,
 };
 use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
@@ -132,7 +131,7 @@ async fn confirm_order_payment(
     let ctx = Some(&request_context.0);
     let subject = match require_confirmation_subject(runtime_context, ctx) {
         Ok(subject) => subject,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     if body.request_no.trim().is_empty() {
@@ -148,7 +147,7 @@ async fn confirm_order_payment(
         |idempotency_key| format!("pay-confirm-{order_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     let credit_port = state.credit_port.clone();
@@ -165,12 +164,16 @@ async fn confirm_order_payment(
                 &subject,
                 &order_id,
                 &body.request_no,
-                payments.as_ref(),
-                recharge.as_ref(),
                 orders.as_ref(),
-                credit_port.as_ref(),
-                account_value_ledger_port.as_ref(),
-                membership_port.as_ref(),
+                OwnerOrderSettlementPorts {
+                    payment_store: payments.as_ref(),
+                    order_state_store: orders.as_ref(),
+                    recharge_store: recharge.as_ref(),
+                    account_value_store: recharge.as_ref(),
+                    credit_port: credit_port.as_ref(),
+                    account_value_ledger_port: account_value_ledger_port.as_ref(),
+                    membership_port: membership_port.as_ref(),
+                },
             )
             .await
         }
@@ -184,12 +187,16 @@ async fn confirm_order_payment(
                 &subject,
                 &order_id,
                 &body.request_no,
-                payments.as_ref(),
-                recharge.as_ref(),
                 orders.as_ref(),
-                credit_port.as_ref(),
-                account_value_ledger_port.as_ref(),
-                membership_port.as_ref(),
+                OwnerOrderSettlementPorts {
+                    payment_store: payments.as_ref(),
+                    order_state_store: orders.as_ref(),
+                    recharge_store: recharge.as_ref(),
+                    account_value_store: recharge.as_ref(),
+                    credit_port: credit_port.as_ref(),
+                    account_value_ledger_port: account_value_ledger_port.as_ref(),
+                    membership_port: membership_port.as_ref(),
+                },
             )
             .await
         }
@@ -201,15 +208,10 @@ async fn confirm_order_payment_inner(
     subject: &BackendOperatorScope,
     order_id: &str,
     request_no: &str,
-    payment_store: &impl OwnerOrderPaymentConfirmationPort,
-    recharge_store: &(impl sdkwork_order_service::PointsRechargeFulfillmentStore
-          + sdkwork_order_service::AccountValueFulfillmentStore),
-    order_store: &(impl OrderSettlementContextLoader + OwnerOrderPaymentStatePort),
-    credit_port: &dyn AccountPointsCreditPort,
-    account_value_ledger_port: &dyn AccountValueLedgerPort,
-    membership_port: &dyn MembershipPurchaseFulfillmentPort,
+    order_context_loader: &dyn OrderSettlementContextLoader,
+    settlement_ports: OwnerOrderSettlementPorts<'_>,
 ) -> Response {
-    let order_context = match order_store
+    let order_context = match order_context_loader
         .load_order_payment_settlement_context(
             &subject.tenant_id,
             subject.organization_id.as_deref(),
@@ -232,15 +234,7 @@ async fn confirm_order_payment_inner(
     };
 
     let settlement_outcome = match settle_owner_order_after_payment_success(
-        OwnerOrderSettlementPorts {
-            payment_store,
-            order_state_store: order_store,
-            recharge_store,
-            account_value_store: recharge_store,
-            credit_port,
-            account_value_ledger_port,
-            membership_port,
-        },
+        settlement_ports,
         &attempt,
         Some(order_context.subject.as_str()),
         request_no,
@@ -268,22 +262,22 @@ async fn confirm_order_payment_inner(
 fn require_confirmation_subject(
     context: IamAppContext,
     web_context: Option<&WebRequestContext>,
-) -> Result<BackendOperatorScope, Response> {
+) -> Result<BackendOperatorScope, Box<Response>> {
     if !context.can_access_backend_api() {
-        return Err(forbidden(
+        return Err(Box::new(forbidden(
             web_context,
             "backend api access requires an organization-scoped session",
-        ));
+        )));
     }
     if !context.has_permission(permissions::CONFIRM) {
-        return Err(forbidden(
+        return Err(Box::new(forbidden(
             web_context,
             format!("missing required permission: {}", permissions::CONFIRM),
-        ));
+        )));
     }
     match backend_operator_scope_from_iam(&context) {
         Ok(subject) => Ok(subject),
-        Err(message) => Err(unauthorized(web_context, message)),
+        Err(message) => Err(Box::new(unauthorized(web_context, message))),
     }
 }
 

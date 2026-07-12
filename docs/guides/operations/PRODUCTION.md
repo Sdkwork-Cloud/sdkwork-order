@@ -47,7 +47,7 @@ POST /backend/v3/api/orders/{orderId}/payment_confirmations
 
 Requires IAM permission `commerce.orders.fulfill`.
 
-Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the payment ingest layer (`replayed: true`) and do **not** re-run settlement. If payment succeeded but order settlement did not complete, replay via `payment_confirmations`.
+Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the payment ingest layer (`replayed: true`) and may re-enter settlement for the exact payment attempt. Confirmation, Order state updates, and fulfillment are idempotent, so retrying the webhook does not duplicate effects. If settlement still requires operator recovery, use `payment_confirmations`; it returns a conflict when multiple payment attempts make an order-only replay ambiguous, in which case replay the exact stored webhook event instead.
 
 ## Health And Observability
 
@@ -65,7 +65,7 @@ Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the
 4. Enable Redis-backed rate limiting at the platform gateway layer when `sdkwork-web-framework` production assembly requires it.
 5. Points-recharge fulfillment is idempotent; payment callbacks may retry safely. Commit failure after wallet credit triggers automatic compensation debit and releases the `processing` reservation; operators may still replay via `payment_confirmations` if compensation fails.
 6. Order cancellation and close (buyer or admin) close payment intents **before** mutating order status to avoid payable terminal orders.
-7. Write commands require `Idempotency-Key` and `Sdkwork-Request-Hash`; replays against terminal order states return success without duplicate audit rows.
+7. Write commands require `Idempotency-Key` and `Sdkwork-Request-Hash`; a late successful payment does not reopen a terminal order and repeated settlement does not duplicate the `payment_succeeded_after_terminal` audit row.
 
 ## Verification Before Release
 

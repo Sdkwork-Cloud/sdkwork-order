@@ -8,7 +8,10 @@ use sdkwork_order_service::{
 };
 use sqlx::{Row, Sqlite, Transaction};
 
-use crate::sqlite_order::SqliteCommerceOrderStore;
+use crate::{
+    money_amount::{commerce_money, multiply_money_amount, sum_money_amounts},
+    sqlite_order::SqliteCommerceOrderStore,
+};
 
 const CHECKOUT_SESSION_CREATE_SCOPE: &str = "checkout.sessions.create";
 const CHECKOUT_QUOTE_CREATE_SCOPE: &str = "checkout.sessions.quotes.create";
@@ -87,8 +90,8 @@ impl SqliteCommerceOrderStore {
         }
 
         let lines = resolve_checkout_lines(&mut tx, &command).await?;
-        let original_amount = sum_money_amounts(lines.iter().map(|line| line.line_total.as_str()));
-        let discount_amount = "0.00".to_owned();
+        let original_amount = sum_money_amounts(lines.iter().map(|line| line.line_total.as_str()))?;
+        let discount_amount = "0".to_owned();
         let payable_amount = original_amount.clone();
         let session_id = checkout_session_id(&command);
         let quote_id = checkout_quote_id(&command.tenant_id, &session_id, &command.request_no);
@@ -150,9 +153,9 @@ impl SqliteCommerceOrderStore {
             SELECT s.id,
                    s.status,
                    s.currency_code,
-                   CAST(COALESCE(q.original_amount, '0.00') AS TEXT) AS original_amount,
-                   CAST(COALESCE(q.discount_amount, '0.00') AS TEXT) AS discount_amount,
-                   CAST(COALESCE(q.payable_amount, '0.00') AS TEXT) AS payable_amount,
+                   CAST(COALESCE(q.original_amount, '0') AS TEXT) AS original_amount,
+                   CAST(COALESCE(q.discount_amount, '0') AS TEXT) AS discount_amount,
+                   CAST(COALESCE(q.payable_amount, '0') AS TEXT) AS payable_amount,
                    q.id AS quote_id
             FROM commerce_checkout_session s
             LEFT JOIN commerce_checkout_quote q
@@ -253,8 +256,8 @@ impl SqliteCommerceOrderStore {
                 "checkout session has no selected lines",
             ));
         }
-        let original_amount = sum_money_amounts(lines.iter().map(|line| line.line_total.as_str()));
-        let discount_amount = "0.00".to_owned();
+        let original_amount = sum_money_amounts(lines.iter().map(|line| line.line_total.as_str()))?;
+        let discount_amount = "0".to_owned();
         let payable_amount = original_amount.clone();
         let quote_id = checkout_quote_id(
             &command.tenant_id,
@@ -310,9 +313,9 @@ impl SqliteCommerceOrderStore {
             SELECT s.id,
                    s.status,
                    s.currency_code,
-                   CAST(COALESCE(q.original_amount, '0.00') AS TEXT) AS original_amount,
-                   CAST(COALESCE(q.discount_amount, '0.00') AS TEXT) AS discount_amount,
-                   CAST(COALESCE(q.payable_amount, '0.00') AS TEXT) AS payable_amount,
+                   CAST(COALESCE(q.original_amount, '0') AS TEXT) AS original_amount,
+                   CAST(COALESCE(q.discount_amount, '0') AS TEXT) AS discount_amount,
+                   CAST(COALESCE(q.payable_amount, '0') AS TEXT) AS payable_amount,
                    q.id AS quote_id
             FROM commerce_idempotency_key i
             JOIN commerce_checkout_session s
@@ -366,12 +369,15 @@ async fn resolve_checkout_lines(
                    fulfillment_type, spec_json
             FROM commerce_product_sku
             WHERE tenant_id = CAST(? AS TEXT)
+              AND ((organization_id = CAST(? AS TEXT)) OR (organization_id IS NULL AND ? IS NULL))
               AND id = CAST(? AS TEXT)
               AND LOWER(COALESCE(status, '')) = 'active'
             LIMIT 1
             "#,
         )
         .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(command.organization_id.as_deref())
         .bind(&line.sku_id)
         .fetch_optional(&mut **tx)
         .await
@@ -379,7 +385,7 @@ async fn resolve_checkout_lines(
         .ok_or_else(|| CommerceServiceError::not_found("checkout sku was not found"))?;
 
         let unit_price = string_cell(&row, "price_amount");
-        let line_total = multiply_money_amount(&unit_price, line.quantity);
+        let line_total = multiply_money_amount(&unit_price, line.quantity)?;
         let title = string_cell(&row, "title");
         let fulfillment_type = string_cell(&row, "fulfillment_type");
         let snapshot = serde_json::json!({
@@ -562,23 +568,26 @@ async fn load_checkout_lines_for_quote(
     .await
     .map_err(|error| store_error("failed to load checkout lines for quote", error))?;
 
-    Ok(rows
-        .iter()
-        .map(|row| {
-            let unit_price = string_cell(row, "price_amount_snapshot");
-            let quantity = row.try_get::<i64, _>("quantity").unwrap_or(1).max(1);
-            ResolvedCheckoutLine {
-                sku_id: string_cell(row, "sku_id"),
-                product_id: optional_string_cell(row, "product_id"),
-                _title: checkout_line_title(row),
-                unit_price: unit_price.clone(),
-                quantity,
-                line_total: multiply_money_amount(&unit_price, quantity),
-                sku_snapshot_json: string_cell(row, "sku_snapshot_json"),
-                fulfillment_type: string_cell(row, "fulfillment_type"),
-            }
-        })
-        .collect())
+    rows.iter()
+        .map(
+            |row| -> Result<ResolvedCheckoutLine, CommerceServiceError> {
+                let unit_price = string_cell(row, "price_amount_snapshot");
+                let quantity = row.try_get::<i64, _>("quantity").map_err(|error| {
+                    store_error("failed to decode checkout line quantity", error)
+                })?;
+                Ok(ResolvedCheckoutLine {
+                    sku_id: string_cell(row, "sku_id"),
+                    product_id: optional_string_cell(row, "product_id"),
+                    _title: checkout_line_title(row),
+                    unit_price: unit_price.clone(),
+                    quantity,
+                    line_total: multiply_money_amount(&unit_price, quantity)?,
+                    sku_snapshot_json: string_cell(row, "sku_snapshot_json"),
+                    fulfillment_type: string_cell(row, "fulfillment_type"),
+                })
+            },
+        )
+        .collect()
 }
 
 async fn insert_checkout_quote_for_command(
@@ -879,40 +888,6 @@ fn checkout_line_title(row: &sqlx::sqlite::SqliteRow) -> String {
         }
     }
     string_cell(row, "sku_id")
-}
-
-fn sum_money_amounts<'a>(amounts: impl Iterator<Item = &'a str>) -> String {
-    let total_cents = amounts
-        .map(parse_money_cents)
-        .try_fold(0i64, |acc, cents| {
-            cents.map(|value| acc.saturating_add(value))
-        })
-        .unwrap_or(0);
-    format!("{:.2}", total_cents as f64 / 100.0)
-}
-
-fn parse_money_cents(amount: &str) -> Result<i64, CommerceServiceError> {
-    let normalized = amount.trim();
-    if normalized.is_empty() {
-        return Ok(0);
-    }
-    let value = normalized.parse::<f64>().map_err(|error| {
-        CommerceServiceError::validation(format!("invalid money amount {amount}: {error}"))
-    })?;
-    Ok((value * 100.0).round() as i64)
-}
-
-fn multiply_money_amount(amount: &str, quantity: i64) -> String {
-    let cents = parse_money_cents(amount)
-        .unwrap_or(0)
-        .saturating_mul(quantity);
-    format!("{:.2}", cents as f64 / 100.0)
-}
-
-fn commerce_money(
-    amount: &str,
-) -> Result<sdkwork_contract_service::CommerceMoney, CommerceServiceError> {
-    sdkwork_contract_service::CommerceMoney::new(amount).map_err(CommerceServiceError::storage)
 }
 
 fn json_string(value: &serde_json::Value, field: &str) -> Result<String, CommerceServiceError> {

@@ -13,7 +13,7 @@ pub fn resolve_trace_id(context: Option<&WebRequestContext>) -> String {
     context
         .and_then(|ctx| ctx.trace_id.clone())
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| sdkwork_utils_rust::uuid())
+        .unwrap_or_else(sdkwork_utils_rust::uuid)
 }
 
 pub fn success_item<T: serde::Serialize>(context: Option<&WebRequestContext>, item: T) -> Response {
@@ -72,12 +72,12 @@ pub fn parse_offset_list_params_validated(
     context: Option<&WebRequestContext>,
     page: Option<i64>,
     page_size: Option<i64>,
-) -> Result<OffsetListPageParams, Response> {
+) -> Result<OffsetListPageParams, Box<Response>> {
     validated_offset_list_params(page, page_size).map_err(|_| {
-        validation(
+        Box::new(validation(
             context,
             format!("page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"),
-        )
+        ))
     })
 }
 
@@ -88,7 +88,7 @@ pub fn parse_offset_list_params(page: Option<i64>, page_size: Option<i64>) -> Of
 pub fn validate_page_size(
     context: Option<&WebRequestContext>,
     page_size: Option<i64>,
-) -> Result<i64, Response> {
+) -> Result<i64, Box<Response>> {
     parse_offset_list_params_validated(context, Some(1), page_size).map(|params| params.page_size)
 }
 

@@ -13,10 +13,10 @@ pub fn resolve_trace_id(context: Option<&WebRequestContext>) -> String {
     context
         .and_then(|ctx| ctx.trace_id.clone())
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| sdkwork_utils_rust::uuid())
+        .unwrap_or_else(sdkwork_utils_rust::uuid)
 }
 
-/// 单资源响应：`{ code: 0, data: { item }, traceId }`。
+/// Returns a single resource as `{ code: 0, data: { item }, traceId }`.
 pub fn success_item<T: serde::Serialize>(context: Option<&WebRequestContext>, item: T) -> Response {
     let trace_id = resolve_trace_id(context);
     let envelope = SdkWorkApiResponse::success(SdkWorkResourceData { item }, trace_id.clone());
@@ -35,7 +35,7 @@ pub fn success_created_item<T: serde::Serialize>(
     )
 }
 
-/// 命令响应：`{ code: 0, data: { accepted: true, resourceId?, status? }, traceId }`。
+/// Returns a command result with `accepted: true` inside the standard envelope.
 pub fn success_command(
     context: Option<&WebRequestContext>,
     resource_id: Option<String>,
@@ -51,8 +51,8 @@ pub fn success_command(
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
 }
 
-/// 标准偏移分页列表响应：`{ code: 0, data: { items, pageInfo: { mode: 'offset', ... } }, traceId }`。
-/// `total_items` 为本次过滤后的总条数，`page`/`page_size` 来自 `OffsetListPageParams`。
+/// Returns an offset-paginated list inside the standard response envelope.
+/// `total_items` is the filtered row count; paging comes from `params`.
 pub fn success_items<T: serde::Serialize>(
     context: Option<&WebRequestContext>,
     items: Vec<T>,
@@ -68,7 +68,7 @@ pub fn success_items<T: serde::Serialize>(
     attach_trace_header((StatusCode::OK, Json(envelope)).into_response(), &trace_id)
 }
 
-/// 已知 `PageInfo` 的列表响应（适用于 cursor 模式或自定义偏移元数据）。
+/// Returns a list with caller-provided page metadata, including cursor pages.
 pub fn success_items_with_page_info<T: serde::Serialize>(
     context: Option<&WebRequestContext>,
     items: Vec<T>,
@@ -84,31 +84,31 @@ pub fn offset_list_page_params_from_query(page: i64, page_size: i64) -> OffsetLi
     offset_list_page_params_from_values(page, page_size)
 }
 
-/// 解析标准 `page` / `page_size` 查询参数；非法值返回 400 而非静默 clamp。
+/// Parses standard `page` and `page_size` values without silently clamping invalid input.
 pub fn parse_offset_list_params_validated(
     context: Option<&WebRequestContext>,
     page: Option<i64>,
     page_size: Option<i64>,
-) -> Result<OffsetListPageParams, Response> {
+) -> Result<OffsetListPageParams, Box<Response>> {
     validated_offset_list_params(page, page_size).map_err(|_| {
-        validation(
+        Box::new(validation(
             context,
             format!("page must be >= 1 and page_size must be between 1 and {MAX_LIST_PAGE_SIZE}"),
-        )
+        ))
     })
 }
 
-/// 解析标准 `page` / `page_size` 查询参数为 `OffsetListPageParams`，统一 clamp 到 `[1, 200]`。
-/// 仅用于已校验或测试场景；列表 handler 应使用 `parse_offset_list_params_validated`。
+/// Parses already-validated values and clamps them to the supported range.
+/// List handlers must use `parse_offset_list_params_validated` instead.
 pub fn parse_offset_list_params(page: Option<i64>, page_size: Option<i64>) -> OffsetListPageParams {
     OffsetListPageParams::parse(page, page_size)
 }
 
-/// 校验 `page_size` 不超过 `MAX_LIST_PAGE_SIZE`（200），超出返回 `INVALID_PARAMETER`。
+/// Validates `page_size` against `MAX_LIST_PAGE_SIZE`.
 pub fn validate_page_size(
     context: Option<&WebRequestContext>,
     page_size: Option<i64>,
-) -> Result<i64, Response> {
+) -> Result<i64, Box<Response>> {
     parse_offset_list_params_validated(context, Some(1), page_size).map(|params| params.page_size)
 }
 

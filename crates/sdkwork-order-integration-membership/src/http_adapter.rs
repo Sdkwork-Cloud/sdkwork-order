@@ -110,8 +110,8 @@ fn map_problem_detail(problem: SdkWorkProblemDetail) -> CommerceServiceError {
     match problem.code {
         40401 => CommerceServiceError::not_found(message),
         40901 => CommerceServiceError::conflict(message),
-        40001 | 40002 | 40003 | 40004 => CommerceServiceError::validation(message),
-        40101 | 40102 | 40103 | 40104 => CommerceServiceError::unauthorized(message),
+        40001..=40004 => CommerceServiceError::validation(message),
+        40101..=40104 => CommerceServiceError::unauthorized(message),
         _ => CommerceServiceError::storage(message),
     }
 }

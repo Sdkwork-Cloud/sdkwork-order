@@ -48,23 +48,23 @@ pub fn validate_backend_write_payload(
     scope: &str,
     payload: &impl Serialize,
     fallback_request_no: impl FnOnce(&str) -> String,
-) -> Result<BackendWriteCommandHeaders, Response> {
+) -> Result<BackendWriteCommandHeaders, Box<Response>> {
     let parsed = parse_required_write_command_headers(headers, fallback_request_no)
-        .map_err(|error| write_command_header_error_to_response(context, error))?;
+        .map_err(|error| Box::new(write_command_header_error_to_response(context, error)))?;
     let expected_hash = stable_json_request_hash(scope, payload).map_err(|_| {
-        write_command_header_error_to_response(
+        Box::new(write_command_header_error_to_response(
             context,
             WriteCommandHeaderError::InvalidHeader("command payload must serialize".to_string()),
-        )
+        ))
     })?;
     if expected_hash.trim() != parsed.request_hash.trim() {
         let trace_id = resolve_trace_id(context);
-        return Err(problem_response(
+        return Err(Box::new(problem_response(
             StatusCode::BAD_REQUEST,
             SdkWorkResultCode::ValidationError,
             "Sdkwork-Request-Hash does not match the command payload",
             &trace_id,
-        ));
+        )));
     }
     Ok(parsed)
 }

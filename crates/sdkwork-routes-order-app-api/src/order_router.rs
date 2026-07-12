@@ -644,7 +644,7 @@ async fn cancel_order_impl(
             format!("order-cancel-{order_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     let cancel_reason = body.cancel_reason.clone();
     let cancel_type = body.cancel_type.clone();
@@ -742,7 +742,7 @@ async fn pay_order(
         |idempotency_key| format!("pay-{order_id}-{idempotency_key}"),
     ) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let callback_payload = body
         .payment_password()
@@ -784,7 +784,7 @@ async fn create_order(
         fallback_order_request_no(&subject, &body.checkout_session_id, idempotency_key)
     }) {
         Ok(value) => value,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let command = match CreateOwnerOrderCommand::new(
         &subject.tenant_id,
@@ -802,7 +802,7 @@ async fn create_order(
         &checkout_owner_order_request_hash(&command),
         &write_headers.request_hash,
     ) {
-        return response;
+        return *response;
     }
 
     match state.store.create_owner_order(command).await {
