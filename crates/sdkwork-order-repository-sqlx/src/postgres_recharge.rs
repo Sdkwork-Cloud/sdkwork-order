@@ -354,7 +354,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
         OR o.order_no = $4
         OR pa.out_trade_no = $4
    )
-ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC NULLS LAST, o.id DESC
+ORDER BY COALESCE(CAST(pa.created_at AS TEXT), CAST(pi.created_at AS TEXT), CAST(o.created_at AS TEXT)) DESC NULLS LAST, o.id DESC
 LIMIT 1
 "#;
 
@@ -390,7 +390,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.id = CAST($4 AS TEXT)
   AND o.subject = 'points_recharge'
-ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC NULLS LAST, o.id DESC
+ORDER BY COALESCE(CAST(pa.created_at AS TEXT), CAST(pi.created_at AS TEXT), CAST(o.created_at AS TEXT)) DESC NULLS LAST, o.id DESC
 LIMIT 1
 "#;
 
@@ -460,7 +460,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
     'account_recharge_package',
     'coupon_recharge'
   )
-ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC, o.id DESC
+ORDER BY COALESCE(CAST(pa.created_at AS TEXT), CAST(pi.created_at AS TEXT), CAST(o.created_at AS TEXT)) DESC, o.id DESC
 LIMIT 1
 "#;
 
@@ -509,7 +509,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND LOWER(COALESCE(NULLIF(pi.status, ''), 'pending')) IN ('created', 'pending', 'processing')
   AND LOWER(COALESCE(NULLIF(pa.status, ''), 'pending')) IN ('created', 'pending', 'processing')
   AND (o.expired_at IS NULL OR CAST(o.expired_at AS TEXT) = '' OR CAST(o.expired_at AS TEXT) > $10)
-ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC NULLS LAST, o.id DESC
+ORDER BY COALESCE(CAST(pa.created_at AS TEXT), CAST(pi.created_at AS TEXT), CAST(o.created_at AS TEXT)) DESC NULLS LAST, o.id DESC
 LIMIT 1
 "#;
 
