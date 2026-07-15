@@ -140,6 +140,7 @@ const result = await client.recharges.settings.retrieve();
 const body = {
   packageId: 'packageId',
   paymentMethod: 'paymentMethod',
+  paymentProduct: 'mobile_cashier_h5',
   clientRequestNo: 'clientRequestNo',
   source: 'source',
 };

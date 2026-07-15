@@ -1,0 +1,272 @@
+.sdkwork-order-checkout-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(92vw, 52rem) !important;
+  min-height: min(76vh, 43rem);
+  max-height: min(88vh, 56rem);
+  overflow: hidden;
+  border-color: var(--sdk-color-border-default, rgb(39 39 42 / 60%));
+  background: var(--sdk-color-surface-panel, #1e1e22);
+  color: var(--sdk-color-text-primary, #fff);
+  box-shadow: var(--sdk-shadow-lg, 0 25px 50px -12px rgb(0 0 0 / 55%));
+}
+
+.sdkwork-order-checkout-dialog__header {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--sdk-color-border-default, rgb(39 39 42 / 60%));
+  padding: 1rem 1.5rem !important;
+}
+
+.sdkwork-order-checkout-dialog__title {
+  color: var(--sdk-color-text-primary, #fff);
+  font-size: 1.25rem;
+}
+
+.sdkwork-order-checkout-dialog__close {
+  border-radius: var(--sdk-radius-control, 0.5rem);
+  padding: 0.375rem;
+  color: var(--sdk-color-text-muted, #a1a1aa);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.sdkwork-order-checkout-dialog__close:hover {
+  background: var(--sdk-color-brand-primary-soft, #27272a);
+  color: var(--sdk-color-text-primary, #fff);
+}
+
+.sdkwork-order-checkout-dialog__close-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.sdkwork-order-checkout-dialog__body {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 20rem;
+  gap: 1.25rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem !important;
+}
+
+.sdkwork-order-checkout-dialog__summary {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.sdkwork-order-checkout-dialog__summary-card,
+.sdkwork-order-checkout-dialog__benefit-card,
+.sdkwork-order-checkout-dialog__payment-panel {
+  border: 1px solid var(--sdk-color-border-default, rgb(39 39 42 / 70%));
+  border-radius: var(--sdk-radius-panel, 0.5rem);
+}
+
+.sdkwork-order-checkout-dialog__summary-card {
+  padding: 1.25rem;
+  background: var(--sdk-color-surface-panel-muted, rgb(24 24 27 / 70%));
+}
+
+.sdkwork-order-checkout-dialog__summary-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sdkwork-order-checkout-dialog__label,
+.sdkwork-order-checkout-dialog__period,
+.sdkwork-order-checkout-dialog__benefit-description,
+.sdkwork-order-checkout-dialog__payment-label {
+  color: var(--sdk-color-text-secondary, #a1a1aa);
+  font-size: 0.875rem;
+}
+
+.sdkwork-order-checkout-dialog__plan-name {
+  margin-top: 0.25rem;
+  color: var(--sdk-color-text-primary, #fff);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.sdkwork-order-checkout-dialog__period {
+  margin-top: 0.5rem;
+}
+
+.sdkwork-order-checkout-dialog__price-block {
+  text-align: right;
+}
+
+.sdkwork-order-checkout-dialog__price,
+.sdkwork-order-checkout-dialog__payment-price {
+  margin-top: 0.25rem;
+  color: var(--sdk-color-text-primary, #fff);
+  font-size: 1.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sdkwork-order-checkout-dialog__original-price {
+  margin-top: 0.25rem;
+  color: var(--sdk-color-text-muted, #71717a);
+  font-size: 0.875rem;
+  text-decoration: line-through;
+}
+
+.sdkwork-order-checkout-dialog__benefit-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sdkwork-order-checkout-dialog__benefit-card {
+  padding: 0.75rem 1rem;
+  background: var(--sdk-color-surface-elevated, rgb(24 24 27 / 50%));
+  color: var(--sdk-color-text-secondary, #d4d4d8);
+  font-size: 0.875rem;
+}
+
+.sdkwork-order-checkout-dialog__benefit-title,
+.sdkwork-order-checkout-dialog__scan-prompt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--sdk-color-text-primary, #fff);
+  font-weight: 500;
+}
+
+.sdkwork-order-checkout-dialog__benefit-icon,
+.sdkwork-order-checkout-dialog__scan-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.sdkwork-order-checkout-dialog__benefit-icon--secure {
+  color: var(--sdk-color-state-success, #34d399);
+}
+
+.sdkwork-order-checkout-dialog__benefit-icon--activation {
+  color: var(--sdk-color-brand-accent, #38bdf8);
+}
+
+.sdkwork-order-checkout-dialog__benefit-description {
+  margin: 0.5rem 0 0;
+  line-height: 1.5rem;
+}
+
+.sdkwork-order-checkout-dialog__payment-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 26.25rem;
+  height: 100%;
+  padding: 1.25rem;
+  background: var(--sdk-color-surface-panel-muted, rgb(24 24 27 / 50%));
+  text-align: center;
+}
+
+.sdkwork-order-checkout-dialog__payment-price {
+  font-weight: 700;
+}
+
+.sdkwork-order-checkout-dialog__pending,
+.sdkwork-order-checkout-dialog__completed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+.sdkwork-order-checkout-dialog__pending {
+  color: var(--sdk-color-text-muted, #a1a1aa);
+}
+
+.sdkwork-order-checkout-dialog__pending-icon,
+.sdkwork-order-checkout-dialog__completed-icon {
+  width: 4rem;
+  height: 4rem;
+}
+
+.sdkwork-order-checkout-dialog__pending-icon {
+  color: var(--sdk-color-brand-accent, #22d3ee);
+}
+
+.sdkwork-order-checkout-dialog__completed-icon {
+  color: var(--sdk-color-state-success, #34d399);
+}
+
+.sdkwork-order-checkout-dialog__completed-label {
+  color: var(--sdk-color-text-primary, #fff);
+  font-weight: 500;
+}
+
+.sdkwork-order-checkout-dialog__qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.sdkwork-order-checkout-dialog__qr-image {
+  width: 16rem;
+  height: 16rem;
+  max-width: 100%;
+  border-radius: var(--sdk-radius-control, 0.5rem);
+  padding: 0.75rem;
+  background: var(--sdk-color-text-inverse, #fff);
+  object-fit: contain;
+}
+
+.sdkwork-order-checkout-dialog__scan-prompt {
+  margin: 1rem 0 0;
+  color: var(--sdk-color-text-secondary, #d4d4d8);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.sdkwork-order-checkout-dialog__unavailable {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
+.sdkwork-order-checkout-dialog__error-copy {
+  font-size: 0.875rem;
+}
+
+.sdkwork-order-checkout-dialog__retry {
+  margin-top: 1rem;
+}
+
+@media (min-width: 48rem) {
+  .sdkwork-order-checkout-dialog__body {
+    padding: 1.5rem !important;
+  }
+
+  .sdkwork-order-checkout-dialog__summary-card,
+  .sdkwork-order-checkout-dialog__payment-panel {
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 64rem) {
+  .sdkwork-order-checkout-dialog__benefit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 39.999rem) {
+  .sdkwork-order-checkout-dialog__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sdkwork-order-checkout-dialog__payment-panel {
+    min-height: 22rem;
+  }
+}

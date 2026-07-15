@@ -44,7 +44,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "e484d5e63bdf992535b18d1023634057b198d259a80a34997609e851ddd47a27"
+      "sha256": "54539192dafe64ddc20beb8d4e3b6e6e70b9d276734896d78e8cffa78d859d0e"
     },
     {
       "path": "sdkwork-sdk.json",
@@ -72,7 +72,7 @@
     },
     {
       "path": "src/api/memberships.ts",
-      "sha256": "36ad29ac9a015fe5eaade24b4ac572c55de1a3ce89cdd33d1a8e62a27f3bbd6a"
+      "sha256": "1104108311dd4c6c8982ae63fb955d869116f5276599a4e37e9e607347068c85"
     },
     {
       "path": "src/api/orders.ts",
@@ -184,11 +184,19 @@
     },
     {
       "path": "src/types/index.ts",
-      "sha256": "b38c42bf576b426e125a610ad4610a5699e00631dd5bb9d1c28b108af3cabb99"
+      "sha256": "e8910201e867bd42e4ee961c3ab464f1ab3caf2fb258934a6e0a246a1ae2ae33"
     },
     {
       "path": "src/types/membership-order-create-command.ts",
-      "sha256": "6525f1971b6ab9d176d651e85f1fdde26b22596a9b8ae2fee52c635a1ec02c77"
+      "sha256": "f68384425530827efac5348776fe7f9fc54056ff652bd55330d722a1fc9d402d"
+    },
+    {
+      "path": "src/types/membership-order-create-response.ts",
+      "sha256": "24ff4547949cb9656a53c980df732091a62211c97c2cf1b3d6795d66f83952fa"
+    },
+    {
+      "path": "src/types/membership-order-create-result.ts",
+      "sha256": "986f5672ba574f678f639abd7750eefc409330440273dc3c858525bfd9512e98"
     },
     {
       "path": "src/types/orders-payments-webhooks-receive-request.ts",

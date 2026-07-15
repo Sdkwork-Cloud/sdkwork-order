@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/order-pc-checkout",
+    "displayName": "SDKWork Order PC Checkout",
+    "version": "0.1.0",
+    "type": "react-package",
+    "root": "sdkwork-order/apps/sdkwork-order-pc/packages/sdkwork-order-pc-checkout",
+    "domain": "commerce",
+    "capability": "checkout",
+    "surface": "app",
+    "status": "ready",
+    "languages": [
+      "typescript",
+      "react"
+    ],
+    "generated": false,
+    "private": true,
+    "manifests": [
+      "package.json"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "MODULE_SPEC.md",
+      "path": "../../../../../sdkwork-specs/MODULE_SPEC.md",
+      "purpose": "Reusable UI package contract and dependency direction."
+    },
+    {
+      "file": "COMPONENT_SPEC.md",
+      "path": "../../../../../sdkwork-specs/COMPONENT_SPEC.md",
+      "purpose": "Component manifest requirements."
+    },
+    {
+      "file": "CODE_STYLE_SPEC.md",
+      "path": "../../../../../sdkwork-specs/CODE_STYLE_SPEC.md",
+      "purpose": "Authored source organization."
+    },
+    {
+      "file": "NAMING_SPEC.md",
+      "path": "../../../../../sdkwork-specs/NAMING_SPEC.md",
+      "purpose": "Package and public API naming."
+    },
+    {
+      "file": "TYPESCRIPT_CODE_SPEC.md",
+      "path": "../../../../../sdkwork-specs/TYPESCRIPT_CODE_SPEC.md",
+      "purpose": "TypeScript package and export rules."
+    },
+    {
+      "file": "FRONTEND_CODE_SPEC.md",
+      "path": "../../../../../sdkwork-specs/FRONTEND_CODE_SPEC.md",
+      "purpose": "Frontend component and UI boundary rules."
+    },
+    {
+      "file": "FRONTEND_SPEC.md",
+      "path": "../../../../../sdkwork-specs/FRONTEND_SPEC.md",
+      "purpose": "Frontend behavior, accessibility, and verification rules."
+    },
+    {
+      "file": "UI_ARCHITECTURE_SPEC.md",
+      "path": "../../../../../sdkwork-specs/UI_ARCHITECTURE_SPEC.md",
+      "purpose": "UI architecture selection rules."
+    },
+    {
+      "file": "APP_PC_ARCHITECTURE_SPEC.md",
+      "path": "../../../../../sdkwork-specs/APP_PC_ARCHITECTURE_SPEC.md",
+      "purpose": "PC package family rules."
+    },
+    {
+      "file": "APP_PC_REACT_UI_SPEC.md",
+      "path": "../../../../../sdkwork-specs/APP_PC_REACT_UI_SPEC.md",
+      "purpose": "PC React UI package rules."
+    }
+  ],
+  "contracts": {
+    "layerRole": "frontend-feature",
+    "publicExports": [
+      "."
+    ],
+    "providedPorts": [
+      {
+        "name": "orderCheckoutDialog",
+        "export": "."
+      }
+    ],
+    "requiredPorts": [
+      {
+        "name": "checkoutCopy",
+        "export": "."
+      },
+      {
+        "name": "checkoutDriver",
+        "export": "."
+      }
+    ],
+    "runtimeEntrypoints": [
+      "package.json#scripts.typecheck"
+    ],
+    "routeManifest": null,
+    "sdkClients": [],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": [
+      "package.json#sdkwork"
+    ]
+  },
+  "verification": {
+    "commands": [
+      "pnpm --filter @sdkwork/order-pc-checkout typecheck"
+    ]
+  }
+}

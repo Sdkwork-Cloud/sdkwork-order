@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { MembershipOrderCreateCommand } from '../types';
+import type { MembershipOrderCreateCommand, MembershipOrderCreateResult } from '../types';
 
 
 export interface MembershipsOrdersCreateParams {
@@ -19,7 +19,7 @@ export class MembershipsOrdersApi {
 
 
 /** Memberships orders create. */
-  async create(body: MembershipOrderCreateCommand, params: MembershipsOrdersCreateParams): Promise<Record<string, unknown>> {
+  async create(body: MembershipOrderCreateCommand, params: MembershipsOrdersCreateParams): Promise<MembershipOrderCreateResult> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
@@ -28,7 +28,7 @@ export class MembershipsOrdersApi {
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/memberships/orders`), body, undefined, requestHeaders, 'application/json');
+    return this.client.post<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), body, undefined, requestHeaders, 'application/json');
   }
 }
 

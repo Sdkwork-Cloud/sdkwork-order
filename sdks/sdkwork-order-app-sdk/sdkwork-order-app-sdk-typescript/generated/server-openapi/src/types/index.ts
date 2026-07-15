@@ -15,6 +15,8 @@ export type { ShopReadinessItem } from './shop-readiness-item';
 export type { UpdateAfterSalesRequest } from './update-after-sales-request';
 export type { RechargeOrderCreateCommand } from './recharge-order-create-command';
 export type { MembershipOrderCreateCommand } from './membership-order-create-command';
+export type { MembershipOrderCreateResponse } from './membership-order-create-response';
+export type { MembershipOrderCreateResult } from './membership-order-create-result';
 export type { SdkWorkApiResponse } from './sdk-work-api-response';
 export type { SdkWorkResourceData } from './sdk-work-resource-data';
 export type { SdkWorkPageData } from './sdk-work-page-data';

@@ -4055,7 +4055,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                  "$ref": "#/components/schemas/MembershipOrderCreateResponse"
                 }
               }
             }
@@ -5640,12 +5640,96 @@
           "paymentMethod": {
             "type": "string"
           },
+          "paymentProduct": {
+            "type": "string",
+            "enum": [
+              "mobile_cashier_h5",
+              "wechat_native",
+              "alipay_native"
+            ],
+            "default": "mobile_cashier_h5",
+            "description": "QR payment product. H5 returns the order-bound cashierUrl; native products create a provider payment intent."
+          },
           "clientRequestNo": {
             "type": "string"
           },
           "source": {
             "type": "string"
           }
+        }
+      },
+      "MembershipOrderCreateResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/MembershipOrderCreateResult"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "MembershipOrderCreateResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "orderNo",
+          "outTradeNo",
+          "amount",
+          "currencyCode",
+          "packageId",
+          "packageName",
+          "durationDays",
+          "paymentMethod",
+          "paymentProduct",
+          "qrCode",
+          "qrCodeType",
+          "paymentParams",
+          "status",
+          "cashierUrl"
+        ],
+        "properties": {
+          "orderId": { "type": "string" },
+          "orderNo": { "type": "string" },
+          "outTradeNo": { "type": "string" },
+          "amount": { "type": "string" },
+          "currencyCode": { "type": "string" },
+          "packageId": { "type": "string" },
+          "packageName": { "type": "string" },
+          "durationDays": { "type": "integer", "format": "int64" },
+          "paymentMethod": { "type": "string" },
+          "paymentProduct": {
+            "type": "string",
+            "enum": ["mobile_cashier_h5", "wechat_native", "alipay_native"]
+          },
+          "qrCode": { "type": "string" },
+          "qrCodeType": {
+            "type": "string",
+            "enum": ["cashier_url", "provider_native"]
+          },
+          "paymentId": { "type": ["string", "null"] },
+          "paymentParams": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "status": { "type": "string" },
+          "cashierUrl": { "type": "string" }
         }
       },
       "SdkWorkApiResponse": {

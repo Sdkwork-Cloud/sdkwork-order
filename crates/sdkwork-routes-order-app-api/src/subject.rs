@@ -133,6 +133,7 @@ mod tests {
             locale: None,
             client_kind: None,
             operation: None,
+            idempotency_key: None,
             trace_id: None,
         }
     }

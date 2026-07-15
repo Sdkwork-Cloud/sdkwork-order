@@ -9,7 +9,7 @@
     "protocol": "http",
     "packageName": "@sdkwork/order-app-sdk"
   },
-  "changeFingerprint": "13aaf0e68664045cfb15892f4123c3692f7c496d9e681a815d9c6f332c0feb6b",
+  "changeFingerprint": "51037e6a415017cf0e6c9f7fb4ba25fa4f9d33850ff80364ce6285dbb162f09f",
   "changes": {
     "createdGeneratedFiles": [
       "bin/publish-core.mjs",
@@ -57,6 +57,8 @@
       "src/types/field-error.ts",
       "src/types/index.ts",
       "src/types/membership-order-create-command.ts",
+      "src/types/membership-order-create-response.ts",
+      "src/types/membership-order-create-result.ts",
       "src/types/orders-payments-webhooks-receive-request.ts",
       "src/types/page-info.ts",
       "src/types/problem-detail.ts",
@@ -140,6 +142,8 @@
           "src/types/field-error.ts",
           "src/types/index.ts",
           "src/types/membership-order-create-command.ts",
+          "src/types/membership-order-create-response.ts",
+          "src/types/membership-order-create-result.ts",
           "src/types/orders-payments-webhooks-receive-request.ts",
           "src/types/page-info.ts",
           "src/types/problem-detail.ts",

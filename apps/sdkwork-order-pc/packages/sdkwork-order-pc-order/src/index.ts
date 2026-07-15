@@ -5,6 +5,7 @@ export * from "./order-copy.ts";
 export * from "./order-intl.tsx";
 export * from "./order-service.ts";
 export * from "./components/order-detail-drawer.tsx";
+export * from "./components/order-checkout-dialog.tsx";
 export * from "./components/order-stat-grid.tsx";
 export * from "./pages/OrderPage.tsx";
 export * from "./components/order-detail-drawer";

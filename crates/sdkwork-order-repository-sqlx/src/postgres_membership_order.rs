@@ -19,10 +19,18 @@ JOIN membership_package_group g
     ON g.id = p.package_group_id
 LEFT JOIN commerce_product_sku s
     ON s.id = p.sku_id
-   AND s.sales_status = 'active'
+   AND COALESCE(
+        NULLIF(to_jsonb(s) ->> 'sales_status', ''),
+        NULLIF(to_jsonb(s) ->> 'status', ''),
+        'active'
+   ) = 'active'
 LEFT JOIN commerce_product_spu pr
     ON pr.id = s.spu_id
-   AND pr.sales_status = 'active'
+   AND COALESCE(
+        NULLIF(to_jsonb(pr) ->> 'sales_status', ''),
+        NULLIF(to_jsonb(pr) ->> 'status', ''),
+        'active'
+   ) = 'active'
 WHERE (
         (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = CAST($2 AS TEXT))
         OR (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id IS NULL)
@@ -59,10 +67,18 @@ JOIN membership_package_group g
     ON g.id = p.package_group_id
 LEFT JOIN commerce_product_sku s
     ON s.id = p.sku_id
-   AND s.sales_status = 'active'
+   AND COALESCE(
+        NULLIF(to_jsonb(s) ->> 'sales_status', ''),
+        NULLIF(to_jsonb(s) ->> 'status', ''),
+        'active'
+   ) = 'active'
 LEFT JOIN commerce_product_spu pr
     ON pr.id = s.spu_id
-   AND pr.sales_status = 'active'
+   AND COALESCE(
+        NULLIF(to_jsonb(pr) ->> 'sales_status', ''),
+        NULLIF(to_jsonb(pr) ->> 'status', ''),
+        'active'
+   ) = 'active'
 WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND (p.organization_id = '0' OR p.organization_id IS NULL)
   AND (g.tenant_id = '__PLATFORM_TENANT__' OR g.tenant_id IS NULL)
@@ -71,27 +87,6 @@ WHERE p.tenant_id = '__PLATFORM_TENANT__'
   AND p.status = 'active'
   AND g.status = 'active'
 ORDER BY COALESCE(p.sort_weight, 0) ASC, p.id ASC
-LIMIT 1
-"#;
-
-const LOAD_MEMBERSHIP_PAYMENT_METHOD: &str = r#"
-SELECT method_key, provider_code
-FROM commerce_payment_method
-WHERE (
-        (tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($2 AS TEXT))
-        OR (tenant_id = CAST($1 AS TEXT) AND organization_id IS NULL)
-        OR (tenant_id = '__PLATFORM_TENANT__' AND (organization_id = '0' OR organization_id IS NULL))
-      )
-  AND status = 'active'
-  AND LOWER(method_key) = $3
-ORDER BY
-    CASE
-        WHEN tenant_id = CAST($1 AS TEXT) AND organization_id = CAST($2 AS TEXT) THEN 0
-        WHEN tenant_id = CAST($1 AS TEXT) AND organization_id IS NULL THEN 1
-        ELSE 2
-    END ASC,
-    COALESCE(sort_order, 0) ASC,
-    id ASC
 LIMIT 1
 "#;
 
@@ -133,7 +128,9 @@ impl PostgresCommerceMembershipOrderStore {
             })?;
 
         let package = load_membership_package(&mut tx, &command).await?;
-        let method_key = load_membership_payment_method(&mut tx, &command).await?;
+        // The H5 cashier can resolve its provider after the order is created.
+        // Persist the requested method without requiring a pre-seeded method row.
+        let method_key = normalize_method_key(&command.method);
 
         insert_membership_order(&mut tx, &command, &package).await?;
         insert_membership_order_item(&mut tx, &command, &package, &method_key).await?;
@@ -164,21 +161,25 @@ impl PostgresCommerceMembershipOrderStore {
                 CAST(COALESCE(ab.payable_amount, oi.total_amount, '0') AS TEXT) AS amount,
                 COALESCE(NULLIF(ab.currency_code, ''), 'CNY') AS currency_code,
                 COALESCE(
-                    NULLIF(COALESCE(oi.sku_snapshot_json, '{}')::jsonb ->> 'packageId', ''),
+                    NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'packageId', ''),
+                    CAST(mp.external_id AS TEXT),
                     $1
                 ) AS package_id,
                 COALESCE(
-                    NULLIF(COALESCE(oi.sku_snapshot_json, '{}')::jsonb ->> 'productName', ''),
-                    oi.title,
+                    NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'productName', ''),
+                    NULLIF(to_jsonb(oi) ->> 'title', ''),
+                    NULLIF(to_jsonb(oi) ->> 'item_title', ''),
+                    NULLIF(mp.name, ''),
                     'Membership package'
                 ) AS package_name,
                 CAST(COALESCE(
-                    NULLIF(COALESCE(oi.sku_snapshot_json, '{}')::jsonb ->> 'durationDays', ''),
+                    NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'durationDays', ''),
+                    CAST(mp.duration_days AS TEXT),
                     '0'
                 ) AS BIGINT) AS duration_days,
                 COALESCE(
-                    NULLIF(COALESCE(oi.sku_snapshot_json, '{}')::jsonb ->> 'paymentMethod', ''),
-                    '-'
+                    NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'paymentMethod', ''),
+                    $6
                 ) AS payment_method,
                 o.status AS order_status
             FROM commerce_order o
@@ -188,6 +189,10 @@ impl PostgresCommerceMembershipOrderStore {
             LEFT JOIN commerce_order_amount_breakdown ab
                 ON ab.tenant_id = o.tenant_id
                AND ab.order_id = o.id
+            LEFT JOIN membership_package mp
+                ON mp.sku_id = oi.sku_id
+               AND CAST(mp.external_id AS TEXT) = $1
+               AND mp.status = 'active'
             WHERE o.tenant_id = CAST($2 AS TEXT)
               AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $3 IS NULL))
               AND o.owner_user_id = CAST($4 AS TEXT)
@@ -202,6 +207,7 @@ impl PostgresCommerceMembershipOrderStore {
         .bind(&organization_id)
         .bind(&command.owner_user_id)
         .bind(&command.idempotency_key)
+        .bind(normalize_method_key(&command.method))
         .fetch_optional(&self.pool)
         .await
         .map_err(|error| store_error("failed to load membership order idempotency replay", error))?;
@@ -288,50 +294,42 @@ fn map_membership_package_row(
     })
 }
 
-async fn load_membership_payment_method(
-    tx: &mut Transaction<'_, Postgres>,
-    command: &CreateMembershipOrderCommand,
-) -> Result<String, CommerceServiceError> {
-    let requested_method = normalize_method_key(&command.method);
-    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
-    let row = sqlx::query(LOAD_MEMBERSHIP_PAYMENT_METHOD)
-        .bind(&command.tenant_id)
-        .bind(&organization_id)
-        .bind(&requested_method)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|error| store_error("failed to load membership payment method", error))?
-        .ok_or_else(|| {
-            CommerceServiceError::conflict("membership payment method is unavailable")
-        })?;
-
-    Ok(normalize_method_key(&string_cell(&row, "method_key")))
-}
-
 async fn insert_membership_order(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
 ) -> Result<(), CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+    let payload = serde_json::json!({
+        "id": command.order_id,
+        "tenant_id": command.tenant_id,
+        "organization_id": organization_id,
+        "owner_user_id": command.owner_user_id,
+        "order_no": command.order_no,
+        "order_type": "membership",
+        "subject": "membership",
+        "status": "pending_payment",
+        "pay_status": "pending",
+        "payment_status": "pending",
+        "fulfillment_status": "unfulfilled",
+        "refund_status": "none",
+        "total_amount": package.price_amount.as_str(),
+        "currency_code": package.currency_code,
+        "request_no": command.order_no,
+        "idempotency_key": command.idempotency_key,
+        "created_at": command.requested_at,
+        "paid_at": null,
+        "cancelled_at": null,
+        "expired_at": command.expire_at,
+        "updated_at": command.requested_at,
+    });
     sqlx::query(
         r#"
         INSERT INTO commerce_order
-            (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status, fulfillment_status, refund_status, subject, currency_code, request_no, idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
-        VALUES
-            ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_payment', 'pending', 'unfulfilled', 'none', 'membership', $6, $7, $8, $9, NULL, NULL, $10, $9)
+        SELECT * FROM jsonb_populate_record(NULL::commerce_order, $1::jsonb)
         "#,
     )
-    .bind(&command.order_id)
-    .bind(&command.tenant_id)
-    .bind(&organization_id)
-    .bind(&command.owner_user_id)
-    .bind(&command.order_no)
-    .bind(&package.currency_code)
-    .bind(&command.order_no)
-    .bind(&command.idempotency_key)
-    .bind(&command.requested_at)
-    .bind(&command.expire_at)
+    .bind(payload.to_string())
     .execute(&mut **tx)
     .await
     .map_err(|error| store_error("failed to insert membership order", error))?;
@@ -344,26 +342,32 @@ async fn insert_membership_order_item(
     package: &MembershipPackageCatalog,
     payment_method: &str,
 ) -> Result<(), CommerceServiceError> {
+    let snapshot = membership_order_item_snapshot_json(package, command, payment_method);
+    let payload = serde_json::json!({
+        "id": command.order_item_id,
+        "tenant_id": command.tenant_id,
+        "organization_id": normalize_organization_scope(command.organization_id.as_deref()),
+        "order_id": command.order_id,
+        "sku_id": package.sku_id,
+        "sku_snapshot_json": snapshot,
+        "title": package.package_name,
+        "item_title": package.package_name,
+        "quantity": 1,
+        "unit_price_amount": package.price_amount.as_str(),
+        "discount_amount": "0.00",
+        "tax_amount": "0.00",
+        "total_amount": package.price_amount.as_str(),
+        "fulfillment_status": "unfulfilled",
+        "refund_status": "none",
+        "created_at": command.requested_at,
+    });
     sqlx::query(
         r#"
         INSERT INTO commerce_order_item
-            (id, tenant_id, order_id, sku_id, sku_snapshot_json, title, quantity, unit_price_amount, total_amount, fulfillment_status, refund_status, created_at)
-        VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, $5, $6, 1, $7, $7, 'unfulfilled', 'none', $8)
+        SELECT * FROM jsonb_populate_record(NULL::commerce_order_item, $1::jsonb)
         "#,
     )
-    .bind(&command.order_item_id)
-    .bind(&command.tenant_id)
-    .bind(&command.order_id)
-    .bind(&package.sku_id)
-    .bind(membership_order_item_snapshot_json(
-        package,
-        command,
-        payment_method,
-    ))
-    .bind(&package.package_name)
-    .bind(package.price_amount.as_str())
-    .bind(&command.requested_at)
+    .bind(payload.to_string())
     .execute(&mut **tx)
     .await
     .map_err(|error| store_error("failed to insert membership order item", error))?;
@@ -375,20 +379,27 @@ async fn insert_membership_order_amount_breakdown(
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
 ) -> Result<(), CommerceServiceError> {
+    let payload = serde_json::json!({
+        "id": format!("{}-amount", command.order_id),
+        "tenant_id": command.tenant_id,
+        "organization_id": normalize_organization_scope(command.organization_id.as_deref()),
+        "order_id": command.order_id,
+        "order_item_id": null,
+        "allocation_type": "order_total",
+        "original_amount": package.price_amount.as_str(),
+        "discount_amount": "0.00",
+        "payable_amount": package.price_amount.as_str(),
+        "currency_code": package.currency_code,
+        "created_at": command.requested_at,
+        "updated_at": command.requested_at,
+    });
     sqlx::query(
         r#"
         INSERT INTO commerce_order_amount_breakdown
-            (id, tenant_id, order_id, original_amount, discount_amount, payable_amount, currency_code, created_at)
-        VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, '0.00', $4, $5, $6)
+        SELECT * FROM jsonb_populate_record(NULL::commerce_order_amount_breakdown, $1::jsonb)
         "#,
     )
-    .bind(format!("{}-amount", command.order_id))
-    .bind(&command.tenant_id)
-    .bind(&command.order_id)
-    .bind(package.price_amount.as_str())
-    .bind(&package.currency_code)
-    .bind(&command.requested_at)
+    .bind(payload.to_string())
     .execute(&mut **tx)
     .await
     .map_err(|error| store_error("failed to insert membership order amount breakdown", error))?;
@@ -557,5 +568,19 @@ mod tests {
     fn postgres_membership_cashier_url_uses_virtual_scene() {
         let url = membership_cashier_url("MB123", "MEMBERSHIP123");
         assert!(url.contains("scene=virtual"));
+    }
+
+    #[test]
+    fn postgres_membership_sql_supports_legacy_and_current_commerce_rows() {
+        assert!(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID.contains("to_jsonb(s)"));
+        assert!(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID.contains("sales_status"));
+        assert!(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID.contains("status"));
+
+        let source = include_str!("postgres_membership_order.rs");
+        assert!(source.contains("jsonb_populate_record(NULL::commerce_order,"));
+        assert!(source.contains("jsonb_populate_record(NULL::commerce_order_item,"));
+        assert!(source.contains("jsonb_populate_record(NULL::commerce_order_amount_breakdown,"));
+        assert!(source.contains("to_jsonb(oi) ->> 'sku_snapshot_json'"));
+        assert!(source.contains("to_jsonb(oi) ->> 'item_title'"));
     }
 }

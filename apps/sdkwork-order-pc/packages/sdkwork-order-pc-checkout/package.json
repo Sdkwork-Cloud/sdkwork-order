@@ -1,9 +1,9 @@
 {
-  "name": "@sdkwork/order-pc-order",
+  "name": "@sdkwork/order-pc-checkout",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Orders, billing details, and transaction histories.",
+  "description": "Reusable order checkout dialog with QR payment presentation.",
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -12,20 +12,18 @@
     }
   },
   "files": [
-    "src",
-    "README.md"
+    "src"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@sdkwork/appbase-pc-react": "workspace:*",
-    "@sdkwork/order-pc-checkout": "workspace:*",
-    "@sdkwork/order-service": "workspace:*",
-    "lucide-react": "catalog:"
+    "lucide-react": "catalog:",
+    "qrcode": "catalog:"
   },
   "devDependencies": {
     "@sdkwork/ui-pc-react": "workspace:*",
+    "@types/qrcode": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "react": "catalog:",
@@ -41,7 +39,7 @@
     "workspace": "sdkwork-order",
     "architecture": "pc-react",
     "domain": "commerce",
-    "capability": "order",
+    "capability": "checkout",
     "status": "ready"
   }
 }

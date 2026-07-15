@@ -31,8 +31,12 @@ pub use fulfillment_router::{
     build_app_fulfillment_router, CommerceFulfillmentFuture, CommerceFulfillmentStore,
 };
 pub use membership_router::{
-    app_membership_order_router_with_postgres_pool, app_membership_order_router_with_sqlite_pool,
-    build_app_membership_order_router, CommerceMembershipOrderFuture, CommerceMembershipOrderStore,
+    app_membership_order_router_with_postgres_pool,
+    app_membership_order_router_with_postgres_pool_and_payments,
+    app_membership_order_router_with_sqlite_pool,
+    app_membership_order_router_with_sqlite_pool_and_payments, build_app_membership_order_router,
+    build_app_membership_order_router_with_payments, CommerceMembershipOrderFuture,
+    CommerceMembershipOrderStore,
 };
 pub use order_router::{
     app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool, build_app_order_router,

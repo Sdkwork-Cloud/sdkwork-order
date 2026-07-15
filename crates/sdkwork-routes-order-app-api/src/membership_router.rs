@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -14,6 +15,10 @@ use sdkwork_order_repository_sqlx::{
     PostgresCommerceMembershipOrderStore, SqliteCommerceMembershipOrderStore,
 };
 use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderOutcome};
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
+use sdkwork_payment_service::{
+    PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
+};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
@@ -21,10 +26,15 @@ use uuid::Uuid;
 
 use crate::api_response::{map_service_error, success_created_item, unauthorized, validation};
 use crate::command_headers::validate_app_write_payload;
+use crate::order_router::OwnerOrderPaymentStore;
+use crate::owner_order_payment_enrich::{
+    enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
+};
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
+const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
 
 pub type CommerceMembershipOrderFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -39,6 +49,7 @@ pub trait CommerceMembershipOrderStore: Send + Sync {
 #[derive(Clone)]
 struct AppMembershipOrderState {
     store: Arc<dyn CommerceMembershipOrderStore>,
+    payments: Option<Arc<dyn OwnerOrderPaymentStore>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -46,6 +57,7 @@ struct AppMembershipOrderState {
 struct CreateMembershipOrderRequest {
     package_id: Option<String>,
     payment_method: Option<String>,
+    payment_product: Option<String>,
     client_request_no: Option<String>,
     source: Option<String>,
 }
@@ -62,6 +74,11 @@ struct CreateMembershipOrderResponse {
     package_name: String,
     duration_days: i64,
     payment_method: String,
+    payment_product: String,
+    qr_code: String,
+    qr_code_type: String,
+    payment_id: Option<String>,
+    payment_params: BTreeMap<String, String>,
     status: String,
     cashier_url: String,
 }
@@ -83,6 +100,10 @@ impl CreateMembershipOrderRequest {
 
     fn payment_method(&self) -> Option<&str> {
         self.payment_method.as_deref()
+    }
+
+    fn payment_product(&self) -> Option<&str> {
+        self.payment_product.as_deref()
     }
 
     fn client_request_no(&self) -> Option<&str> {
@@ -113,20 +134,66 @@ impl CommerceMembershipOrderStore for PostgresCommerceMembershipOrderStore {
 }
 
 pub fn app_membership_order_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_app_membership_order_router(Arc::new(SqliteCommerceMembershipOrderStore::new(pool)))
+    let credentials = ProviderCredentialBundle::from_env();
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+        credentials.clone(),
+    ));
+    app_membership_order_router_with_sqlite_pool_and_payments(pool, registry, credentials)
 }
 
 pub fn app_membership_order_router_with_postgres_pool(pool: PgPool) -> Router {
-    build_app_membership_order_router(Arc::new(PostgresCommerceMembershipOrderStore::new(pool)))
+    let credentials = ProviderCredentialBundle::from_env();
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+        credentials.clone(),
+    ));
+    app_membership_order_router_with_postgres_pool_and_payments(pool, registry, credentials)
+}
+
+pub fn app_membership_order_router_with_sqlite_pool_and_payments(
+    pool: SqlitePool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+) -> Router {
+    let payments = enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials);
+    build_app_membership_order_router_with_payments(
+        Arc::new(SqliteCommerceMembershipOrderStore::new(pool)),
+        payments,
+    )
+}
+
+pub fn app_membership_order_router_with_postgres_pool_and_payments(
+    pool: PgPool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+) -> Router {
+    let payments = enriched_postgres_owner_order_payments(pool.clone(), registry, credentials);
+    build_app_membership_order_router_with_payments(
+        Arc::new(PostgresCommerceMembershipOrderStore::new(pool)),
+        payments,
+    )
 }
 
 pub fn build_app_membership_order_router(store: Arc<dyn CommerceMembershipOrderStore>) -> Router {
+    build_app_membership_order_router_state(store, None)
+}
+
+pub fn build_app_membership_order_router_with_payments(
+    store: Arc<dyn CommerceMembershipOrderStore>,
+    payments: Arc<dyn OwnerOrderPaymentStore>,
+) -> Router {
+    build_app_membership_order_router_state(store, Some(payments))
+}
+
+fn build_app_membership_order_router_state(
+    store: Arc<dyn CommerceMembershipOrderStore>,
+    payments: Option<Arc<dyn OwnerOrderPaymentStore>>,
+) -> Router {
     Router::new()
         .route(
             "/app/v3/api/memberships/orders",
             post(create_membership_order),
         )
-        .with_state(AppMembershipOrderState { store })
+        .with_state(AppMembershipOrderState { store, payments })
 }
 
 async fn create_membership_order(
@@ -145,7 +212,11 @@ async fn create_membership_order(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let method = match validate_payment_method(request.payment_method()) {
+    let payment_product = match validate_payment_product(request.payment_product()) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
+    let method = match validate_payment_method(request.payment_method(), &payment_product) {
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
@@ -172,8 +243,54 @@ async fn create_membership_order(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.store.create_membership_order(command).await {
-        Ok(outcome) => success_created_item(ctx, map_membership_order_outcome(outcome)),
+    let outcome = match state.store.create_membership_order(command).await {
+        Ok(outcome) => outcome,
+        Err(error) => return map_service_error(ctx, error),
+    };
+
+    if payment_product == DEFAULT_PAYMENT_PRODUCT {
+        return success_created_item(
+            ctx,
+            map_membership_order_outcome(outcome, &payment_product, None),
+        );
+    }
+
+    let Some(payments) = state.payments.as_ref() else {
+        return map_service_error(
+            ctx,
+            CommerceServiceError::provider_unavailable(
+                "membership order payment orchestration is not configured",
+            ),
+        );
+    };
+    let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
+        tenant_id: subject.tenant_id.clone(),
+        organization_id: subject.organization_id.clone(),
+        owner_user_id: subject.user_id.clone(),
+        order_id: outcome.order_id.clone(),
+        payment_method: method,
+        payment_scene: Some(payment_scene(&payment_product).to_string()),
+        payment_attempt_callback_payload: None,
+        request_no: format!("{}-payment", write_headers.request_no),
+        idempotency_key: format!(
+            "{}:payment:{}",
+            write_headers.idempotency_key, payment_product
+        ),
+    }) {
+        Ok(command) => command,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    match payments.pay_owner_order(pay_command).await {
+        Ok(payment) if provider_qr_code(&payment.payment_params).is_some() => success_created_item(
+            ctx,
+            map_membership_order_outcome(outcome, &payment_product, Some(payment)),
+        ),
+        Ok(_) => map_service_error(
+            ctx,
+            CommerceServiceError::provider_unavailable(format!(
+                "payment provider did not return a QR code for {payment_product}"
+            )),
+        ),
         Err(error) => map_service_error(ctx, error),
     }
 }
@@ -186,7 +303,24 @@ fn validate_package_id(value: Option<&str>) -> Result<String, String> {
     Ok(package_id.to_string())
 }
 
-fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
+fn validate_payment_product(value: Option<&str>) -> Result<String, String> {
+    let product = value
+        .unwrap_or(DEFAULT_PAYMENT_PRODUCT)
+        .trim()
+        .to_ascii_lowercase();
+    if matches!(
+        product.as_str(),
+        "mobile_cashier_h5" | "wechat_native" | "alipay_native"
+    ) {
+        return Ok(product);
+    }
+    Err(
+        "payment product must be one of: mobile_cashier_h5, wechat_native, alipay_native"
+            .to_string(),
+    )
+}
+
+fn validate_payment_method(value: Option<&str>, payment_product: &str) -> Result<String, String> {
     let method = value.unwrap_or_default().trim().to_ascii_lowercase();
     if method.is_empty() {
         return Err("payment method must be provided".to_string());
@@ -200,7 +334,34 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
             ALLOWED_PAYMENT_METHODS.join(", ")
         ));
     }
+    let expected = match payment_product {
+        "wechat_native" => Some("wechat_pay"),
+        "alipay_native" => Some("alipay"),
+        _ => None,
+    };
+    if expected.is_some_and(|expected| expected != method) {
+        return Err(format!(
+            "payment product {payment_product} requires payment method {}",
+            expected.unwrap_or_default()
+        ));
+    }
     Ok(method)
+}
+
+fn payment_scene(payment_product: &str) -> &str {
+    match payment_product {
+        "wechat_native" => "wechat_native",
+        "alipay_native" => "alipay_qr",
+        _ => DEFAULT_PAYMENT_PRODUCT,
+    }
+}
+
+fn provider_qr_code(payment_params: &BTreeMap<String, String>) -> Option<&String> {
+    payment_params
+        .get("qrCodeUrl")
+        .or_else(|| payment_params.get("qrCode"))
+        .or_else(|| payment_params.get("codeUrl"))
+        .filter(|value| !value.trim().is_empty())
 }
 
 fn build_create_membership_command(
@@ -243,7 +404,28 @@ fn build_create_membership_command(
 
 fn map_membership_order_outcome(
     value: CreateMembershipOrderOutcome,
+    payment_product: &str,
+    payment: Option<PayOwnerOrderOutcome>,
 ) -> CreateMembershipOrderResponse {
+    let cashier_url = value.cashier_url;
+    let (payment_id, payment_params, payment_status) = payment
+        .map(|payment| {
+            (
+                Some(payment.payment_id),
+                payment.payment_params,
+                Some(payment.status),
+            )
+        })
+        .unwrap_or_else(|| (None, BTreeMap::new(), None));
+    let provider_qr_code = provider_qr_code(&payment_params);
+    let (qr_code, qr_code_type) = if payment_product == DEFAULT_PAYMENT_PRODUCT {
+        (cashier_url.clone(), "cashier_url")
+    } else {
+        (
+            provider_qr_code.cloned().unwrap_or_default(),
+            "provider_native",
+        )
+    };
     CreateMembershipOrderResponse {
         order_id: value.order_id,
         order_no: value.order_no,
@@ -254,8 +436,13 @@ fn map_membership_order_outcome(
         package_name: value.package_name,
         duration_days: value.duration_days,
         payment_method: value.payment_method,
-        status: value.status,
-        cashier_url: value.cashier_url,
+        payment_product: payment_product.to_string(),
+        qr_code,
+        qr_code_type: qr_code_type.to_string(),
+        payment_id,
+        payment_params,
+        status: payment_status.unwrap_or(value.status),
+        cashier_url,
     }
 }
 
@@ -323,4 +510,62 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let month = month_prime + if month_prime < 10 { 3 } else { -9 };
     let year = year + if month <= 2 { 1 } else { 0 };
     (year, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::{
+        payment_scene, provider_qr_code, validate_payment_method, validate_payment_product,
+        DEFAULT_PAYMENT_PRODUCT,
+    };
+
+    #[test]
+    fn defaults_to_order_bound_mobile_cashier_product() {
+        assert_eq!(
+            validate_payment_product(None).expect("default payment product"),
+            DEFAULT_PAYMENT_PRODUCT
+        );
+    }
+
+    #[test]
+    fn native_products_require_their_provider_payment_method() {
+        assert_eq!(
+            validate_payment_method(Some("wechat_pay"), "wechat_native")
+                .expect("wechat native method"),
+            "wechat_pay"
+        );
+        assert!(validate_payment_method(Some("alipay"), "wechat_native").is_err());
+        assert_eq!(
+            validate_payment_method(Some("alipay"), "alipay_native").expect("alipay native method"),
+            "alipay"
+        );
+        assert!(validate_payment_method(Some("wechat_pay"), "alipay_native").is_err());
+    }
+
+    #[test]
+    fn native_products_map_to_provider_supported_scenes() {
+        assert_eq!(payment_scene("wechat_native"), "wechat_native");
+        assert_eq!(payment_scene("alipay_native"), "alipay_qr");
+    }
+
+    #[test]
+    fn native_qr_requires_provider_qr_output() {
+        let mut params = BTreeMap::new();
+        params.insert(
+            "cashierUrl".to_string(),
+            "https://cashier.test/order/1".to_string(),
+        );
+        assert!(provider_qr_code(&params).is_none());
+
+        params.insert(
+            "qrCodeUrl".to_string(),
+            "weixin://wxpay/bizpayurl?pr=order".to_string(),
+        );
+        assert_eq!(
+            provider_qr_code(&params).map(String::as_str),
+            Some("weixin://wxpay/bizpayurl?pr=order")
+        );
+    }
 }

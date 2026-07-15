@@ -12,7 +12,7 @@
   "mode": "apply",
   "hasChanges": true,
   "hasDestructiveChanges": false,
-  "changeFingerprint": "13aaf0e68664045cfb15892f4123c3692f7c496d9e681a815d9c6f332c0feb6b",
+  "changeFingerprint": "51037e6a415017cf0e6c9f7fb4ba25fa4f9d33850ff80364ce6285dbb162f09f",
   "changeImpact": {
     "schemaVersion": 1,
     "areas": [
@@ -66,6 +66,8 @@
           "src/types/field-error.ts",
           "src/types/index.ts",
           "src/types/membership-order-create-command.ts",
+          "src/types/membership-order-create-response.ts",
+          "src/types/membership-order-create-result.ts",
           "src/types/orders-payments-webhooks-receive-request.ts",
           "src/types/page-info.ts",
           "src/types/problem-detail.ts",
@@ -251,21 +253,21 @@
     "localVersions": []
   },
   "stats": {
-    "totalFiles": 66,
-    "models": 34,
+    "totalFiles": 68,
+    "models": 36,
     "apis": 9,
-    "types": 36
+    "types": 38
   },
   "warnings": [],
   "syncSummary": {
     "dryRun": false,
     "controlPlaneEnabled": true,
-    "writtenFiles": 66,
+    "writtenFiles": 68,
     "skippedScaffoldFiles": 0,
     "skippedUnchangedGeneratedFiles": 0,
     "deletedGeneratedFiles": 0,
     "changeSummaryPath": ".sdkwork/sdkwork-generator-changes.json",
-    "changeFingerprint": "13aaf0e68664045cfb15892f4123c3692f7c496d9e681a815d9c6f332c0feb6b",
+    "changeFingerprint": "51037e6a415017cf0e6c9f7fb4ba25fa4f9d33850ff80364ce6285dbb162f09f",
     "changes": {
       "createdGeneratedFiles": [
         "bin/publish-core.mjs",
@@ -313,6 +315,8 @@
         "src/types/field-error.ts",
         "src/types/index.ts",
         "src/types/membership-order-create-command.ts",
+        "src/types/membership-order-create-response.ts",
+        "src/types/membership-order-create-result.ts",
         "src/types/orders-payments-webhooks-receive-request.ts",
         "src/types/page-info.ts",
         "src/types/problem-detail.ts",
@@ -396,6 +400,8 @@
             "src/types/field-error.ts",
             "src/types/index.ts",
             "src/types/membership-order-create-command.ts",
+            "src/types/membership-order-create-response.ts",
+            "src/types/membership-order-create-result.ts",
             "src/types/orders-payments-webhooks-receive-request.ts",
             "src/types/page-info.ts",
             "src/types/problem-detail.ts",
