@@ -50,12 +50,6 @@ WITH scoped_packages AS (
         END AS scope_rank,
         COALESCE(p.sort_weight, 0) AS sort_weight
     FROM commerce_recharge_package p
-    LEFT JOIN commerce_product_sku s
-        ON s.id = p.sku_id
-       AND s.sales_status = 'active'
-    LEFT JOIN commerce_product_spu pr
-        ON pr.id = s.spu_id
-       AND pr.sales_status = 'active'
     WHERE (
             (p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id = CAST(?2 AS TEXT))
             OR (p.tenant_id = CAST(?1 AS TEXT) AND p.organization_id IS NULL)
@@ -63,7 +57,6 @@ WITH scoped_packages AS (
       AND p.status = 'active'
       AND (p.valid_from IS NULL OR p.valid_from <= ?3)
       AND (p.valid_to IS NULL OR p.valid_to >= ?3)
-    GROUP BY p.id, p.tenant_id, p.organization_id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
 ),
 public_packages AS (
     SELECT
@@ -74,18 +67,11 @@ public_packages AS (
         0 AS scope_rank,
         COALESCE(p.sort_weight, 0) AS sort_weight
     FROM commerce_recharge_package p
-    LEFT JOIN commerce_product_sku s
-        ON s.id = p.sku_id
-       AND s.sales_status = 'active'
-    LEFT JOIN commerce_product_spu pr
-        ON pr.id = s.spu_id
-       AND pr.sales_status = 'active'
     WHERE p.tenant_id = '__PLATFORM_TENANT__'
       AND (p.organization_id = '0' OR p.organization_id IS NULL)
       AND p.status = 'active'
       AND (p.valid_from IS NULL OR p.valid_from <= ?3)
       AND (p.valid_to IS NULL OR p.valid_to >= ?3)
-    GROUP BY p.id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
 ),
 effective_packages AS (
     SELECT id, price_amount, currency_code, bonus_points, scope_rank, sort_weight

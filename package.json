@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "pnpm --dir apps/sdkwork-order-pc dev",
     "build": "pnpm --dir apps/sdkwork-order-pc build",
-    "start": "cargo run -p sdkwork-order-standalone-gateway --bin order-server",
+    "start": "cargo run -p sdkwork-order-standalone-gateway --bin sdkwork-order-standalone-gateway",
     "test": "pnpm test:node && pnpm test:vitest && cargo test --workspace",
     "test:node": "node --test --test-reporter=spec tests/static/openapi-contract.test.mjs",
     "test:vitest": "vitest run --config vitest.config.ts --configLoader native --pool vmThreads",

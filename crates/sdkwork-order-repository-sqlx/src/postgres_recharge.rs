@@ -51,12 +51,6 @@ WITH scoped_packages AS (
         END AS scope_rank,
         COALESCE(p.sort_weight, 0) AS sort_weight
     FROM commerce_recharge_package p
-    LEFT JOIN commerce_product_sku s
-        ON s.id = p.sku_id
-       AND s.sales_status = 'active'
-    LEFT JOIN commerce_product_spu pr
-        ON pr.id = s.spu_id
-       AND pr.sales_status = 'active'
     WHERE (
             (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id = CAST($2 AS TEXT))
             OR (p.tenant_id = CAST($1 AS TEXT) AND p.organization_id IS NULL)
@@ -64,7 +58,6 @@ WITH scoped_packages AS (
       AND p.status = 'active'
       AND (p.valid_from IS NULL OR p.valid_from <= $3)
       AND (p.valid_to IS NULL OR p.valid_to >= $3)
-    GROUP BY p.id, p.tenant_id, p.organization_id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
 ),
 public_packages AS (
     SELECT
@@ -75,18 +68,11 @@ public_packages AS (
         0 AS scope_rank,
         COALESCE(p.sort_weight, 0) AS sort_weight
     FROM commerce_recharge_package p
-    LEFT JOIN commerce_product_sku s
-        ON s.id = p.sku_id
-       AND s.sales_status = 'active'
-    LEFT JOIN commerce_product_spu pr
-        ON pr.id = s.spu_id
-       AND pr.sales_status = 'active'
     WHERE p.tenant_id = '__PLATFORM_TENANT__'
       AND (p.organization_id = '0' OR p.organization_id IS NULL)
       AND p.status = 'active'
       AND (p.valid_from IS NULL OR p.valid_from <= $3)
       AND (p.valid_to IS NULL OR p.valid_to >= $3)
-    GROUP BY p.id, p.price_amount, p.currency_code, p.bonus_points, p.sort_weight
 ),
 effective_packages AS (
     SELECT id, price_amount, currency_code, bonus_points, scope_rank, sort_weight
@@ -337,7 +323,7 @@ SELECT
     pa.id AS payment_attempt_id,
     COALESCE(NULLIF(o.order_no, ''), NULLIF(pa.out_trade_no, ''), '-') AS order_no,
     COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, ''), '-') AS out_trade_no,
-    CAST(COALESCE(NULLIF(pa.amount, ''), NULLIF(pi.amount, ''), '0') AS TEXT) AS amount,
+    COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS amount,
     COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     CAST(COALESCE(
         NULLIF(pa.callback_payload::jsonb ->> 'points', ''),
@@ -349,8 +335,8 @@ SELECT
     pi.status AS payment_status,
     pa.status AS payment_attempt_status,
     CAST(o.created_at AS TEXT) AS created_at,
-    CAST(COALESCE(o.expired_at, '') AS TEXT) AS expires_at,
-    CAST(COALESCE(pa.paid_at, o.paid_at, '') AS TEXT) AS paid_at
+    COALESCE(CAST(o.expired_at AS TEXT), '') AS expires_at,
+    COALESCE(CAST(pa.paid_at AS TEXT), CAST(o.paid_at AS TEXT), '') AS paid_at
 FROM commerce_order o
 LEFT JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
@@ -385,7 +371,7 @@ SELECT
         NULLIF(oi.sku_snapshot_json::jsonb ->> 'points', ''),
         '0'
     ) AS TEXT) AS points_value,
-    CAST(COALESCE(NULLIF(pa.amount, ''), NULLIF(pi.amount, ''), '0') AS TEXT) AS amount,
+    COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS amount,
     COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') AS currency_code
 FROM commerce_order o
 LEFT JOIN commerce_order_item oi
@@ -485,7 +471,7 @@ SELECT
     pa.id AS payment_attempt_id,
     COALESCE(NULLIF(o.order_no, ''), NULLIF(pa.out_trade_no, ''), '-') AS order_no,
     COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, ''), '-') AS out_trade_no,
-    CAST(COALESCE(NULLIF(pa.amount, ''), NULLIF(pi.amount, ''), '0') AS TEXT) AS amount,
+    COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS amount,
     COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     CAST(COALESCE(
         NULLIF(pa.callback_payload::jsonb ->> 'points', ''),
@@ -497,8 +483,8 @@ SELECT
     pi.status AS payment_status,
     pa.status AS payment_attempt_status,
     CAST(o.created_at AS TEXT) AS created_at,
-    CAST(COALESCE(o.expired_at, '') AS TEXT) AS expires_at,
-    CAST(COALESCE(pa.paid_at, o.paid_at, '') AS TEXT) AS paid_at
+    COALESCE(CAST(o.expired_at AS TEXT), '') AS expires_at,
+    COALESCE(CAST(pa.paid_at AS TEXT), CAST(o.paid_at AS TEXT), '') AS paid_at
 FROM commerce_order o
 JOIN commerce_payment_intent pi
     ON pi.tenant_id = o.tenant_id
@@ -512,7 +498,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
   AND o.subject = 'points_recharge'
-  AND CAST(COALESCE(NULLIF(pa.amount, ''), NULLIF(pi.amount, ''), '0') AS TEXT) IN ($4, $5, $6)
+  AND COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') IN ($4, $5, $6)
   AND COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') = $7
   AND CAST(COALESCE(
         NULLIF(pa.callback_payload::jsonb ->> 'points', ''),
@@ -522,7 +508,7 @@ WHERE o.tenant_id = CAST($1 AS TEXT)
   AND LOWER(COALESCE(NULLIF(o.status, ''), 'pending_payment')) IN ('draft', 'pending', 'pending_payment')
   AND LOWER(COALESCE(NULLIF(pi.status, ''), 'pending')) IN ('created', 'pending', 'processing')
   AND LOWER(COALESCE(NULLIF(pa.status, ''), 'pending')) IN ('created', 'pending', 'processing')
-  AND (o.expired_at IS NULL OR o.expired_at = '' OR o.expired_at > $10)
+  AND (o.expired_at IS NULL OR CAST(o.expired_at AS TEXT) = '' OR CAST(o.expired_at AS TEXT) > $10)
 ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC NULLS LAST, o.id DESC
 LIMIT 1
 "#;
@@ -1053,7 +1039,7 @@ impl PostgresCommerceRechargeStore {
             SET status = 'paid',
                 payment_status = 'success',
                 fulfillment_status = 'fulfilled',
-                paid_at = COALESCE(NULLIF(paid_at, ''), $1),
+                paid_at = COALESCE(paid_at, $1),
                 updated_at = $1
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))
@@ -1136,7 +1122,7 @@ impl PostgresCommerceRechargeStore {
             SET status = 'paid',
                 payment_status = 'success',
                 fulfillment_status = 'fulfilled',
-                paid_at = COALESCE(NULLIF(paid_at, ''), $1),
+                paid_at = COALESCE(paid_at, $1),
                 updated_at = $1
             WHERE tenant_id = CAST($2 AS TEXT)
               AND ((organization_id = CAST($3 AS TEXT)) OR (organization_id IS NULL AND $3 IS NULL))

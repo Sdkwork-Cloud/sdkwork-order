@@ -1873,7 +1873,7 @@ fn optional_string(value: Option<&str>) -> Option<String> {
 fn map_recharge_package(value: RechargePackageItem) -> RechargePackageResponse {
     RechargePackageResponse {
         id: value.id,
-        price_amount: value.price_amount.as_str().to_string(),
+        price_amount: format_money_minor(value.price_amount.as_str()),
         currency_code: value.currency_code,
         bonus_points: value.bonus_points,
         grant_amount: value.grant_amount,
@@ -1967,7 +1967,7 @@ fn map_recharge_outcome(value: CreatePointsRechargeOrderOutcome) -> SubmitRechar
             .as_str()
             .to_string(),
         target_asset: AccountValueAssetCode::Points.as_str().to_string(),
-        amount: value.amount.as_str().to_string(),
+        amount: format_money_minor(value.amount.as_str()),
         grant_amount: value.points.to_string(),
         currency_code: value.currency_code,
         points: value.points,
@@ -2016,7 +2016,7 @@ fn map_checkout_status(value: CheckoutStatusSnapshot) -> CheckoutStatusResponse 
     CheckoutStatusResponse {
         order_no: value.order_no,
         out_trade_no: value.out_trade_no,
-        amount: value.amount.as_str().to_string(),
+        amount: format_money_minor(value.amount.as_str()),
         currency_code: value.currency_code,
         points: value.points,
         provider_code: value.provider_code,
@@ -2034,6 +2034,15 @@ fn map_checkout_status(value: CheckoutStatusSnapshot) -> CheckoutStatusResponse 
         qr_code_payload: value.qr_code_payload,
         request_payment_payload: value.request_payment_payload,
     }
+}
+
+fn format_money_minor(value: &str) -> String {
+    let Ok(minor_units) = value.trim().parse::<i64>() else {
+        return value.trim().to_string();
+    };
+    let sign = if minor_units < 0 { "-" } else { "" };
+    let absolute = minor_units.unsigned_abs();
+    format!("{sign}{}.{:02}", absolute / 100, absolute % 100)
 }
 
 fn fallback_account_value_request_no(
@@ -2151,6 +2160,13 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formats_internal_minor_units_as_api_major_amounts() {
+        assert_eq!("0.00", format_money_minor("0"));
+        assert_eq!("75.00", format_money_minor("7500"));
+        assert_eq!("899.00", format_money_minor("89900"));
+    }
 
     #[test]
     fn builds_token_bank_plan_purchase_account_recharge_command() {

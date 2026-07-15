@@ -1,16 +1,14 @@
 {
-    "schemaVersion":  1,
-    "moduleId":  "order",
-    "defaultLocale":  "zh-CN",
-    "profiles":  {
-                     "standard":  {
-                                      "locales":  {
-
-                                                  },
-                                      "common":  [
-
-                                                 ]
-                                  }
-                 },
-    "kind":  "sdkwork.database.seed"
+  "schemaVersion": 1,
+  "kind": "sdkwork.database.seed",
+  "moduleId": "order",
+  "defaultLocale": "zh-CN",
+  "profiles": {
+    "standard": {
+      "common": [
+        "001_bootstrap.sql"
+      ],
+      "locales": {}
+    }
+  }
 }

@@ -2,6 +2,39 @@
 -- module: order
 -- account value order-owned tables; shared commerce core tables are reference-only in this repo
 
+CREATE TABLE IF NOT EXISTS commerce_recharge_package (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT,
+    external_id BIGINT NOT NULL,
+    package_no TEXT NOT NULL,
+    sku_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    price_amount TEXT NOT NULL,
+    currency_code TEXT NOT NULL DEFAULT 'CNY',
+    bonus_points BIGINT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    valid_from TEXT,
+    valid_to TEXT,
+    sort_weight BIGINT NOT NULL DEFAULT 0,
+    request_no TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_recharge_package_no
+    ON commerce_recharge_package(tenant_id, COALESCE(organization_id, '0'), package_no);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_recharge_package_idempotency
+    ON commerce_recharge_package(tenant_id, COALESCE(organization_id, '0'), idempotency_key);
+
+CREATE INDEX IF NOT EXISTS idx_recharge_package_list
+    ON commerce_recharge_package(tenant_id, organization_id, status, sort_weight, id);
+
+CREATE INDEX IF NOT EXISTS idx_recharge_package_sku
+    ON commerce_recharge_package(tenant_id, sku_id);
+
 CREATE TABLE IF NOT EXISTS commerce_account_value_package (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
