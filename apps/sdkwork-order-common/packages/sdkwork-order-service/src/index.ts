@@ -10,6 +10,7 @@ import {
   createOrderAppTransportClient,
   type BootstrapSdkworkOrderAppServiceInput,
 } from "./transport.ts";
+import { createSdkworkWriteCommandHeaders } from "./write-command-headers.ts";
 
 type ServiceTemplate = { readonly [key: string]: true | ServiceTemplate };
 
@@ -22,6 +23,41 @@ export type SdkworkOrderAppService = {
   orders: SdkworkOrderOrdersService;
   recharges: SdkworkOrderRechargesService;
 };
+
+export interface SdkworkPointsRechargePackage {
+  id: string;
+  priceAmount: number;
+  currencyCode: string;
+  bonusPoints: number;
+  grantAmount: number;
+  points: number;
+}
+
+export interface SdkworkPointsRechargePayment {
+  amountCny: number | null;
+  cashierUrl?: string;
+  orderId?: string;
+  orderNo?: string;
+  points: number;
+  qrCode?: string;
+  status: "completed" | "failed" | "pending";
+}
+
+export interface SdkworkPointsRechargeOrderInput {
+  packageId: number | string;
+  paymentMethod?: string;
+  source?: string;
+}
+
+export interface SdkworkPointsRechargeService {
+  listPackages(): Promise<SdkworkPointsRechargePackage[]>;
+  createOrder(input: SdkworkPointsRechargeOrderInput): Promise<SdkworkPointsRechargePayment>;
+  getOrderStatus(orderId: string): Promise<SdkworkPointsRechargePayment>;
+}
+
+export interface CreateSdkworkPointsRechargeServiceOptions {
+  appService?: SdkworkOrderAppService;
+}
 
 export type SdkworkOrderAppServiceProvider = () => SdkworkOrderAppService;
 
@@ -121,6 +157,58 @@ export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppService
       input.appClient.commerce.recharges,
       ["commerce", "recharges"],
     ),
+  };
+}
+
+export function createSdkworkPointsRechargeService(
+  options: CreateSdkworkPointsRechargeServiceOptions = {},
+): SdkworkPointsRechargeService {
+  const resolveAppService = () => options.appService ?? getSdkworkOrderService();
+
+  return {
+    async listPackages() {
+      const response = await resolveAppService().recharges.packages.list({ page: 1, pageSize: 200 });
+      const page = unwrapSdkworkOrderListPage<unknown>(response, "Unable to load recharge packages.");
+      return page.items.map(normalizePointsRechargePackage).filter((item): item is SdkworkPointsRechargePackage => item !== null);
+    },
+
+    async createOrder(input) {
+      const packageId = String(input.packageId).trim();
+      if (!packageId) {
+        throw new Error("A recharge package is required.");
+      }
+      const packages = await this.listPackages();
+      const selectedPackage = packages.find((item) => item.id === packageId);
+      if (!selectedPackage) {
+        throw new Error("The selected recharge package is unavailable.");
+      }
+
+      const body = {
+        amount: selectedPackage.priceAmount,
+        currencyCode: selectedPackage.currencyCode,
+        packageId: selectedPackage.id,
+        paymentMethod: input.paymentMethod ?? "wechat_pay",
+        source: input.source ?? "membership-token-plan",
+        subject: "points_recharge" as const,
+        targetAsset: "points" as const,
+      };
+      const headers = createSdkworkWriteCommandHeaders("recharges.orders.create", body);
+      const response = await resolveAppService().recharges.orders.create(body, headers);
+      return normalizePointsRechargePayment(
+        unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
+      );
+    },
+
+    async getOrderStatus(orderId) {
+      const normalizedOrderId = orderId.trim();
+      if (!normalizedOrderId) {
+        throw new Error("A recharge order id is required.");
+      }
+      const response = await resolveAppService().recharges.orders.retrieve(normalizedOrderId);
+      return normalizePointsRechargePayment(
+        unwrapSdkworkOrderResource<unknown>(response, "Unable to retrieve points recharge order."),
+      );
+    },
   };
 }
 
@@ -257,6 +345,52 @@ export function readSdkworkMediaResource(value: unknown): SdkworkMediaResource |
     return undefined;
   }
   return { ...record, kind, source } as SdkworkMediaResource;
+}
+
+function normalizePointsRechargePackage(value: unknown): SdkworkPointsRechargePackage | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const id = toSdkworkOrderOptionalString(record.id ?? record.packageId);
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    priceAmount: toSdkworkOrderNumber(record.priceAmount ?? record.price),
+    currencyCode: toSdkworkOrderOptionalString(record.currencyCode) ?? "CNY",
+    bonusPoints: toSdkworkOrderNumber(record.bonusPoints),
+    grantAmount: toSdkworkOrderNumber(record.grantAmount),
+    points: toSdkworkOrderNumber(record.points ?? record.grantAmount ?? record.bonusPoints),
+  };
+}
+
+function normalizePointsRechargePayment(value: unknown): SdkworkPointsRechargePayment {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const status = normalizePointsRechargeStatus(
+    record.status ?? record.rechargeStatus ?? record.paymentStatus ?? record.orderStatus,
+  );
+  return {
+    amountCny: toNullableSdkworkOrderNumber(record.amountCny ?? record.amount),
+    cashierUrl: toSdkworkOrderOptionalString(record.cashierUrl),
+    orderId: toSdkworkOrderOptionalString(record.orderId ?? record.id),
+    orderNo: toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo),
+    points: toSdkworkOrderNumber(record.points ?? record.grantAmount),
+    qrCode: toSdkworkOrderOptionalString(record.qrCode ?? record.qrCodePayload ?? record.providerQrCode ?? record.cashierUrl),
+    status,
+  };
+}
+
+function normalizePointsRechargeStatus(value: unknown): SdkworkPointsRechargePayment["status"] {
+  const status = String(value ?? "").trim().toLowerCase();
+  if (["completed", "complete", "paid", "success", "succeeded", "fulfilled"].includes(status)) {
+    return "completed";
+  }
+  if (["failed", "cancelled", "canceled", "closed", "expired", "rejected"].includes(status)) {
+    return "failed";
+  }
+  return "pending";
 }
 
 function buildServiceTree<TService>(

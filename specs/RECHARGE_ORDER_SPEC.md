@@ -127,6 +127,7 @@ Track phases in [commerce-recharge.spec.json](./commerce-recharge.spec.json).
 | Package | Role |
 | --- | --- |
 | `@sdkwork/order-pc-order` | Unified order list, order detail, admin |
+| `@sdkwork/order-pc-recharge` | Reusable points package selector, recharge order creation, QR payment, and status polling dialog |
 | `@sdkwork/account-pc-wallet` | May consume order SDK for recharge UI (composition) |
 
 ## 9. Verification

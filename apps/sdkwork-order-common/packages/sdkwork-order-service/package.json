@@ -10,6 +10,9 @@
       "default": "./src/index.ts"
     }
   },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@sdkwork/order-app-sdk": "workspace:*",
     "@sdkwork/order-backend-sdk": "workspace:*",

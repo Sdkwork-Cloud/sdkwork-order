@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/order-service",
+    "displayName": "SDKWork Order App Service",
+    "version": "0.1.0",
+    "type": "typescript-package",
+    "root": "sdkwork-order/apps/sdkwork-order-common/packages/sdkwork-order-service",
+    "domain": "commerce",
+    "declaredDomain": "commerce",
+    "capability": "order-service",
+    "status": "ready",
+    "languages": ["typescript"],
+    "generated": false,
+    "private": true,
+    "manifests": ["package.json"]
+  },
+  "canonicalSpecs": [
+    { "file": "SDK_SPEC.md", "path": "../../../../../sdkwork-specs/SDK_SPEC.md", "purpose": "SDK consumer boundary." },
+    { "file": "APP_SDK_INTEGRATION_SPEC.md", "path": "../../../../../sdkwork-specs/APP_SDK_INTEGRATION_SPEC.md", "purpose": "Injected app SDK service rules." },
+    { "file": "TYPESCRIPT_CODE_SPEC.md", "path": "../../../../../sdkwork-specs/TYPESCRIPT_CODE_SPEC.md", "purpose": "TypeScript implementation rules." },
+    { "file": "TEST_SPEC.md", "path": "../../../../../sdkwork-specs/TEST_SPEC.md", "purpose": "Service verification rules." }
+  ],
+  "contracts": {
+    "layerRole": "sdk-facade",
+    "publicExports": ["."],
+    "providedPorts": [{ "name": "orderAppService", "export": "." }, { "name": "pointsRechargeService", "export": "." }],
+    "requiredPorts": [{ "name": "orderAppSdk", "export": ".", "package": "@sdkwork/order-app-sdk" }],
+    "runtimeEntrypoints": ["package.json#scripts.typecheck"],
+    "sdkClients": ["@sdkwork/order-app-sdk"],
+    "events": [],
+    "configKeys": [],
+    "routeManifest": null
+  },
+  "integration": {
+    "authority": "Generated order app SDK is the only HTTP transport authority.",
+    "dependencyPolicy": "Consumers receive this service through injection or the configured runtime provider.",
+    "sdkPolicy": "No raw HTTP or manual auth headers are allowed."
+  },
+  "verification": { "commands": ["pnpm --filter @sdkwork/order-service typecheck"] }
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/order-pc-recharge",
+    "displayName": "SDKWork Order PC Points Recharge",
+    "version": "0.1.0",
+    "type": "react-package",
+    "root": "sdkwork-order/apps/sdkwork-order-pc/packages/sdkwork-order-pc-recharge",
+    "domain": "commerce",
+    "declaredDomain": "commerce",
+    "capability": "recharge",
+    "status": "ready",
+    "languages": ["typescript", "react"],
+    "generated": false,
+    "private": true,
+    "manifests": ["package.json"]
+  },
+  "canonicalSpecs": [
+    { "file": "FRONTEND_SPEC.md", "path": "../../../../../sdkwork-specs/FRONTEND_SPEC.md", "purpose": "Frontend UI and service boundaries." },
+    { "file": "UI_ARCHITECTURE_SPEC.md", "path": "../../../../../sdkwork-specs/UI_ARCHITECTURE_SPEC.md", "purpose": "PC package architecture rules." },
+    { "file": "SDK_SPEC.md", "path": "../../../../../sdkwork-specs/SDK_SPEC.md", "purpose": "Generated SDK consumption rules." },
+    { "file": "TEST_SPEC.md", "path": "../../../../../sdkwork-specs/TEST_SPEC.md", "purpose": "Frontend and SDK verification rules." }
+  ],
+  "contracts": {
+    "layerRole": "frontend-feature",
+    "publicExports": ["."],
+    "providedPorts": [{ "name": "pointsRechargeDialog", "export": "." }],
+    "requiredPorts": [{ "name": "orderService", "export": ".", "package": "@sdkwork/order-service" }],
+    "runtimeEntrypoints": ["package.json#scripts.typecheck"],
+    "sdkClients": ["@sdkwork/order-service"],
+    "events": [],
+    "configKeys": ["package.json#sdkwork"],
+    "routeManifest": null
+  },
+  "integration": {
+    "authority": "Root SDKWork specs remain authoritative.",
+    "dependencyPolicy": "The dialog consumes the injected order service and never constructs HTTP clients.",
+    "sdkPolicy": "All app-api calls delegate to @sdkwork/order-service backed by @sdkwork/order-app-sdk."
+  },
+  "verification": { "commands": ["pnpm --filter @sdkwork/order-pc-recharge typecheck"] }
+}

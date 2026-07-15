@@ -19,6 +19,7 @@
       "@sdkwork/order-pc-admin-core": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-admin-core/src/index.ts"],
       "@sdkwork/order-pc-shell": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-shell/src/index.tsx"],
       "@sdkwork/order-pc-order": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-order/src/index.ts"],
+      "@sdkwork/order-pc-recharge": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-recharge/src/index.ts"],
       "@sdkwork/order-pc-admin-orders": ["apps/sdkwork-order-pc/packages/sdkwork-order-pc-admin-orders/src/index.ts"],
       "@sdkwork/order-backend-sdk": ["sdks/sdkwork-order-backend-sdk/sdkwork-order-backend-sdk-typescript/src/index.ts"]
     },

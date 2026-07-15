@@ -1,0 +1,255 @@
+.sdkwork-points-recharge-dialog {
+  max-width: 1040px;
+  width: min(1040px, calc(100vw - 48px));
+}
+
+.sdkwork-points-recharge-dialog__header,
+.sdkwork-points-recharge-dialog__body {
+  background: var(--sdk-color-surface-panel, #20242a);
+  color: var(--sdk-color-text-primary, #f4f7fb);
+}
+
+.sdkwork-points-recharge-dialog .sdkwork-points-recharge-dialog__header {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  min-height: 128px;
+  padding: 30px 48px;
+  text-align: left;
+}
+
+.sdkwork-points-recharge-dialog__identity {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+}
+
+.sdkwork-points-recharge-dialog__identity > svg {
+  color: var(--sdk-color-brand-primary, #14c8e8);
+  height: 20px;
+  margin-right: 10px;
+  width: 20px;
+}
+
+.sdkwork-points-recharge-dialog__header-actions {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+}
+
+.sdkwork-points-recharge-dialog__balance {
+  align-items: center;
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+}
+
+.sdkwork-points-recharge-dialog__balance strong {
+  background: var(--sdk-color-surface-panel-muted, #343a43);
+  border-radius: 999px;
+  color: var(--sdk-color-text-primary, #f4f7fb);
+  font-size: 18px;
+  line-height: 1;
+  min-width: 52px;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+.sdkwork-points-recharge-dialog__close {
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  position: static;
+}
+
+.sdkwork-points-recharge-dialog__body {
+  display: grid;
+  gap: 36px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, .8fr);
+  padding: 36px 48px 42px;
+}
+
+.sdkwork-points-recharge-dialog__section-title {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  font-size: 24px;
+  font-weight: 700;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.sdkwork-points-recharge-dialog__section-title span {
+  background: var(--sdk-color-border-default, #3d444d);
+  height: 1px;
+  width: 84px;
+}
+
+.sdkwork-points-recharge-dialog__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sdkwork-points-recharge-dialog__package {
+  background: var(--sdk-color-surface-panel-muted, #343a43);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 124px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.sdkwork-points-recharge-dialog__package:hover,
+.sdkwork-points-recharge-dialog__package.is-selected {
+  border-color: var(--sdk-color-text-primary, #f4f7fb);
+}
+
+.sdkwork-points-recharge-dialog__points {
+  align-items: center;
+  display: flex;
+  font-size: 24px;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.sdkwork-points-recharge-dialog__points svg {
+  height: 18px;
+  width: 18px;
+}
+
+.sdkwork-points-recharge-dialog__points small {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sdkwork-points-recharge-dialog__load-error {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+
+.sdkwork-points-recharge-dialog__price,
+.sdkwork-points-recharge-dialog__hint,
+.sdkwork-points-recharge-dialog__muted {
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+}
+
+.sdkwork-points-recharge-dialog__hint {
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 28px 0 0;
+  text-align: center;
+}
+
+.sdkwork-points-recharge-dialog__payment {
+  align-items: center;
+  background: var(--sdk-color-surface-base, #171a1f);
+  border: 1px solid var(--sdk-color-border-default, #3d444d);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 364px;
+  padding: 24px;
+}
+
+.sdkwork-points-recharge-dialog__payment-empty,
+.sdkwork-points-recharge-dialog__completed {
+  align-items: center;
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+  width: 100%;
+}
+
+.sdkwork-points-recharge-dialog__payment-empty svg {
+  height: 42px;
+  width: 42px;
+}
+
+.sdkwork-points-recharge-dialog__payment-empty p {
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 0;
+  max-width: 250px;
+}
+
+.sdkwork-points-recharge-dialog__qr {
+  text-align: center;
+}
+
+.sdkwork-points-recharge-dialog__qr img {
+  background: #fff;
+  border-radius: 10px;
+  display: block;
+  height: 252px;
+  padding: 10px;
+  width: 252px;
+}
+
+.sdkwork-points-recharge-dialog__qr p {
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  margin-top: 12px;
+}
+
+.sdkwork-points-recharge-dialog__qr span {
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 10px;
+  max-width: 260px;
+}
+
+.sdkwork-points-recharge-dialog__completed svg {
+  color: var(--sdk-color-brand-primary, #14c8e8);
+  height: 44px;
+  width: 44px;
+}
+
+@media (max-width: 760px) {
+  .sdkwork-points-recharge-dialog .sdkwork-points-recharge-dialog__header {
+    flex-direction: row;
+    min-height: 80px;
+    padding: 20px;
+  }
+
+  .sdkwork-points-recharge-dialog__header-actions {
+    gap: 10px;
+  }
+
+  .sdkwork-points-recharge-dialog__balance {
+    font-size: 12px;
+  }
+
+  .sdkwork-points-recharge-dialog__balance strong {
+    font-size: 15px;
+    min-width: 44px;
+    padding: 7px 10px;
+  }
+
+  .sdkwork-points-recharge-dialog__body {
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+    padding: 22px 20px 24px;
+  }
+
+  .sdkwork-points-recharge-dialog__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sdkwork-points-recharge-dialog__payment {
+    min-height: 260px;
+  }
+}
