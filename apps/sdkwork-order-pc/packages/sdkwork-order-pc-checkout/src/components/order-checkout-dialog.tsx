@@ -26,6 +26,7 @@ export type SdkworkOrderCheckoutPaymentStatus = "completed" | "failed" | "pendin
 
 export interface SdkworkOrderCheckoutPayment {
   amountCny?: number | null;
+  cashierUrl?: string;
   orderId?: string;
   qrCode?: string;
   status: SdkworkOrderCheckoutPaymentStatus;
@@ -149,13 +150,17 @@ export function SdkworkOrderCheckoutDialog({
           return;
         }
 
-        setPayment(result);
-        if (result.status === "failed") {
+        const qrCode = result.qrCode?.trim() || result.cashierUrl?.trim();
+        const normalizedResult = qrCode
+          ? { ...result, qrCode }
+          : result;
+        setPayment(normalizedResult);
+        if (normalizedResult.status === "failed") {
           setPaymentError(copyRef.current.paymentUnavailableDescription);
-        } else if (!result.qrCode && result.status !== "completed") {
+        } else if (!normalizedResult.qrCode && normalizedResult.status !== "completed") {
           setPaymentError(copyRef.current.paymentUnavailableDescription);
-        } else if (result.status === "completed") {
-          notifyPaymentCompleted(result);
+        } else if (normalizedResult.status === "completed") {
+          notifyPaymentCompleted(normalizedResult);
         }
       })
       .catch((error) => {

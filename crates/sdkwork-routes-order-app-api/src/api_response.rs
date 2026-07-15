@@ -5,15 +5,44 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_utils_rust::{
     offset_list_page_info, offset_list_page_params_from_values, validated_offset_list_params,
     OffsetListPageParams, PageInfo, SdkWorkApiResponse, SdkWorkCommandData, SdkWorkPageData,
-    SdkWorkProblemDetail, SdkWorkResourceData, SdkWorkResultCode, MAX_LIST_PAGE_SIZE,
+    SdkWorkProblemDetail, SdkWorkProblemRouting, SdkWorkResourceData, SdkWorkResultCode,
+    MAX_LIST_PAGE_SIZE,
 };
 use sdkwork_web_core::WebRequestContext;
 
 pub fn resolve_trace_id(context: Option<&WebRequestContext>) -> String {
     context
-        .and_then(|ctx| ctx.trace_id.clone())
+        .map(WebRequestContext::resolved_trace_id)
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(sdkwork_utils_rust::uuid)
+}
+
+fn problem_routing(context: Option<&WebRequestContext>) -> SdkWorkProblemRouting {
+    context
+        .map(WebRequestContext::problem_routing)
+        .unwrap_or_default()
+}
+
+fn problem_for_context(
+    context: Option<&WebRequestContext>,
+    status: StatusCode,
+    result_code: SdkWorkResultCode,
+    detail: impl Into<String>,
+) -> Response {
+    let trace_id = resolve_trace_id(context);
+    let problem = SdkWorkProblemDetail::platform_enriched(
+        result_code,
+        detail,
+        trace_id.clone(),
+        problem_routing(context),
+    );
+    let response = (
+        status,
+        [(axum::http::header::CONTENT_TYPE, "application/problem+json")],
+        Json(problem),
+    )
+        .into_response();
+    attach_trace_header(response, &trace_id)
 }
 
 /// Returns a single resource as `{ code: 0, data: { item }, traceId }`.
@@ -116,7 +145,6 @@ pub fn map_service_error(
     context: Option<&WebRequestContext>,
     error: CommerceServiceError,
 ) -> Response {
-    let trace_id = resolve_trace_id(context);
     let (status, result_code, detail) = match error.code() {
         "validation" => (
             StatusCode::BAD_REQUEST,
@@ -154,66 +182,64 @@ pub fn map_service_error(
             error.message().to_string(),
         ),
     };
-    let problem = SdkWorkProblemDetail::platform(result_code, detail, trace_id.clone());
-    attach_trace_header((status, Json(problem)).into_response(), &trace_id)
+    let operation_id = context
+        .and_then(|ctx| ctx.operation.as_ref())
+        .map(|operation| operation.operation_id.as_str())
+        .unwrap_or("unknown");
+    if status.is_server_error() {
+        tracing::error!(
+            trace_id = %resolve_trace_id(context),
+            operation_id,
+            error_code = error.code(),
+            error = %error.message(),
+            "order app-api request failed"
+        );
+    }
+    problem_for_context(context, status, result_code, detail)
 }
 
 pub fn unauthorized(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
+    problem_for_context(
+        context,
+        StatusCode::UNAUTHORIZED,
         SdkWorkResultCode::AuthenticationRequired,
         detail,
-        trace_id.clone(),
-    );
-    attach_trace_header(
-        (StatusCode::UNAUTHORIZED, Json(problem)).into_response(),
-        &trace_id,
     )
 }
 
 pub fn forbidden(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
+    problem_for_context(
+        context,
+        StatusCode::FORBIDDEN,
         SdkWorkResultCode::PermissionRequired,
         detail,
-        trace_id.clone(),
-    );
-    attach_trace_header(
-        (StatusCode::FORBIDDEN, Json(problem)).into_response(),
-        &trace_id,
     )
 }
 
 pub fn validation(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
+    problem_for_context(
+        context,
+        StatusCode::BAD_REQUEST,
         SdkWorkResultCode::ValidationError,
         detail,
-        trace_id.clone(),
-    );
-    attach_trace_header(
-        (StatusCode::BAD_REQUEST, Json(problem)).into_response(),
-        &trace_id,
     )
 }
 
 pub fn conflict(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem =
-        SdkWorkProblemDetail::platform(SdkWorkResultCode::Conflict, detail, trace_id.clone());
-    attach_trace_header(
-        (StatusCode::CONFLICT, Json(problem)).into_response(),
-        &trace_id,
+    problem_for_context(
+        context,
+        StatusCode::CONFLICT,
+        SdkWorkResultCode::Conflict,
+        detail,
     )
 }
 
 pub fn not_found(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem =
-        SdkWorkProblemDetail::platform(SdkWorkResultCode::NotFound, detail, trace_id.clone());
-    attach_trace_header(
-        (StatusCode::NOT_FOUND, Json(problem)).into_response(),
-        &trace_id,
+    problem_for_context(
+        context,
+        StatusCode::NOT_FOUND,
+        SdkWorkResultCode::NotFound,
+        detail,
     )
 }
 
@@ -221,25 +247,20 @@ pub fn unprocessable_entity(
     context: Option<&WebRequestContext>,
     detail: impl Into<String>,
 ) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem = SdkWorkProblemDetail::platform(
+    problem_for_context(
+        context,
+        StatusCode::UNPROCESSABLE_ENTITY,
         SdkWorkResultCode::UnprocessableEntity,
         detail,
-        trace_id.clone(),
-    );
-    attach_trace_header(
-        (StatusCode::UNPROCESSABLE_ENTITY, Json(problem)).into_response(),
-        &trace_id,
     )
 }
 
 pub fn not_implemented(context: Option<&WebRequestContext>, detail: impl Into<String>) -> Response {
-    let trace_id = resolve_trace_id(context);
-    let problem =
-        SdkWorkProblemDetail::platform(SdkWorkResultCode::InternalError, detail, trace_id.clone());
-    attach_trace_header(
-        (StatusCode::NOT_IMPLEMENTED, Json(problem)).into_response(),
-        &trace_id,
+    problem_for_context(
+        context,
+        StatusCode::NOT_IMPLEMENTED,
+        SdkWorkResultCode::InternalError,
+        detail,
     )
 }
 
@@ -256,6 +277,11 @@ fn attach_trace_header(response: Response, trace_id: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::to_bytes;
+    use sdkwork_web_core::{
+        ServerRequestId, WebApiSurface, WebAuthMode, WebOperationBinding, WebRequestContext,
+        WebTransportFacts,
+    };
 
     #[test]
     fn success_items_uses_offset_page_info_with_total_items() {
@@ -292,5 +318,59 @@ mod tests {
             Some("cancelled".to_string()),
         );
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn service_error_includes_standard_operation_routing() {
+        let context = WebRequestContext {
+            request_id: ServerRequestId("request-1".to_owned()),
+            api_surface: WebApiSurface::AppApi,
+            auth_mode: WebAuthMode::DualToken,
+            transport: WebTransportFacts {
+                path: "/app/v3/api/orders/order-1/payment_success".to_owned(),
+                method: "GET".to_owned(),
+                auth_token_present: true,
+                access_token_present: true,
+                api_key_present: false,
+                oauth_bearer_present: false,
+                agent_token_present: false,
+            },
+            principal: None,
+            locale: None,
+            client_kind: None,
+            operation: Some(WebOperationBinding {
+                operation_id: "orders.paymentSuccess.retrieve".to_owned(),
+                route_template: "/app/v3/api/orders/{orderId}/payment_success".to_owned(),
+                rate_limit_tier: None,
+                idempotent: true,
+            }),
+            trace_id: Some("trace-1".to_owned()),
+            idempotency_key: None,
+        };
+
+        let response = map_service_error(
+            Some(&context),
+            CommerceServiceError::storage("database read failed"),
+        );
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            response
+                .headers()
+                .get(axum::http::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("application/problem+json")
+        );
+        let body = to_bytes(response.into_body(), 16 * 1024)
+            .await
+            .expect("problem body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("problem json");
+        assert_eq!(payload["code"], 50001);
+        assert_eq!(payload["detail"], "An internal error occurred");
+        assert_eq!(payload["traceId"], "trace-1");
+        assert_eq!(payload["operationId"], "orders.paymentSuccess.retrieve");
+        assert_eq!(
+            payload["instance"],
+            "GET /app/v3/api/orders/{orderId}/payment_success"
+        );
     }
 }

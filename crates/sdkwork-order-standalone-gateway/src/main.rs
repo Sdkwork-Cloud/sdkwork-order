@@ -14,7 +14,6 @@ use axum::http::HeaderName;
 use sdkwork_order_gateway_assembly::{assemble_application_router, order_contract_fallback_config};
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_web_bootstrap::{service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig};
-use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
@@ -40,7 +39,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .router
         .layer(TraceLayer::new_for_http())
-        .layer(build_cors_layer());
+        .layer(
+            sdkwork_web_bootstrap::application_cors_layer_from_env(
+                &["SDKWORK_ORDER_ENVIRONMENT", "ORDER_ENVIRONMENT"],
+                &[
+                    "ORDER_CORS_ALLOW_ORIGINS",
+                    "SDKWORK_ORDER_CORS_ALLOWED_ORIGINS",
+                    "SDKWORK_CORS_ALLOWED_ORIGINS",
+                ],
+            )
+            .allow_headers([
+                ACCEPT,
+                ACCEPT_LANGUAGE,
+                AUTHORIZATION,
+                CONTENT_TYPE,
+                HeaderName::from_static("access-token"),
+                HeaderName::from_static("idempotency-key"),
+                HeaderName::from_static("if-match"),
+                HeaderName::from_static("sdkwork-request-hash"),
+                HeaderName::from_static("sdkwork-request-no"),
+                HeaderName::from_static("traceparent"),
+                HeaderName::from_static("tracestate"),
+                HeaderName::from_static("x-idempotency-fingerprint"),
+                HeaderName::from_static("x-sdkwork-locale"),
+            ]),
+        );
 
     let readiness = Arc::new(OrderReadiness { host: host.clone() });
     let app = service_router(
@@ -111,77 +134,6 @@ impl ReadinessCheck for OrderReadiness {
 /// - When set to `*`: emit a warning and fall back to a permissive policy
 ///   ONLY when `ORDER_CORS_PERMISSIVE_DEV=1` is also set, otherwise deny.
 /// - Otherwise: comma-separated list of allowed origins.
-fn build_cors_layer() -> CorsLayer {
-    let raw = std::env::var("ORDER_CORS_ALLOW_ORIGINS")
-        .unwrap_or_default()
-        .trim()
-        .to_owned();
-
-    let allow_origin = if raw.is_empty() {
-        tracing::warn!(
-            target = "order.security",
-            "ORDER_CORS_ALLOW_ORIGINS is not set; cross-origin requests are denied"
-        );
-        AllowOrigin::list([])
-    } else if raw == "*" {
-        if std::env::var("ORDER_CORS_PERMISSIVE_DEV").as_deref() == Ok("1") {
-            tracing::warn!(
-                target = "order.security",
-                "CORS is permissive (dev mode) — never use in production"
-            );
-            AllowOrigin::mirror_request()
-        } else {
-            tracing::error!(
-                target = "order.security",
-                "ORDER_CORS_ALLOW_ORIGINS='*' ignored without ORDER_CORS_PERMISSIVE_DEV=1; cross-origin requests are denied"
-            );
-            AllowOrigin::list([])
-        }
-    } else {
-        let origins: Vec<_> = raw
-            .split(',')
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .filter_map(|s| match s.parse::<axum::http::HeaderValue>() {
-                Ok(value) => Some(value),
-                Err(error) => {
-                    tracing::warn!(target = "order.security", origin = %s, error = %error, "invalid CORS origin ignored");
-                    None
-                }
-            })
-            .collect();
-        AllowOrigin::list(origins)
-    };
-
-    CorsLayer::new()
-        .allow_origin(allow_origin)
-        .allow_methods([
-            axum::http::Method::GET,
-            axum::http::Method::POST,
-            axum::http::Method::PUT,
-            axum::http::Method::PATCH,
-            axum::http::Method::DELETE,
-            axum::http::Method::OPTIONS,
-        ])
-        .allow_headers([
-            ACCEPT,
-            ACCEPT_LANGUAGE,
-            AUTHORIZATION,
-            CONTENT_TYPE,
-            HeaderName::from_static("access-token"),
-            HeaderName::from_static("idempotency-key"),
-            HeaderName::from_static("if-match"),
-            HeaderName::from_static("sdkwork-request-hash"),
-            HeaderName::from_static("sdkwork-request-no"),
-            HeaderName::from_static("traceparent"),
-            HeaderName::from_static("tracestate"),
-            HeaderName::from_static("x-idempotency-fingerprint"),
-            HeaderName::from_static("x-sdkwork-locale"),
-        ])
-        .allow_credentials(true)
-        .max_age(Duration::from_secs(600))
-}
-
 /// Waits for SIGINT (Ctrl+C) or SIGTERM to trigger graceful shutdown.
 async fn shutdown_signal() {
     let ctrl_c = async {

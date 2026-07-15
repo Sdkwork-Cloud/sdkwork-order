@@ -61,6 +61,38 @@ describe("SdkworkOrderCheckoutDialog", () => {
     expect(screen.getByText(copy.secureTitle)).toBeInTheDocument();
   });
 
+  it("uses the mobile cashier URL as the QR payload when qrCode is omitted", async () => {
+    const cashierUrl = "https://im.sdkwork.com/cashier?scene=virtual&orderId=ORDER-H5&outTradeNo=TRADE-H5";
+
+    render(
+      <SdkworkThemeProvider defaultTheme="light">
+        <SdkworkOrderCheckoutDialog
+          copy={copy}
+          driver={{
+            createPayment: async () => ({
+              cashierUrl,
+              orderId: "ORDER-H5",
+              status: "pending",
+            }),
+          }}
+          isOpen
+          onClose={vi.fn()}
+          summary={{
+            id: "membership-standard-monthly",
+            name: "Standard monthly",
+            priceLabel: "\u00a5158",
+          }}
+        />
+      </SdkworkThemeProvider>,
+    );
+
+    expect(await screen.findByRole("img", { name: copy.scanPrompt })).toHaveAttribute(
+      "src",
+      "data:image/png;base64,checkout-qr",
+    );
+    expect(screen.queryByText(copy.paymentUnavailable)).not.toBeInTheDocument();
+  });
+
   it("keeps the selected plan on the left and the QR payment panel on the right for PC checkout", async () => {
     render(
       <SdkworkThemeProvider defaultTheme="light">
