@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
 export interface OrdersRefundRequestsListParams {
@@ -90,8 +90,8 @@ export class OrdersPaymentSuccessApi {
 
 
 /** Orders payment Success retrieve. */
-  async retrieve(orderId: string): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`));
+  async retrieve(orderId: string): Promise<OrderPaymentSuccess> {
+    return this.client.get<OrderPaymentSuccess>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`));
   }
 }
 

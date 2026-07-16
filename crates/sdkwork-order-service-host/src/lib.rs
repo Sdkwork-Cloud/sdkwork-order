@@ -5,6 +5,7 @@ use sdkwork_order_integration_account::{
 };
 use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_env;
 use sdkwork_order_integration_payment::payment_refund_executor_port_from_database_pool;
+pub use sdkwork_order_service::order_service_contract;
 use sdkwork_order_service::{
     AccountPointsCreditPort, AccountValueLedgerPort, MembershipPurchaseFulfillmentPort,
     NoopPaymentPayoutExecutorPort, PaymentPayoutExecutorPort, PaymentRefundExecutorPort,
@@ -29,6 +30,18 @@ impl OrderServiceHost {
 
     pub async fn from_env() -> Result<Self, String> {
         let database = bootstrap_order_database_from_env().await?;
+        Self::from_database_with_env_integrations(database).await
+    }
+
+    /// Builds the Order service container on a pool owned by an embedding gateway assembly.
+    pub async fn from_database_pool(pool: DatabasePool) -> Result<Self, String> {
+        let database = OrderDatabaseHost::from_pool(pool)?;
+        Self::from_database_with_env_integrations(database).await
+    }
+
+    async fn from_database_with_env_integrations(
+        database: OrderDatabaseHost,
+    ) -> Result<Self, String> {
         let account_credit_port = account_points_credit_port_from_env().await?;
         let account_value_ledger_port = account_value_ledger_port_from_env().await?;
         let membership_fulfillment_port = membership_purchase_fulfillment_port_from_env()?;

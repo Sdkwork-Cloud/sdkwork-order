@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "pnpm --dir apps/sdkwork-order-pc dev",
+    "stop": "node ../sdkwork-specs/tools/stop-sdkwork-workspace-processes.mjs --workspace .",    "dev": "pnpm --dir apps/sdkwork-order-pc dev",
     "build": "pnpm --dir apps/sdkwork-order-pc build",
     "start": "cargo run -p sdkwork-order-standalone-gateway --bin sdkwork-order-standalone-gateway",
     "test": "pnpm test:node && pnpm test:vitest && cargo test --workspace",

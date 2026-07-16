@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
     enrich_owner_order_payment_postgres, enrich_owner_order_payment_sqlite,
@@ -71,7 +72,8 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
             let idempotency_key = command.idempotency_key.clone();
             let payment_scene = command.payment_scene.clone();
             let outcome = inner.pay_owner_order(command).await?;
-            enrich_owner_order_payment_sqlite(
+            let fallback = outcome.clone();
+            let enriched = enrich_owner_order_payment_sqlite(
                 &pool,
                 OwnerOrderPaymentEnrichmentContext {
                     deployment_registry: &registry,
@@ -84,7 +86,8 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
                 },
                 outcome,
             )
-            .await
+            .await;
+            checkout_enrichment_or_development_fallback(enriched, fallback)
         })
     }
 
@@ -121,7 +124,8 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
             let idempotency_key = command.idempotency_key.clone();
             let payment_scene = command.payment_scene.clone();
             let outcome = inner.pay_owner_order(command).await?;
-            enrich_owner_order_payment_postgres(
+            let fallback = outcome.clone();
+            let enriched = enrich_owner_order_payment_postgres(
                 &pool,
                 OwnerOrderPaymentEnrichmentContext {
                     deployment_registry: &registry,
@@ -134,7 +138,8 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
                 },
                 outcome,
             )
-            .await
+            .await;
+            checkout_enrichment_or_development_fallback(enriched, fallback)
         })
     }
 
@@ -152,5 +157,85 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
             )?;
             inner.cancel_order_payments(payment_command).await
         })
+    }
+}
+
+fn checkout_enrichment_or_development_fallback(
+    result: Result<PayOwnerOrderOutcome, CommerceServiceError>,
+    fallback: PayOwnerOrderOutcome,
+) -> Result<PayOwnerOrderOutcome, CommerceServiceError> {
+    match result {
+        Ok(outcome) => Ok(outcome),
+        Err(error) if should_use_development_cashier_fallback(&error, runtime_environment()) => {
+            tracing::warn!(
+                provider_code = fallback
+                    .payment_params
+                    .get("providerCode")
+                    .map(String::as_str),
+                order_id = fallback.order_id,
+                "payment provider is not configured; returning the pending development cashier"
+            );
+            Ok(fallback)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn runtime_environment() -> Option<String> {
+    ["SDKWORK_ORDER_ENVIRONMENT", "SDKWORK_ENV"]
+        .into_iter()
+        .find_map(|key| {
+            std::env::var(key)
+                .ok()
+                .map(|value| value.trim().to_ascii_lowercase())
+                .filter(|value| !value.is_empty())
+        })
+}
+
+fn should_use_development_cashier_fallback(
+    error: &CommerceServiceError,
+    environment: Option<String>,
+) -> bool {
+    error.code() == "provider-unavailable"
+        && error.message().contains("is not configured")
+        && matches!(
+            environment.as_deref(),
+            Some("development" | "dev" | "local" | "test")
+        )
+}
+
+#[cfg(test)]
+mod tests {
+    use sdkwork_contract_service::CommerceServiceError;
+
+    use super::should_use_development_cashier_fallback;
+
+    #[test]
+    fn development_cashier_fallback_only_accepts_unconfigured_provider_errors() {
+        let unconfigured = CommerceServiceError::provider_unavailable(
+            "payment provider wechat_pay is not configured",
+        );
+        let transport = CommerceServiceError::provider_unavailable("wechat transport failed");
+
+        assert!(should_use_development_cashier_fallback(
+            &unconfigured,
+            Some("development".to_owned())
+        ));
+        assert!(should_use_development_cashier_fallback(
+            &unconfigured,
+            Some("dev".to_owned())
+        ));
+        assert!(!should_use_development_cashier_fallback(
+            &unconfigured,
+            Some("production".to_owned())
+        ));
+        assert!(!should_use_development_cashier_fallback(
+            &transport,
+            Some("development".to_owned())
+        ));
+        assert!(!should_use_development_cashier_fallback(
+            &unconfigured,
+            None
+        ));
     }
 }

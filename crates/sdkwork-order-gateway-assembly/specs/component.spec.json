@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-gateway-assembly",
+    "displayName": "SDKWork Order Gateway Assembly",
+    "version": "0.1.0",
+    "type": "rust-gateway-assembly",
+    "root": "crates/sdkwork-order-gateway-assembly",
+    "domain": "commerce",
+    "capability": "order-gateway-assembly",
+    "surface": "gateway-api",
+    "languages": ["rust"],
+    "generated": false,
+    "manifests": ["Cargo.toml", "assembly-manifest.json"]
+  },
+  "canonicalSpecs": [
+    { "file": "APPLICATION_GATEWAY_SPEC.md", "path": "../../../sdkwork-specs/APPLICATION_GATEWAY_SPEC.md", "purpose": "Gateway assembly and embedded dependency composition." },
+    { "file": "WEB_FRAMEWORK_SPEC.md", "path": "../../../sdkwork-specs/WEB_FRAMEWORK_SPEC.md", "purpose": "Shared HTTP framework and infrastructure ownership." },
+    { "file": "WEB_BACKEND_SPEC.md", "path": "../../../sdkwork-specs/WEB_BACKEND_SPEC.md", "purpose": "Business router and route manifest exports." },
+    { "file": "API_SPEC.md", "path": "../../../sdkwork-specs/API_SPEC.md", "purpose": "Order app/backend API authority contracts." },
+    { "file": "SDK_WORKSPACE_GENERATION_SPEC.md", "path": "../../../sdkwork-specs/SDK_WORKSPACE_GENERATION_SPEC.md", "purpose": "Assembly materialization and SDK route coverage." },
+    { "file": "DATABASE_FRAMEWORK_SPEC.md", "path": "../../../sdkwork-specs/DATABASE_FRAMEWORK_SPEC.md", "purpose": "Database module SPI export for embedding gateways." },
+    { "file": "RUST_CODE_SPEC.md", "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md", "purpose": "Rust runtime composition boundaries." },
+    { "file": "TEST_SPEC.md", "path": "../../../sdkwork-specs/TEST_SPEC.md", "purpose": "Assembly and route coverage verification." }
+  ],
+  "contracts": {
+    "layerRole": "runtime-gateway",
+    "publicExports": ["."],
+    "runtimeEntrypoints": [
+      "sdkwork_order_gateway_assembly::assemble_application_router",
+      "sdkwork_order_gateway_assembly::ApplicationAssembly::from_database_pool",
+      "sdkwork_order_gateway_assembly::ApplicationAssembly::app_route_manifest",
+      "sdkwork_order_gateway_assembly::ApplicationAssembly::database_module"
+    ],
+    "routeManifest": "assembly-manifest.json",
+    "sdkClients": [],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": [
+      "SDKWORK_ORDER_APP_ROOT",
+      "SDKWORK_ORDER_DATABASE_URL",
+      "SDKWORK_ORDER_DATABASE_ENGINE"
+    ]
+  },
+  "apiCoverage": {
+    "appAuthority": "apis/app-api/order/order-app-api.openapi.json",
+    "backendAuthority": "apis/backend-api/order/order-backend-api.openapi.json",
+    "appRouteCrate": "sdkwork-routes-order-app-api",
+    "backendRouteCrate": "sdkwork-routes-order-backend-api",
+    "embeddedMode": "complete-app-business-router"
+  },
+  "verification": {
+    "commands": [
+      "cargo test -p sdkwork-order-gateway-assembly",
+      "pnpm gateway:assembly:validate",
+      "node ../sdkwork-specs/tools/check-route-path-collisions.mjs --root ."
+    ]
+  }
+}

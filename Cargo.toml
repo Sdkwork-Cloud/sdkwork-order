@@ -51,8 +51,8 @@ sdkwork_payment_service = { path = "../sdkwork-payment/crates/sdkwork-payment-se
 sdkwork_order_repository_sqlx = { path = "crates/sdkwork-order-repository-sqlx", package = "sdkwork-order-repository-sqlx" }
 sdkwork_payment_repository_sqlx = { path = "../sdkwork-payment/crates/sdkwork-payment-repository-sqlx", package = "sdkwork-payment-repository-sqlx" }
 sdkwork_payment_providers = { path = "../sdkwork-payment/crates/sdkwork-payment-providers", package = "sdkwork-payment-providers" }
-sdkwork_routes_order_app_api = { path = "crates/sdkwork-routes-order-app-api", package = "sdkwork-routes-order-app-api" }
-sdkwork_routes_order_backend_api = { path = "crates/sdkwork-routes-order-backend-api", package = "sdkwork-routes-order-backend-api" }
+sdkwork-routes-order-app-api = { path = "crates/sdkwork-routes-order-app-api" }
+sdkwork-routes-order-backend-api = { path = "crates/sdkwork-routes-order-backend-api" }
 sdkwork_order_gateway_assembly = { path = "crates/sdkwork-order-gateway-assembly", package = "sdkwork-order-gateway-assembly" }
 sdkwork_order_database_host = { path = "crates/sdkwork-order-database-host", package = "sdkwork-order-database-host" }
 sdkwork_order_service_host = { path = "crates/sdkwork-order-service-host", package = "sdkwork-order-service-host" }

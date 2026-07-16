@@ -19,6 +19,12 @@ use crate::{
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 
 pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
+    mount_app_openapi(build_order_app_business_router(host))
+}
+
+/// Builds the complete Order app-api business surface without infrastructure/OpenAPI routes.
+/// Gateway assemblies use this entrypoint when Order is embedded into a shared HTTP ingress.
+pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let credit_port = host.account_credit_port();
     let account_value_ledger_port = host.account_value_ledger_port();
     let membership_port = host.membership_fulfillment_port();
@@ -86,7 +92,7 @@ pub fn build_order_app_router(host: Arc<OrderServiceHost>) -> Router {
                 ))
         }
     };
-    mount_app_openapi(router)
+    router
 }
 
 pub async fn build_order_app_router_with_framework(host: Arc<OrderServiceHost>) -> Router {

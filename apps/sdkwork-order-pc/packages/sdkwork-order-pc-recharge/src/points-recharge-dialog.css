@@ -1,4 +1,13 @@
 .sdkwork-points-recharge-dialog {
+  --sdk-color-brand-primary: #12c8df;
+  --sdk-color-border-default: #3d444d;
+  --sdk-color-surface-base: #171a1f;
+  --sdk-color-surface-panel: #20242a;
+  --sdk-color-surface-panel-muted: #343a43;
+  --sdk-color-text-primary: #f4f7fb;
+  --sdk-color-text-secondary: #a9b1bd;
+  background: #20242a;
+  color: #f4f7fb;
   max-width: 1040px;
   width: min(1040px, calc(100vw - 48px));
 }
@@ -7,6 +16,10 @@
 .sdkwork-points-recharge-dialog__body {
   background: var(--sdk-color-surface-panel, #20242a);
   color: var(--sdk-color-text-primary, #f4f7fb);
+}
+
+.sdkwork-points-recharge-dialog__body {
+  background: #272c32;
 }
 
 .sdkwork-points-recharge-dialog .sdkwork-points-recharge-dialog__header {
@@ -184,6 +197,18 @@
   max-width: 250px;
 }
 
+.sdkwork-points-recharge-dialog__payment-empty button {
+  background: #12c8df !important;
+  border-color: #12c8df !important;
+  color: #06262b !important;
+  font-weight: 700;
+}
+
+.sdkwork-points-recharge-dialog__payment-empty button:hover:not(:disabled) {
+  background: #4bd8e9 !important;
+  border-color: #4bd8e9 !important;
+}
+
 .sdkwork-points-recharge-dialog__qr {
   text-align: center;
 }
@@ -198,12 +223,12 @@
 }
 
 .sdkwork-points-recharge-dialog__qr p {
-  color: var(--sdk-color-text-secondary, #a9b1bd);
+  color: #cbd2dc;
   margin-top: 12px;
 }
 
 .sdkwork-points-recharge-dialog__qr span {
-  color: var(--sdk-color-text-secondary, #a9b1bd);
+  color: #a9b1bd;
   display: block;
   font-size: 12px;
   line-height: 1.6;

@@ -181,6 +181,12 @@ pub struct OrderOwnerDetail {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OrderOwnerPaymentStatus {
+    pub status: String,
+    pub payment_status: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OrderOwnerStatistics {
     pub total_orders: i64,
     pub pending_payment: i64,

@@ -1502,7 +1502,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                  "$ref": "#/components/schemas/OrderPaymentSuccessResponse"
                 }
               }
             }
@@ -5894,6 +5894,56 @@
             "properties": {
               "data": {
                 "$ref": "#/components/schemas/SdkWorkResourceData"
+              }
+            }
+          }
+        ]
+      },
+      "OrderPaymentSuccess": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "paid",
+          "status",
+          "statusName"
+        ],
+        "properties": {
+          "paid": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "statusName": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderPaymentSuccessData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "item"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/OrderPaymentSuccess"
+          }
+        }
+      },
+      "OrderPaymentSuccessResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/OrderPaymentSuccessData"
               }
             }
           }

@@ -12,7 +12,7 @@
   "mode": "apply",
   "hasChanges": true,
   "hasDestructiveChanges": false,
-  "changeFingerprint": "51037e6a415017cf0e6c9f7fb4ba25fa4f9d33850ff80364ce6285dbb162f09f",
+  "changeFingerprint": "3fb3268fb42c38a604e2ebf31f5494f5e041ee963779218dbde868ac3ff24878",
   "changeImpact": {
     "schemaVersion": 1,
     "areas": [
@@ -68,6 +68,9 @@
           "src/types/membership-order-create-command.ts",
           "src/types/membership-order-create-response.ts",
           "src/types/membership-order-create-result.ts",
+          "src/types/order-payment-success-data.ts",
+          "src/types/order-payment-success-response.ts",
+          "src/types/order-payment-success.ts",
           "src/types/orders-payments-webhooks-receive-request.ts",
           "src/types/page-info.ts",
           "src/types/problem-detail.ts",
@@ -253,21 +256,21 @@
     "localVersions": []
   },
   "stats": {
-    "totalFiles": 68,
-    "models": 36,
+    "totalFiles": 71,
+    "models": 39,
     "apis": 9,
-    "types": 38
+    "types": 41
   },
   "warnings": [],
   "syncSummary": {
     "dryRun": false,
     "controlPlaneEnabled": true,
-    "writtenFiles": 68,
+    "writtenFiles": 71,
     "skippedScaffoldFiles": 0,
     "skippedUnchangedGeneratedFiles": 0,
     "deletedGeneratedFiles": 0,
     "changeSummaryPath": ".sdkwork/sdkwork-generator-changes.json",
-    "changeFingerprint": "51037e6a415017cf0e6c9f7fb4ba25fa4f9d33850ff80364ce6285dbb162f09f",
+    "changeFingerprint": "3fb3268fb42c38a604e2ebf31f5494f5e041ee963779218dbde868ac3ff24878",
     "changes": {
       "createdGeneratedFiles": [
         "bin/publish-core.mjs",
@@ -317,6 +320,9 @@
         "src/types/membership-order-create-command.ts",
         "src/types/membership-order-create-response.ts",
         "src/types/membership-order-create-result.ts",
+        "src/types/order-payment-success-data.ts",
+        "src/types/order-payment-success-response.ts",
+        "src/types/order-payment-success.ts",
         "src/types/orders-payments-webhooks-receive-request.ts",
         "src/types/page-info.ts",
         "src/types/problem-detail.ts",
@@ -402,6 +408,9 @@
             "src/types/membership-order-create-command.ts",
             "src/types/membership-order-create-response.ts",
             "src/types/membership-order-create-result.ts",
+            "src/types/order-payment-success-data.ts",
+            "src/types/order-payment-success-response.ts",
+            "src/types/order-payment-success.ts",
             "src/types/orders-payments-webhooks-receive-request.ts",
             "src/types/page-info.ts",
             "src/types/problem-detail.ts",

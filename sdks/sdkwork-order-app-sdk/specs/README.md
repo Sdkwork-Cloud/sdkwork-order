@@ -7,4 +7,4 @@ Machine authority:
 - `component.spec.json`
 - `../sdk-manifest.json`
 
-The SDK family uses `sdk-manifest.json` as the single per-family metadata source. Retired per-family `.sdkwork-assembly.json` files must not be restored.
+The SDK family uses `sdk-manifest.json` as the single per-family metadata source. Retired per-family `sdk-manifest.json` files must not be restored.

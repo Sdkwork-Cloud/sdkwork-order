@@ -16,7 +16,9 @@ pub mod shipment_router;
 pub mod subject;
 pub mod web_bootstrap;
 
-pub use routes::build_order_app_router_with_framework;
+pub use routes::{
+    build_order_app_business_router, build_order_app_router, build_order_app_router_with_framework,
+};
 
 pub use after_sales_router::{
     app_after_sales_router_with_postgres_pool, app_after_sales_router_with_sqlite_pool,

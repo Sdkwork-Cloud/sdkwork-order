@@ -10,14 +10,14 @@ engines:
 table_prefix: commerce_
 tables:
   - name: commerce_order
-    write_owner: sdkwork-commerce-platform
-    reference_only: true
+    write_owner: sdkwork-order
+    reference_only: false
   - name: commerce_order_item
-    write_owner: sdkwork-commerce-platform
-    reference_only: true
+    write_owner: sdkwork-order
+    reference_only: false
   - name: commerce_order_amount_breakdown
-    write_owner: sdkwork-commerce-platform
-    reference_only: true
+    write_owner: sdkwork-order
+    reference_only: false
   - name: commerce_order_event
     write_owner: sdkwork-commerce-platform
     reference_only: true

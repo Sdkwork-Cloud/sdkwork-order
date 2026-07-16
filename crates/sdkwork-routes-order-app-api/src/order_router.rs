@@ -14,8 +14,8 @@ use sdkwork_order_service::{
     checkout_owner_order_request_hash, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
     CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
     OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
-    OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand, PayOwnerOrderCommandInput,
-    PayOwnerOrderOutcome,
+    OrderOwnerPaymentStatus, OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand,
+    PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
@@ -55,6 +55,11 @@ pub trait CommerceOrderStore: Send + Sync {
         &'a self,
         query: OrderOwnerDetailQuery,
     ) -> CommerceOrderFuture<'a, Option<OrderOwnerDetail>>;
+
+    fn retrieve_owner_order_payment_status<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+    ) -> CommerceOrderFuture<'a, Option<OrderOwnerPaymentStatus>>;
 
     fn retrieve_owner_order_statistics<'a>(
         &'a self,
@@ -511,38 +516,67 @@ async fn fetch_order_payment_success(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let query = match OrderOwnerDetailQuery::new(
-        &subject.tenant_id,
-        subject.organization_id.as_deref(),
-        &subject.user_id,
-        &order_id,
-    ) {
-        Ok(query) => query,
+    let status = match retrieve_payment_success_order(&*state.store, &subject, &order_id).await {
+        Ok(status) => status,
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match state.store.retrieve_owner_order(query).await {
-        Ok(Some(detail)) => {
-            let summary = map_order_summary(detail.summary);
-            let paid = matches!(
-                summary.status.to_ascii_lowercase().as_str(),
-                "paid" | "completed" | "fulfilled" | "awaiting_external_fulfillment"
-            ) || summary.paid_amount.as_ref().is_some_and(|amount| {
-                !amount.as_str().trim().is_empty()
-                    && amount.as_str() != "0"
-                    && amount.as_str() != "0.00"
-            });
+    match status {
+        Some(status) => {
+            let paid = order_payment_succeeded(&status);
+            let status_name = format_order_status_name(&status.status);
             success_item(
                 ctx,
                 OrderPaymentSuccessResponse {
                     paid,
-                    status: summary.status,
-                    status_name: summary.status_name,
+                    status: status.status,
+                    status_name,
                 },
             )
         }
-        Ok(None) => not_found(ctx, "order was not found"),
-        Err(error) => map_service_error(ctx, error),
+        None => not_found(ctx, "order was not found"),
+    }
+}
+
+async fn retrieve_payment_success_order(
+    store: &dyn CommerceOrderStore,
+    subject: &AppRuntimeSubject,
+    order_id: &str,
+) -> Result<Option<OrderOwnerPaymentStatus>, CommerceServiceError> {
+    for organization_id in payment_success_organization_scopes(subject.organization_id.as_deref()) {
+        let query = OrderOwnerDetailQuery::new(
+            &subject.tenant_id,
+            organization_id.as_deref(),
+            &subject.user_id,
+            order_id,
+        )?;
+        if let Some(status) = store.retrieve_owner_order_payment_status(query).await? {
+            return Ok(Some(status));
+        }
+    }
+    Ok(None)
+}
+
+fn order_payment_succeeded(status: &OrderOwnerPaymentStatus) -> bool {
+    matches!(
+        status.status.trim().to_ascii_lowercase().as_str(),
+        "paid" | "completed" | "fulfilled" | "awaiting_external_fulfillment"
+    ) || status.payment_status.as_deref().is_some_and(|value| {
+        matches!(
+            value.trim().to_ascii_lowercase().as_str(),
+            "success" | "succeeded" | "paid"
+        )
+    })
+}
+
+fn payment_success_organization_scopes(organization_id: Option<&str>) -> Vec<Option<String>> {
+    let organization_id = organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    match organization_id {
+        Some(organization_id) => vec![Some(organization_id)],
+        None => vec![None, Some("0".to_owned())],
     }
 }
 
@@ -973,6 +1007,13 @@ impl CommerceOrderStore for SqliteCommerceOrderStore {
         Box::pin(async move { self.retrieve_owner_order(query).await })
     }
 
+    fn retrieve_owner_order_payment_status<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+    ) -> CommerceOrderFuture<'a, Option<OrderOwnerPaymentStatus>> {
+        Box::pin(async move { self.retrieve_owner_order_payment_status(query).await })
+    }
+
     fn retrieve_owner_order_statistics<'a>(
         &'a self,
         tenant_id: String,
@@ -1024,6 +1065,13 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         query: OrderOwnerDetailQuery,
     ) -> CommerceOrderFuture<'a, Option<OrderOwnerDetail>> {
         Box::pin(async move { self.retrieve_owner_order(query).await })
+    }
+
+    fn retrieve_owner_order_payment_status<'a>(
+        &'a self,
+        query: OrderOwnerDetailQuery,
+    ) -> CommerceOrderFuture<'a, Option<OrderOwnerPaymentStatus>> {
+        Box::pin(async move { self.retrieve_owner_order_payment_status(query).await })
     }
 
     fn retrieve_owner_order_statistics<'a>(
@@ -1079,5 +1127,115 @@ impl OrderPaymentRecordStore for PostgresCommercePaymentRecordStore {
         query: PaymentRecordOrderListQuery,
     ) -> CommerceOrderFuture<'a, PaymentRecordOrderListPage> {
         Box::pin(async move { self.list_payment_records_by_order(query).await })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sdkwork_order_repository_sqlx::{
+        order_points_recharge_e2e_sqlite_memory_pool, SqliteCommerceOrderStore,
+    };
+
+    use super::{
+        order_payment_succeeded, payment_success_organization_scopes,
+        retrieve_payment_success_order, AppRuntimeSubject,
+    };
+    use sdkwork_order_service::OrderOwnerPaymentStatus;
+
+    #[test]
+    fn payment_success_lookup_falls_back_to_platform_scope_only_when_unscoped() {
+        assert_eq!(
+            vec![None, Some("0".to_owned())],
+            payment_success_organization_scopes(None)
+        );
+        assert_eq!(
+            vec![Some("org-1".to_owned())],
+            payment_success_organization_scopes(Some(" org-1 "))
+        );
+    }
+
+    #[test]
+    fn payment_success_accepts_order_or_payment_success_states() {
+        assert!(order_payment_succeeded(&OrderOwnerPaymentStatus {
+            status: "pending_payment".to_owned(),
+            payment_status: Some("succeeded".to_owned()),
+        }));
+        assert!(order_payment_succeeded(&OrderOwnerPaymentStatus {
+            status: "fulfilled".to_owned(),
+            payment_status: None,
+        }));
+        assert!(!order_payment_succeeded(&OrderOwnerPaymentStatus {
+            status: "pending_payment".to_owned(),
+            payment_status: Some("pending".to_owned()),
+        }));
+    }
+
+    #[tokio::test]
+    async fn payment_success_lookup_reads_platform_scoped_recharge_without_cross_scope_access() {
+        let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO commerce_order
+                (id, tenant_id, organization_id, owner_user_id, order_no, status, subject,
+                 currency_code, payment_status, created_at, updated_at)
+            VALUES
+                ('order-platform-recharge', 'tenant-1', '0', 'user-1', 'RC-PLATFORM-1',
+                 'pending_payment', 'points_recharge', 'CNY', 'pending',
+                 '2026-07-16T00:00:00Z', '2026-07-16T00:00:00Z')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("platform scoped recharge order");
+        sqlx::query(
+            r#"
+            INSERT INTO commerce_order_amount_breakdown
+                (id, tenant_id, organization_id, order_id, allocation_type,
+                 original_amount, discount_amount, payable_amount, currency_code, created_at)
+            VALUES
+                ('amount-platform-recharge', 'tenant-1', '0', 'order-platform-recharge',
+                 'order_total', '5000', '0', '5000', 'CNY', '2026-07-16T00:00:00Z')
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("platform scoped recharge amount");
+
+        let store = SqliteCommerceOrderStore::new(pool);
+        let unscoped_owner = AppRuntimeSubject {
+            tenant_id: "tenant-1".to_owned(),
+            organization_id: None,
+            user_id: "user-1".to_owned(),
+        };
+        let detail =
+            retrieve_payment_success_order(&store, &unscoped_owner, "order-platform-recharge")
+                .await
+                .expect("payment success lookup")
+                .expect("platform scoped owner order");
+        assert_eq!("pending_payment", detail.status);
+
+        let another_user = AppRuntimeSubject {
+            user_id: "user-2".to_owned(),
+            ..unscoped_owner.clone()
+        };
+        assert!(
+            retrieve_payment_success_order(&store, &another_user, "order-platform-recharge")
+                .await
+                .expect("cross-user lookup")
+                .is_none()
+        );
+
+        let another_organization = AppRuntimeSubject {
+            organization_id: Some("org-2".to_owned()),
+            ..unscoped_owner
+        };
+        assert!(retrieve_payment_success_order(
+            &store,
+            &another_organization,
+            "order-platform-recharge"
+        )
+        .await
+        .expect("cross-organization lookup")
+        .is_none());
     }
 }

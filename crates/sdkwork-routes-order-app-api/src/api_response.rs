@@ -176,6 +176,16 @@ pub fn map_service_error(
             SdkWorkResultCode::PermissionRequired,
             error.message().to_string(),
         ),
+        "provider-unavailable" => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            SdkWorkResultCode::ServiceUnavailable,
+            error.message().to_string(),
+        ),
+        "transport" => (
+            StatusCode::BAD_GATEWAY,
+            SdkWorkResultCode::BadGateway,
+            error.message().to_string(),
+        ),
         _ => (
             StatusCode::INTERNAL_SERVER_ERROR,
             SdkWorkResultCode::InternalError,
@@ -308,6 +318,17 @@ mod tests {
     fn unprocessable_entity_response_returns_422() {
         let response = unprocessable_entity(None, "invalid state");
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn provider_unavailable_response_returns_503() {
+        let response = map_service_error(
+            None,
+            CommerceServiceError::provider_unavailable(
+                "payment provider wechat_pay is not configured",
+            ),
+        );
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[test]

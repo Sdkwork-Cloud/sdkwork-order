@@ -49,6 +49,7 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
 const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
 /// 允许的支付方式白名单。新增支付方式时只需扩展此处。
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
@@ -1291,11 +1292,12 @@ async fn pay_coupon_recharge_order(
     outcome: CreateAccountRechargeOrderOutcome,
 ) -> Response {
     let callback_payload = coupon_recharge_callback_payload(command, payment_password);
+    let persisted_order_id = outcome.order_id.clone();
     let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
         organization_id: subject.organization_id.clone(),
         owner_user_id: subject.user_id.clone(),
-        order_id: command.order_id.clone(),
+        order_id: persisted_order_id.clone(),
         payment_method: method.to_owned(),
         payment_scene: None,
         payment_attempt_callback_payload: Some(callback_payload),
@@ -1315,7 +1317,7 @@ async fn pay_coupon_recharge_order(
                 &subject.tenant_id,
                 subject.organization_id.as_deref(),
                 &subject.user_id,
-                &command.order_id,
+                &persisted_order_id,
                 Some("auto-cancel: coupon recharge payment initiation failed"),
             );
             if let Ok(rollback_command) = rollback {
@@ -1360,6 +1362,9 @@ async fn submit_points_recharge_order(
         .await
     {
         Ok(mut outcome) => {
+            let persisted_order_id = outcome.order_id.clone();
+            let persisted_organization_id =
+                points_recharge_organization_scope(subject.organization_id.as_deref());
             let callback_payload = serde_json::json!({
                 "points": outcome.points,
                 "packageId": command.package_id,
@@ -1370,9 +1375,9 @@ async fn submit_points_recharge_order(
             .to_string();
             let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
                 tenant_id: subject.tenant_id.clone(),
-                organization_id: subject.organization_id.clone(),
+                organization_id: Some(persisted_organization_id.clone()),
                 owner_user_id: subject.user_id.clone(),
-                order_id: command.order_id.clone(),
+                order_id: persisted_order_id.clone(),
                 payment_method: method.to_owned(),
                 payment_scene: None,
                 payment_attempt_callback_payload: Some(callback_payload),
@@ -1390,9 +1395,9 @@ async fn submit_points_recharge_order(
                 Err(error) => {
                     let rollback = CancelOwnerOrderCommand::new(
                         &subject.tenant_id,
-                        subject.organization_id.as_deref(),
+                        Some(&persisted_organization_id),
                         &subject.user_id,
-                        &command.order_id,
+                        &persisted_order_id,
                         Some("auto-cancel: recharge payment initiation failed"),
                     );
                     if let Ok(rollback_command) = rollback {
@@ -1424,11 +1429,12 @@ async fn pay_account_value_order(
     outcome: CreateAccountRechargeOrderOutcome,
 ) -> Response {
     let callback_payload = account_value_callback_payload(command, payment_password);
+    let persisted_order_id = outcome.order_id.clone();
     let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
         organization_id: subject.organization_id.clone(),
         owner_user_id: subject.user_id.clone(),
-        order_id: command.order_id.clone(),
+        order_id: persisted_order_id.clone(),
         payment_method: method.to_owned(),
         payment_scene: None,
         payment_attempt_callback_payload: Some(callback_payload),
@@ -1448,7 +1454,7 @@ async fn pay_account_value_order(
                 &subject.tenant_id,
                 subject.organization_id.as_deref(),
                 &subject.user_id,
-                &command.order_id,
+                &persisted_order_id,
                 Some("auto-cancel: account value payment initiation failed"),
             );
             if let Ok(rollback_command) = rollback {
@@ -1458,6 +1464,14 @@ async fn pay_account_value_order(
             map_service_error(ctx, error)
         }
     }
+}
+
+fn points_recharge_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
+        .to_owned()
 }
 
 async fn fetch_checkout_status(
@@ -2231,6 +2245,16 @@ mod tests {
         assert!(!command.payment_required);
         assert!(command.order_no.starts_with("CP"));
         assert!(command.out_trade_no.starts_with("COUPON"));
+    }
+
+    #[test]
+    fn points_recharge_payment_scope_matches_persisted_platform_scope() {
+        assert_eq!(
+            "0",
+            points_recharge_organization_scope(None),
+            "an unscoped points recharge order is persisted in the platform organization scope"
+        );
+        assert_eq!("org-1", points_recharge_organization_scope(Some(" org-1 ")));
     }
 
     fn test_subject() -> AppRuntimeSubject {

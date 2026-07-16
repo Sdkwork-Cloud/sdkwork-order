@@ -1,6 +1,86 @@
 -- sdkwork:baseline
 -- module: order
--- account value order-owned tables; shared commerce core tables are reference-only in this repo
+-- order-owned core and account-value tables
+
+CREATE TABLE IF NOT EXISTS commerce_order (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT,
+    owner_user_id TEXT NOT NULL,
+    order_no TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending_payment',
+    subject TEXT NOT NULL,
+    currency_code TEXT NOT NULL DEFAULT 'CNY',
+    payment_status TEXT,
+    fulfillment_status TEXT,
+    refund_status TEXT,
+    request_no TEXT,
+    idempotency_key TEXT,
+    created_at TEXT NOT NULL,
+    paid_at TEXT,
+    cancelled_at TEXT,
+    expired_at TEXT,
+    updated_at TEXT NOT NULL
+);
+
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS payment_status TEXT;
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS fulfillment_status TEXT;
+ALTER TABLE commerce_order ADD COLUMN IF NOT EXISTS refund_status TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_order_owner_idempotency
+    ON commerce_order(tenant_id, COALESCE(organization_id, '0'), owner_user_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_order_owner_list
+    ON commerce_order(tenant_id, organization_id, owner_user_id, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS commerce_order_item (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT,
+    order_id TEXT NOT NULL,
+    sku_id TEXT,
+    sku_snapshot_json TEXT,
+    title TEXT,
+    quantity BIGINT NOT NULL DEFAULT 1,
+    unit_price_amount TEXT,
+    discount_amount TEXT,
+    tax_amount TEXT,
+    total_amount TEXT,
+    fulfillment_status TEXT,
+    refund_status TEXT,
+    created_at TEXT NOT NULL
+);
+
+ALTER TABLE commerce_order_item ADD COLUMN IF NOT EXISTS sku_snapshot_json TEXT;
+ALTER TABLE commerce_order_item ADD COLUMN IF NOT EXISTS title TEXT;
+ALTER TABLE commerce_order_item ADD COLUMN IF NOT EXISTS discount_amount TEXT;
+ALTER TABLE commerce_order_item ADD COLUMN IF NOT EXISTS tax_amount TEXT;
+ALTER TABLE commerce_order_item ADD COLUMN IF NOT EXISTS fulfillment_status TEXT;
+ALTER TABLE commerce_order_item ADD COLUMN IF NOT EXISTS refund_status TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_order_item_order
+    ON commerce_order_item(tenant_id, order_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS commerce_order_amount_breakdown (
+    id TEXT NOT NULL PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    organization_id TEXT,
+    order_id TEXT NOT NULL,
+    order_item_id TEXT,
+    allocation_type TEXT NOT NULL DEFAULT 'order_total',
+    original_amount TEXT NOT NULL DEFAULT '0',
+    discount_amount TEXT NOT NULL DEFAULT '0',
+    payable_amount TEXT NOT NULL DEFAULT '0',
+    currency_code TEXT,
+    created_at TIMESTAMPTZ NOT NULL
+);
+
+ALTER TABLE commerce_order_amount_breakdown ADD COLUMN IF NOT EXISTS order_item_id TEXT;
+ALTER TABLE commerce_order_amount_breakdown ADD COLUMN IF NOT EXISTS original_amount TEXT NOT NULL DEFAULT '0';
+
+CREATE INDEX IF NOT EXISTS idx_order_amount_breakdown_order
+    ON commerce_order_amount_breakdown(tenant_id, order_id, allocation_type, id);
 
 CREATE TABLE IF NOT EXISTS commerce_recharge_package (
     id TEXT NOT NULL PRIMARY KEY,

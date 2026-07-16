@@ -76,7 +76,7 @@
     },
     {
       "path": "src/api/orders.ts",
-      "sha256": "dd2f13db54cc87a9833f9a1c1298ea8c9a9fd48836888f10c914dc5801a6f04f"
+      "sha256": "5cab1bc2f2983e304b24787cd6ea195445a0523d247fb42547cbaf4bb51f3275"
     },
     {
       "path": "src/api/paths.ts",
@@ -184,7 +184,7 @@
     },
     {
       "path": "src/types/index.ts",
-      "sha256": "e8910201e867bd42e4ee961c3ab464f1ab3caf2fb258934a6e0a246a1ae2ae33"
+      "sha256": "91b0f888c8315b95a5979903efab8cb0669165e9db1c246d073f7ff841bd5fbc"
     },
     {
       "path": "src/types/membership-order-create-command.ts",
@@ -197,6 +197,18 @@
     {
       "path": "src/types/membership-order-create-result.ts",
       "sha256": "986f5672ba574f678f639abd7750eefc409330440273dc3c858525bfd9512e98"
+    },
+    {
+      "path": "src/types/order-payment-success-data.ts",
+      "sha256": "b02950bf3f78abb5a5bcbf709aac812b8e5909fea206347f23cb8b05f710bc42"
+    },
+    {
+      "path": "src/types/order-payment-success-response.ts",
+      "sha256": "4eba40c2c84d092de1ae6e8ea29f0adfb15d16deb62e438ec60ae99a6a6f3447"
+    },
+    {
+      "path": "src/types/order-payment-success.ts",
+      "sha256": "713f87e555cd0e0bbea33df3f4ea4703ab4583beefbee80cd25df4c81109a8c6"
     },
     {
       "path": "src/types/orders-payments-webhooks-receive-request.ts",

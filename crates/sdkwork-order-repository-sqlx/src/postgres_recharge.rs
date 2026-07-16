@@ -255,18 +255,6 @@ ORDER BY
 LIMIT 1
 "#;
 
-const LOAD_RECHARGE_PRODUCT_SKU_BY_ID: &str = r#"
-SELECT
-    CAST(s.id AS TEXT) AS sku_id,
-    COALESCE(NULLIF(s.name, ''), NULLIF(s.title, ''), NULLIF(pr.title, ''), 'Points recharge') AS product_name
-FROM commerce_product_sku s
-JOIN commerce_product_spu pr ON pr.id = s.spu_id
-WHERE s.id = $1
-  AND s.sales_status = 'active'
-  AND pr.sales_status = 'active'
-LIMIT 1
-"#;
-
 const LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT: &str = r#"
 SELECT
     CAST(s.id AS TEXT) AS sku_id,
@@ -323,7 +311,12 @@ SELECT
     pa.id AS payment_attempt_id,
     COALESCE(NULLIF(o.order_no, ''), NULLIF(pa.out_trade_no, ''), '-') AS order_no,
     COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, ''), '-') AS out_trade_no,
-    COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS amount,
+    CAST(
+        CAST(
+            COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0')
+            AS NUMERIC
+        ) AS BIGINT
+    )::TEXT AS amount,
     COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     CAST(COALESCE(
         NULLIF(pa.callback_payload::jsonb ->> 'points', ''),
@@ -371,7 +364,12 @@ SELECT
         NULLIF(oi.sku_snapshot_json::jsonb ->> 'points', ''),
         '0'
     ) AS TEXT) AS points_value,
-    COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS amount,
+    CAST(
+        CAST(
+            COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0')
+            AS NUMERIC
+        ) AS BIGINT
+    )::TEXT AS amount,
     COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') AS currency_code
 FROM commerce_order o
 LEFT JOIN commerce_order_item oi
@@ -471,7 +469,12 @@ SELECT
     pa.id AS payment_attempt_id,
     COALESCE(NULLIF(o.order_no, ''), NULLIF(pa.out_trade_no, ''), '-') AS order_no,
     COALESCE(NULLIF(pa.out_trade_no, ''), NULLIF(o.order_no, ''), '-') AS out_trade_no,
-    COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS amount,
+    CAST(
+        CAST(
+            COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0')
+            AS NUMERIC
+        ) AS BIGINT
+    )::TEXT AS amount,
     COALESCE(NULLIF(pa.currency_code, ''), NULLIF(pi.currency_code, ''), NULLIF(o.currency_code, ''), 'CNY') AS currency_code,
     CAST(COALESCE(
         NULLIF(pa.callback_payload::jsonb ->> 'points', ''),
@@ -708,9 +711,10 @@ impl PostgresCommerceRechargeStore {
         &self,
         query: CheckoutStatusQuery,
     ) -> Result<Option<CheckoutStatusSnapshot>, CommerceServiceError> {
+        let organization_id = normalize_organization_scope(query.organization_id.as_deref());
         let row = sqlx::query(LOAD_CHECKOUT_STATUS)
             .bind(&query.tenant_id)
-            .bind(query.organization_id.as_deref())
+            .bind(&organization_id)
             .bind(&query.owner_user_id)
             .bind(&query.order_no)
             .fetch_optional(&self.pool)
@@ -1472,10 +1476,17 @@ async fn load_recharge_method(
         .bind(&requested_method)
         .fetch_optional(&mut **tx)
         .await
-        .map_err(|error| store_error("failed to load recharge method", error))?
-        .ok_or_else(|| CommerceServiceError::conflict("recharge payment method is unavailable"))?;
-    let method_key = normalize_method_key(&string_cell(&row, "method_key"));
-    let provider_code = normalize_method_key(&string_cell(&row, "provider_code"));
+        .map_err(|error| store_error("failed to load recharge method", error))?;
+    let method_key = row
+        .as_ref()
+        .map(|row| normalize_method_key(&string_cell(row, "method_key")))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| requested_method.clone());
+    let provider_code = row
+        .as_ref()
+        .map(|row| normalize_method_key(&string_cell(row, "provider_code")))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| requested_method.clone());
     let payment_product = recharge_payment_product(&method_key)?.to_string();
     Ok(RechargeMethod {
         method_key,
@@ -1603,16 +1614,14 @@ async fn load_recharge_product_sku(
     pack: Option<&RechargePack>,
 ) -> Result<RechargeProductSku, CommerceServiceError> {
     if let Some(pack) = pack {
-        let row = sqlx::query(LOAD_RECHARGE_PRODUCT_SKU_BY_ID)
-            .bind(&pack.sku_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(|error| store_error("failed to load recharge product sku by id", error))?
-            .ok_or_else(|| CommerceServiceError::conflict("recharge product sku is unavailable"))?;
-
+        if pack.sku_id.trim().is_empty() {
+            return Err(CommerceServiceError::conflict(
+                "recharge package sku reference is unavailable",
+            ));
+        }
         return Ok(RechargeProductSku {
-            sku_id: string_cell(&row, "sku_id"),
-            product_name: string_cell(&row, "product_name"),
+            sku_id: pack.sku_id.clone(),
+            product_name: pack.name.clone(),
         });
     }
 
@@ -1754,7 +1763,7 @@ async fn insert_order_amount_breakdown(
         INSERT INTO commerce_order_amount_breakdown
             (id, tenant_id, order_id, original_amount, discount_amount, payable_amount, currency_code, created_at)
         VALUES
-            ($1, CAST($2 AS TEXT), $3, $4, '0', $4, $5, $6)
+            ($1, CAST($2 AS TEXT), $3, $4, '0', $4, $5, $6::timestamptz)
         "#,
     )
     .bind(format!("{}-amount", command.order_id))
@@ -2502,6 +2511,20 @@ mod tests {
         let keys = decimal_sql_match_keys("1200");
         assert_eq!(keys.compact, "12");
         assert_eq!(keys.one_decimal, "12.0");
+    }
+
+    #[test]
+    fn postgres_checkout_queries_project_payment_amounts_as_minor_unit_text() {
+        for query in [
+            LOAD_CHECKOUT_STATUS,
+            LOAD_POINTS_RECHARGE_FULFILLMENT_CONTEXT,
+            LOAD_REUSABLE_RECHARGE_CHECKOUT,
+        ] {
+            let normalized = query.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(normalized.contains(
+                "CAST( CAST( COALESCE(NULLIF(CAST(pa.amount AS TEXT), ''), NULLIF(CAST(pi.amount AS TEXT), ''), '0') AS NUMERIC ) AS BIGINT )::TEXT AS amount"
+            ));
+        }
     }
 
     #[test]

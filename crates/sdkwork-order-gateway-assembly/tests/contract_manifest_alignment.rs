@@ -1,4 +1,4 @@
-use sdkwork_order_service::order_service_contract;
+use sdkwork_order_service_host::order_service_contract;
 use sdkwork_routes_order_app_api::http_route_manifest::app_route_manifest;
 use sdkwork_routes_order_backend_api::http_route_manifest::backend_route_manifest;
 

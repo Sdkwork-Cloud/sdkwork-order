@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use axum::http::header::{ACCEPT, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE};
 use axum::http::HeaderName;
-use sdkwork_order_gateway_assembly::{assemble_application_router, order_contract_fallback_config};
+use sdkwork_order_gateway_assembly::{assemble_application_router, ApplicationAssembly};
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_web_bootstrap::{service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig};
 use tower_http::trace::TraceLayer;
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         business,
         ServiceRouterConfig::default()
             .with_readiness_check(readiness.clone())
-            .with_contract_fallback(order_contract_fallback_config()),
+            .with_contract_fallback(ApplicationAssembly::contract_fallback_config()),
     );
 
     let addr = std::env::var("ORDER_API_BIND").unwrap_or_else(|_| "0.0.0.0:18093".to_owned());

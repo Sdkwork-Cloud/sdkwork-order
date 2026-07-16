@@ -4,7 +4,7 @@
   "applicationCode": "order",
   "packageName": "sdkwork-order-gateway-assembly",
   "crateDir": "crates/sdkwork-order-gateway-assembly",
-  "generatedAt": "2026-07-08T01:34:20.930Z",
+  "generatedAt": "2026-07-16T04:34:00.104Z",
   "routeCrates": [
     {
       "packageName": "sdkwork-routes-order-app-api",

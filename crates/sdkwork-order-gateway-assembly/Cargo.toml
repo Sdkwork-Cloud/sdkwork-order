@@ -11,11 +11,12 @@ path = "src/lib.rs"
 
 [dependencies]
 axum.workspace = true
-tokio = { version = "1.48", features = ["macros", "rt-multi-thread"] }
+tokio.workspace = true
 sdkwork_order_service_host.workspace = true
+sdkwork_order_database_host.workspace = true
+sdkwork-database-sqlx.workspace = true
+sdkwork-database-spi.workspace = true
 sdkwork-web-bootstrap.workspace = true
-sdkwork_routes_order_app_api.workspace = true
-sdkwork_routes_order_backend_api.workspace = true
-
-[dev-dependencies]
-sdkwork_order_service.workspace = true
+sdkwork-web-core.workspace = true
+sdkwork-routes-order-app-api.workspace = true
+sdkwork-routes-order-backend-api.workspace = true

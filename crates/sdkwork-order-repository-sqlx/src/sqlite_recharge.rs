@@ -254,18 +254,6 @@ ORDER BY
 LIMIT 1
 "#;
 
-const LOAD_RECHARGE_PRODUCT_SKU_BY_ID: &str = r#"
-SELECT
-    s.id AS sku_id,
-    COALESCE(NULLIF(s.name, ''), NULLIF(s.title, ''), NULLIF(pr.title, ''), 'Points recharge') AS product_name
-FROM commerce_product_sku s
-JOIN commerce_product_spu pr ON pr.id = s.spu_id
-WHERE s.id = ?1
-  AND s.sales_status = 'active'
-  AND pr.sales_status = 'active'
-LIMIT 1
-"#;
-
 const LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT: &str = r#"
 SELECT
     s.id AS sku_id,
@@ -1549,10 +1537,17 @@ async fn load_recharge_method(
         .bind(&requested_method)
         .fetch_optional(&mut **tx)
         .await
-        .map_err(|error| store_error("failed to load recharge method", error))?
-        .ok_or_else(|| CommerceServiceError::conflict("recharge payment method is unavailable"))?;
-    let method_key = normalize_method_key(&string_cell(&row, "method_key"));
-    let provider_code = normalize_method_key(&string_cell(&row, "provider_code"));
+        .map_err(|error| store_error("failed to load recharge method", error))?;
+    let method_key = row
+        .as_ref()
+        .map(|row| normalize_method_key(&string_cell(row, "method_key")))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| requested_method.clone());
+    let provider_code = row
+        .as_ref()
+        .map(|row| normalize_method_key(&string_cell(row, "provider_code")))
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| requested_method.clone());
     let payment_product = recharge_payment_product(&method_key)?.to_string();
     Ok(RechargeMethod {
         method_key,
@@ -1681,16 +1676,14 @@ async fn load_recharge_product_sku(
     pack: Option<&RechargePack>,
 ) -> Result<RechargeProductSku, CommerceServiceError> {
     if let Some(pack) = pack {
-        let row = sqlx::query(LOAD_RECHARGE_PRODUCT_SKU_BY_ID)
-            .bind(&pack.sku_id)
-            .fetch_optional(&mut **tx)
-            .await
-            .map_err(|error| store_error("failed to load recharge product sku by id", error))?
-            .ok_or_else(|| CommerceServiceError::conflict("recharge product sku is unavailable"))?;
-
+        if pack.sku_id.trim().is_empty() {
+            return Err(CommerceServiceError::conflict(
+                "recharge package sku reference is unavailable",
+            ));
+        }
         return Ok(RechargeProductSku {
-            sku_id: string_cell(&row, "sku_id"),
-            product_name: string_cell(&row, "product_name"),
+            sku_id: pack.sku_id.clone(),
+            product_name: pack.name.clone(),
         });
     }
 

@@ -3,7 +3,8 @@ use sdkwork_order_service::{
     stable_checkout_order_subject, stable_order_settlement_subject, CancelOwnerOrderCommand,
     CreateOwnerOrderCommand, CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery,
     OrderOwnerEventListQuery, OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerItem,
-    OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerStatistics, OrderOwnerSummary,
+    OrderOwnerListPage, OrderOwnerListQuery, OrderOwnerPaymentStatus, OrderOwnerStatistics,
+    OrderOwnerSummary,
 };
 use sdkwork_payment_service::{parse_scene_codes_csv, PaymentMethodItem, PaymentMethodListQuery};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -180,6 +181,16 @@ LEFT JOIN commerce_payment_attempt pa
    AND (pa.organization_id IS NULL OR o.organization_id IS NULL OR pa.organization_id = o.organization_id)
    AND pa.owner_user_id = o.owner_user_id
    AND pa.order_id = o.id
+WHERE o.tenant_id = CAST($1 AS TEXT)
+  AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
+  AND o.owner_user_id = CAST($3 AS TEXT)
+  AND o.id = CAST($4 AS TEXT)
+LIMIT 1
+"#;
+
+const RETRIEVE_OWNER_ORDER_PAYMENT_STATUS: &str = r#"
+SELECT o.status, o.payment_status
+FROM commerce_order o
 WHERE o.tenant_id = CAST($1 AS TEXT)
   AND ((o.organization_id = CAST($2 AS TEXT)) OR (o.organization_id IS NULL AND $2 IS NULL))
   AND o.owner_user_id = CAST($3 AS TEXT)
@@ -446,6 +457,25 @@ impl PostgresCommerceOrderStore {
             items,
             out_trade_no: optional_string_cell(&row, "out_trade_no"),
             transaction_id: optional_string_cell(&row, "transaction_id"),
+        }))
+    }
+
+    pub async fn retrieve_owner_order_payment_status(
+        &self,
+        query: OrderOwnerDetailQuery,
+    ) -> Result<Option<OrderOwnerPaymentStatus>, CommerceServiceError> {
+        let row = sqlx::query(RETRIEVE_OWNER_ORDER_PAYMENT_STATUS)
+            .bind(&query.tenant_id)
+            .bind(query.organization_id.as_deref())
+            .bind(&query.owner_user_id)
+            .bind(&query.order_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|error| store_error("failed to retrieve owner order payment status", error))?;
+
+        Ok(row.map(|row| OrderOwnerPaymentStatus {
+            status: string_cell(&row, "status"),
+            payment_status: optional_string_cell(&row, "payment_status"),
         }))
     }
 
