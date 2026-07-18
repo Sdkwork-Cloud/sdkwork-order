@@ -14,15 +14,45 @@ import { createSdkworkWriteCommandHeaders } from "./write-command-headers.ts";
 
 type ServiceTemplate = { readonly [key: string]: true | ServiceTemplate };
 
-type OrderServiceMethod = (...args: Parameters<OrderSdkMethod>) => Promise<unknown>;
-
 export type SdkworkOrderOrdersService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["orders"]>;
 export type SdkworkOrderRechargesService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["recharges"]>;
+export type SdkworkOrderMembershipsService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["memberships"]>;
 
 export type SdkworkOrderAppService = {
+  memberships: SdkworkOrderMembershipsService;
   orders: SdkworkOrderOrdersService;
   recharges: SdkworkOrderRechargesService;
 };
+
+export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade";
+
+export interface SdkworkMembershipCheckoutInput {
+  action: SdkworkMembershipCheckoutAction;
+  packageId: number;
+  paymentMethod?: string;
+  paymentProduct?: "alipay_native" | "mobile_cashier_h5" | "wechat_native";
+}
+
+export interface SdkworkMembershipCheckoutPayment {
+  amountCny: number | null;
+  cashierUrl?: string;
+  durationDays: number | null;
+  orderId?: string;
+  packageId: number | null;
+  packageName?: string;
+  qrCode?: string;
+  status: "completed" | "failed" | "pending";
+  targetLevelName?: string;
+}
+
+export interface SdkworkMembershipCheckoutService {
+  createCheckout(input: SdkworkMembershipCheckoutInput): Promise<SdkworkMembershipCheckoutPayment>;
+  getCheckoutStatus(orderId: string): Promise<SdkworkMembershipCheckoutPayment>;
+}
+
+export interface CreateSdkworkMembershipCheckoutServiceOptions {
+  appService?: SdkworkOrderAppService;
+}
 
 export interface SdkworkPointsRechargePackage {
   id: string;
@@ -56,6 +86,23 @@ export interface SdkworkPointsRechargeService {
 }
 
 export interface CreateSdkworkPointsRechargeServiceOptions {
+  appService?: SdkworkOrderAppService;
+}
+
+export interface SdkworkCouponRechargeResult {
+  grantAmount: number;
+  orderId: string;
+  orderNo?: string;
+  replayed: boolean;
+  status: "completed" | "pending";
+  targetAsset: "token_bank";
+}
+
+export interface SdkworkCouponRechargeService {
+  redeem(code: string): Promise<SdkworkCouponRechargeResult>;
+}
+
+export interface CreateSdkworkCouponRechargeServiceOptions {
   appService?: SdkworkOrderAppService;
 }
 
@@ -147,6 +194,11 @@ export function requireSdkworkOrderSession(message = "Authentication required"):
 
 export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppServiceInput): SdkworkOrderAppService {
   return {
+    memberships: buildServiceTree<SdkworkOrderMembershipsService>(
+      APP_ORDER_METHOD_TREE.memberships,
+      input.appClient.commerce.memberships,
+      ["commerce", "memberships"],
+    ),
     orders: buildServiceTree<SdkworkOrderOrdersService>(
       APP_ORDER_METHOD_TREE.orders,
       input.appClient.commerce.orders,
@@ -208,6 +260,92 @@ export function createSdkworkPointsRechargeService(
       return normalizePointsRechargePayment(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to retrieve points recharge order."),
       );
+    },
+  };
+}
+
+export function createSdkworkCouponRechargeService(
+  options: CreateSdkworkCouponRechargeServiceOptions = {},
+): SdkworkCouponRechargeService {
+  const resolveAppService = () => options.appService ?? getSdkworkOrderService();
+
+  return {
+    async redeem(code) {
+      requireSdkworkOrderSession();
+      const couponCode = code.trim();
+      if (!couponCode) {
+        throw new Error("A coupon code is required.");
+      }
+      const body = {
+        amount: 0,
+        couponCode,
+        currencyCode: "CNY",
+        subject: "coupon_recharge" as const,
+        targetAsset: "token_bank" as const,
+      };
+      const headers = createSdkworkWriteCommandHeaders(
+        "recharges.orders.create",
+        body,
+      );
+      const response = await resolveAppService().recharges.orders.create(body, headers);
+      return normalizeCouponRechargeResult(
+        unwrapSdkworkOrderResource<unknown>(response, "Unable to redeem this coupon."),
+      );
+    },
+  };
+}
+
+export function createSdkworkMembershipCheckoutService(
+  options: CreateSdkworkMembershipCheckoutServiceOptions = {},
+): SdkworkMembershipCheckoutService {
+  const resolveAppService = () => options.appService ?? getSdkworkOrderService();
+
+  return {
+    async createCheckout(input) {
+      requireSdkworkOrderSession();
+      const packageId = String(input.packageId).trim();
+      if (!packageId || input.packageId <= 0) {
+        throw new Error("A valid membership package is required.");
+      }
+
+      const paymentProduct = input.paymentProduct ?? "mobile_cashier_h5";
+      const paymentMethod = normalizeMembershipPaymentMethod(input.paymentMethod, paymentProduct);
+      const body = {
+        packageId,
+        paymentMethod,
+        paymentProduct,
+      };
+      const headers = createSdkworkWriteCommandHeaders(
+        "memberships.orders.create",
+        body,
+        `membership-checkout:${packageId}:${input.action}`,
+      );
+      const response = await resolveAppService().memberships.orders.create(body, headers);
+      return normalizeMembershipCheckoutPayment(
+        unwrapSdkworkOrderResource<unknown>(response, "Unable to create membership order."),
+        input.packageId,
+        paymentProduct,
+      );
+    },
+
+    async getCheckoutStatus(orderId) {
+      requireSdkworkOrderSession();
+      const normalizedOrderId = orderId.trim();
+      if (!normalizedOrderId) {
+        throw new Error("A membership order id is required.");
+      }
+      const response = await resolveAppService().orders.paymentSuccess.retrieve(normalizedOrderId);
+      const record = unwrapSdkworkOrderResource<Record<string, unknown>>(
+        response,
+        "Unable to retrieve membership order status.",
+      );
+      return {
+        amountCny: null,
+        durationDays: null,
+        orderId: normalizedOrderId,
+        packageId: null,
+        status: record?.paid === true ? "completed" : normalizePointsRechargeStatus(record?.status),
+      };
     },
   };
 }
@@ -380,6 +518,72 @@ function normalizePointsRechargePayment(value: unknown): SdkworkPointsRechargePa
     qrCode: toSdkworkOrderOptionalString(record.qrCode ?? record.qrCodePayload ?? record.providerQrCode ?? record.cashierUrl),
     status,
   };
+}
+
+function normalizeCouponRechargeResult(value: unknown): SdkworkCouponRechargeResult {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const orderId = toSdkworkOrderOptionalString(record.orderId ?? record.id);
+  if (!orderId) {
+    throw new Error("Coupon redemption did not return an order id.");
+  }
+  const grantAmount = toSdkworkOrderNumber(record.grantAmount);
+  if (grantAmount <= 0) {
+    throw new Error("Coupon redemption did not return a Token Bank grant.");
+  }
+  const status = normalizePointsRechargeStatus(
+    record.status ?? record.fulfillmentStatus ?? record.orderStatus,
+  );
+  return {
+    grantAmount,
+    orderId,
+    orderNo: toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo),
+    replayed: record.replayed === true,
+    status: status === "completed" ? "completed" : "pending",
+    targetAsset: "token_bank",
+  };
+}
+
+function normalizeMembershipCheckoutPayment(
+  value: unknown,
+  fallbackPackageId: number,
+  paymentProduct: SdkworkMembershipCheckoutInput["paymentProduct"],
+): SdkworkMembershipCheckoutPayment {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const paymentParams = record.paymentParams && typeof record.paymentParams === "object"
+    ? record.paymentParams as Record<string, unknown>
+    : {};
+  const cashierUrl = toSdkworkOrderOptionalString(record.cashierUrl ?? paymentParams.cashierUrl);
+  const providerQrCode = toSdkworkOrderOptionalString(
+    paymentParams.qrCodeUrl
+      ?? paymentParams.qrCode
+      ?? paymentParams.qrCodePayload
+      ?? paymentParams.codeUrl
+      ?? record.qrCode
+      ?? record.qrCodePayload
+      ?? record.codeUrl,
+  );
+  return {
+    amountCny: toNullableSdkworkOrderNumber(record.amountCny ?? record.amount),
+    cashierUrl,
+    durationDays: toNullableSdkworkOrderNumber(record.durationDays),
+    orderId: toSdkworkOrderOptionalString(record.orderId ?? record.id),
+    packageId: toNullableSdkworkOrderNumber(record.packageId) ?? fallbackPackageId,
+    packageName: toSdkworkOrderOptionalString(record.packageName),
+    qrCode: paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl,
+    status: normalizePointsRechargeStatus(record.status ?? record.paymentStatus ?? record.orderStatus),
+    targetLevelName: toSdkworkOrderOptionalString(record.targetLevelName ?? record.targetPlanName),
+  };
+}
+
+function normalizeMembershipPaymentMethod(
+  value: string | undefined,
+  paymentProduct: NonNullable<SdkworkMembershipCheckoutInput["paymentProduct"]>,
+): string {
+  const normalized = value?.trim().toLowerCase().replace(/-/gu, "_");
+  if (normalized) {
+    return normalized === "wechat" ? "wechat_pay" : normalized;
+  }
+  return paymentProduct === "alipay_native" ? "alipay" : "wechat_pay";
 }
 
 function normalizePointsRechargeStatus(value: unknown): SdkworkPointsRechargePayment["status"] {

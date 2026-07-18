@@ -25,7 +25,7 @@
   "contracts": {
     "layerRole": "sdk-facade",
     "publicExports": ["."],
-    "providedPorts": [{ "name": "orderAppService", "export": "." }, { "name": "pointsRechargeService", "export": "." }],
+    "providedPorts": [{ "name": "orderAppService", "export": "." }, { "name": "membershipCheckoutService", "export": "." }, { "name": "pointsRechargeService", "export": "." }],
     "requiredPorts": [{ "name": "orderAppSdk", "export": ".", "package": "@sdkwork/order-app-sdk" }],
     "runtimeEntrypoints": ["package.json#scripts.typecheck"],
     "sdkClients": ["@sdkwork/order-app-sdk"],

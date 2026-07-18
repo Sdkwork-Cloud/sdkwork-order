@@ -1,4 +1,9 @@
 export const APP_ORDER_METHOD_TREE = {
+  memberships: {
+    orders: {
+      create: true,
+    },
+  },
   orders: {
     list: true,
     create: true,

@@ -13,7 +13,8 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
-    MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts,
+    CouponRedemptionPort, MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts,
 };
 use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
@@ -54,6 +55,7 @@ struct PaymentConfirmationState {
     store: PaymentConfirmationStoreKind,
     credit_port: Arc<dyn AccountPointsCreditPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 }
 
@@ -81,6 +83,22 @@ pub fn payment_confirmation_router_with_sqlite_pool(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
+    payment_confirmation_router_with_sqlite_pool_and_coupon(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        Arc::new(NoopCouponRedemptionPort),
+        membership_port,
+    )
+}
+
+pub fn payment_confirmation_router_with_sqlite_pool_and_coupon(
+    pool: SqlitePool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Sqlite {
             payments: Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
@@ -89,6 +107,7 @@ pub fn payment_confirmation_router_with_sqlite_pool(
         },
         credit_port,
         account_value_ledger_port,
+        coupon_redemption_port,
         membership_port,
     })
 }
@@ -99,6 +118,22 @@ pub fn payment_confirmation_router_with_postgres_pool(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
+    payment_confirmation_router_with_postgres_pool_and_coupon(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        Arc::new(NoopCouponRedemptionPort),
+        membership_port,
+    )
+}
+
+pub fn payment_confirmation_router_with_postgres_pool_and_coupon(
+    pool: PgPool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Postgres {
             payments: Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
@@ -107,6 +142,7 @@ pub fn payment_confirmation_router_with_postgres_pool(
         },
         credit_port,
         account_value_ledger_port,
+        coupon_redemption_port,
         membership_port,
     })
 }
@@ -152,6 +188,7 @@ async fn confirm_order_payment(
 
     let credit_port = state.credit_port.clone();
     let account_value_ledger_port = state.account_value_ledger_port.clone();
+    let coupon_redemption_port = state.coupon_redemption_port.clone();
     let membership_port = state.membership_port.clone();
     match state.store {
         PaymentConfirmationStoreKind::Sqlite {
@@ -172,6 +209,7 @@ async fn confirm_order_payment(
                     account_value_store: recharge.as_ref(),
                     credit_port: credit_port.as_ref(),
                     account_value_ledger_port: account_value_ledger_port.as_ref(),
+                    coupon_redemption_port: coupon_redemption_port.as_ref(),
                     membership_port: membership_port.as_ref(),
                 },
             )
@@ -195,6 +233,7 @@ async fn confirm_order_payment(
                     account_value_store: recharge.as_ref(),
                     credit_port: credit_port.as_ref(),
                     account_value_ledger_port: account_value_ledger_port.as_ref(),
+                    coupon_redemption_port: coupon_redemption_port.as_ref(),
                     membership_port: membership_port.as_ref(),
                 },
             )

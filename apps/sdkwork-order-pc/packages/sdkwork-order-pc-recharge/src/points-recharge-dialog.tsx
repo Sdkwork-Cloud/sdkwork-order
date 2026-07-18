@@ -53,6 +53,11 @@ export interface SdkworkPointsRechargeDialogProps {
   service?: SdkworkPointsRechargeService;
 }
 
+interface SdkworkPointsRechargeCheckout {
+  packageId: string;
+  payment: SdkworkPointsRechargePayment;
+}
+
 const DEFAULT_COPY: SdkworkPointsRechargeDialogCopy = {
   account: "积分账户",
   agreement: "我已阅读并同意《积分充值服务协议》",
@@ -91,34 +96,47 @@ export function SdkworkPointsRechargeDialog({
   );
   const [packages, setPackages] = useState<SdkworkPointsRechargePackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
-  const [payment, setPayment] = useState<SdkworkPointsRechargePayment | null>(null);
+  const [checkout, setCheckout] = useState<SdkworkPointsRechargeCheckout | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const completedOrderRef = useRef<string | null>(null);
+  const isPayingRef = useRef(false);
+  const paymentRequestSequenceRef = useRef(0);
+  const selectedPackageIdRef = useRef<string | null>(null);
 
   const selectedPackage = packages.find((item) => item.id === selectedPackageId) ?? null;
+  const payment = checkout?.packageId === selectedPackageId ? checkout.payment : null;
   const hasActivePayment = payment !== null && payment.status !== "failed";
 
   useEffect(() => {
     if (!isOpen) {
-      return;
+      paymentRequestSequenceRef.current += 1;
+      isPayingRef.current = false;
+      return undefined;
     }
     let active = true;
+    paymentRequestSequenceRef.current += 1;
+    isPayingRef.current = false;
     setIsLoading(true);
+    setIsPaying(false);
     setError(null);
-    setPayment(null);
+    setCheckout(null);
     setQrImageUrl(null);
     completedOrderRef.current = null;
     void service.listPackages()
       .then((items) => {
         if (!active) return;
         setPackages(items);
-        setSelectedPackageId((current) => current && items.some((item) => item.id === current)
-          ? current
-          : items[0]?.id ?? null);
+        setSelectedPackageId((current) => {
+          const next = current && items.some((item) => item.id === current)
+            ? current
+            : items[0]?.id ?? null;
+          selectedPackageIdRef.current = next;
+          return next;
+        });
       })
       .catch((cause) => {
         if (active) setError(cause instanceof Error ? cause.message : copy.loadFailed);
@@ -128,17 +146,19 @@ export function SdkworkPointsRechargeDialog({
       });
     return () => {
       active = false;
+      paymentRequestSequenceRef.current += 1;
+      isPayingRef.current = false;
     };
   }, [copy.loadFailed, isOpen, loadAttempt, service]);
 
   useEffect(() => {
     if (!payment?.qrCode) {
       setQrImageUrl(null);
-      return;
+      return undefined;
     }
     if (payment.qrCode.startsWith("data:image/")) {
       setQrImageUrl(payment.qrCode);
-      return;
+      return undefined;
     }
     let active = true;
     void toDataURL(payment.qrCode, { errorCorrectionLevel: "M", margin: 1, width: 252 })
@@ -154,16 +174,23 @@ export function SdkworkPointsRechargeDialog({
   }, [copy.paymentUnavailableDescription, payment?.qrCode]);
 
   useEffect(() => {
-    if (!isOpen || payment?.status !== "pending" || !payment.orderId) {
+    if (!isOpen || !checkout || payment?.status !== "pending" || !payment.orderId) {
       return undefined;
     }
     const orderId = payment.orderId;
+    const packageId = checkout.packageId;
+    const paymentSessionSequence = paymentRequestSequenceRef.current;
     let active = true;
     const poll = async () => {
       try {
         const next = await service.getOrderStatus(orderId);
-        if (!active) return;
-        setPayment((current) => current ? { ...current, ...next } : next);
+        if (!active
+          || paymentRequestSequenceRef.current !== paymentSessionSequence
+          || selectedPackageIdRef.current !== packageId) return;
+        setCheckout((current) => current?.packageId === packageId
+          && current.payment.orderId === orderId
+          ? { packageId, payment: { ...current.payment, ...next } }
+          : current);
         if (next.status === "completed" && completedOrderRef.current !== orderId) {
           completedOrderRef.current = orderId;
           await onCompleted?.(next);
@@ -179,31 +206,60 @@ export function SdkworkPointsRechargeDialog({
       active = false;
       window.clearInterval(interval);
     };
-  }, [copy.paymentUnavailableDescription, isOpen, onCompleted, payment?.orderId, payment?.status, service]);
+  }, [checkout?.packageId, copy.paymentUnavailableDescription, isOpen, onCompleted, payment?.orderId, payment?.status, service]);
+
+  function selectPackage(packageId: string) {
+    if (packageId === selectedPackageIdRef.current || isPayingRef.current) return;
+    paymentRequestSequenceRef.current += 1;
+    selectedPackageIdRef.current = packageId;
+    completedOrderRef.current = null;
+    setSelectedPackageId(packageId);
+    setCheckout(null);
+    setQrImageUrl(null);
+    setError(null);
+  }
+
+  function closeDialog() {
+    paymentRequestSequenceRef.current += 1;
+    isPayingRef.current = false;
+    onClose();
+  }
 
   async function createPayment() {
-    if (!selectedPackage) return;
+    if (!selectedPackage || isPayingRef.current) return;
+    const packageId = selectedPackage.id;
+    const requestSequence = paymentRequestSequenceRef.current + 1;
+    paymentRequestSequenceRef.current = requestSequence;
+    isPayingRef.current = true;
     setIsPaying(true);
     setError(null);
     try {
-      const result = await service.createOrder({ packageId: selectedPackage.id, paymentMethod });
-      setPayment(result);
+      const result = await service.createOrder({ packageId, paymentMethod });
+      if (paymentRequestSequenceRef.current !== requestSequence
+        || selectedPackageIdRef.current !== packageId) return;
+      setCheckout({ packageId, payment: result });
       if (result.status === "completed") {
-        const key = result.orderId ?? selectedPackage.id;
+        const key = result.orderId ?? packageId;
         if (completedOrderRef.current !== key) {
           completedOrderRef.current = key;
           await onCompleted?.(result);
         }
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : copy.paymentUnavailableDescription);
+      if (paymentRequestSequenceRef.current === requestSequence
+        && selectedPackageIdRef.current === packageId) {
+        setError(cause instanceof Error ? cause.message : copy.paymentUnavailableDescription);
+      }
     } finally {
-      setIsPaying(false);
+      if (paymentRequestSequenceRef.current === requestSequence) {
+        isPayingRef.current = false;
+        setIsPaying(false);
+      }
     }
   }
 
   return (
-    <Modal onOpenChange={(open) => !open && onClose()} open={isOpen}>
+    <Modal onOpenChange={(open) => !open && closeDialog()} open={isOpen}>
       <ModalContent aria-describedby={undefined} aria-labelledby="sdkwork-points-recharge-title" className="sdkwork-points-recharge-dialog" showCloseButton={false} size="lg">
         <ModalHeader className="sdkwork-points-recharge-dialog__header">
           <div className="sdkwork-points-recharge-dialog__identity">
@@ -229,11 +285,18 @@ export function SdkworkPointsRechargeDialog({
               </div>
             ) : null}
             {!isLoading && packages.length > 0 ? (
-              <div className="sdkwork-points-recharge-dialog__grid">
+              <div aria-busy={isPaying} className="sdkwork-points-recharge-dialog__grid">
                 {packages.map((item) => {
                   const selected = item.id === selectedPackageId;
                   return (
-                    <button className={`sdkwork-points-recharge-dialog__package ${selected ? "is-selected" : ""}`} key={item.id} onClick={() => { setSelectedPackageId(item.id); setPayment(null); setError(null); }} type="button">
+                    <button
+                      aria-pressed={selected}
+                      className={`sdkwork-points-recharge-dialog__package ${selected ? "is-selected" : ""}`}
+                      disabled={isLoading || isPaying}
+                      key={item.id}
+                      onClick={() => selectPackage(item.id)}
+                      type="button"
+                    >
                       <span className="sdkwork-points-recharge-dialog__points"><Sparkles aria-hidden="true" />{item.points.toLocaleString()} <small>{copy.pointsUnit}</small></span>
                       <span className="sdkwork-points-recharge-dialog__price">{item.currencyCode} {item.priceAmount.toFixed(2)}</span>
                     </button>
@@ -243,9 +306,9 @@ export function SdkworkPointsRechargeDialog({
             ) : null}
             <p className="sdkwork-points-recharge-dialog__hint">{copy.notice}</p>
           </section>
-          <aside className="sdkwork-points-recharge-dialog__payment">
+          <aside aria-live="polite" className="sdkwork-points-recharge-dialog__payment">
             {error && packages.length > 0 ? <StatusNotice tone="danger" title={copy.paymentUnavailable}>{error}</StatusNotice> : null}
-            {!payment || isPaying ? (
+            {!payment || isPaying || payment.status === "failed" ? (
               <div className="sdkwork-points-recharge-dialog__payment-empty">
                 <QrCode aria-hidden="true" />
                 <p>{copy.agreement}</p>
@@ -266,7 +329,7 @@ export function SdkworkPointsRechargeDialog({
                 <span>{copy.agreementAccepted}</span>
               </div>
             ) : null}
-            {payment?.status === "completed" ? <div className="sdkwork-points-recharge-dialog__completed"><CheckCircle2 aria-hidden="true" /><strong>{copy.completed}</strong><Button onClick={onClose} type="button">{copy.close}</Button></div> : null}
+            {payment?.status === "completed" ? <div className="sdkwork-points-recharge-dialog__completed"><CheckCircle2 aria-hidden="true" /><strong>{copy.completed}</strong><Button onClick={closeDialog} type="button">{copy.close}</Button></div> : null}
             {payment?.status === "failed" && !error ? <StatusNotice tone="danger" title={copy.paymentUnavailable}>{copy.paymentUnavailableDescription}</StatusNotice> : null}
           </aside>
         </ModalBody>

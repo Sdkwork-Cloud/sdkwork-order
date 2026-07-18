@@ -21,6 +21,7 @@ export function createOrderAppSdkClientFromTransport(
 ): OrderAppSdkClient {
   return {
     commerce: {
+      memberships: transport.memberships,
       orders: transport.orders,
       recharges: transport.recharges,
     },

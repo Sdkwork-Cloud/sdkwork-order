@@ -6,6 +6,11 @@ mod generated;
 
 pub use bootstrap::{assemble_application_router, ApplicationAssembly};
 
+pub async fn assemble_application_router_from_env() -> Result<ApplicationAssembly, String> {
+    let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);
+    Ok(assemble_application_router(host).await)
+}
+
 pub fn assembly_route_count() -> usize {
     generated::ROUTE_CRATE_COUNT
 }

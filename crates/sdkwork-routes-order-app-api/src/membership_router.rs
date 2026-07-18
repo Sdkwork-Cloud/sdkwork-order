@@ -35,6 +35,7 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
 const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
+const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
 pub type CommerceMembershipOrderFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -263,9 +264,11 @@ async fn create_membership_order(
             ),
         );
     };
+    let persisted_organization_id =
+        membership_order_organization_scope(subject.organization_id.as_deref());
     let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
-        organization_id: subject.organization_id.clone(),
+        organization_id: Some(persisted_organization_id),
         owner_user_id: subject.user_id.clone(),
         order_id: outcome.order_id.clone(),
         payment_method: method,
@@ -362,6 +365,14 @@ fn provider_qr_code(payment_params: &BTreeMap<String, String>) -> Option<&String
         .or_else(|| payment_params.get("qrCode"))
         .or_else(|| payment_params.get("codeUrl"))
         .filter(|value| !value.trim().is_empty())
+}
+
+fn membership_order_organization_scope(organization_id: Option<&str>) -> String {
+    organization_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(PLATFORM_ORGANIZATION_SCOPE_SENTINEL)
+        .to_owned()
 }
 
 fn build_create_membership_command(
@@ -517,8 +528,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use super::{
-        payment_scene, provider_qr_code, validate_payment_method, validate_payment_product,
-        DEFAULT_PAYMENT_PRODUCT,
+        membership_order_organization_scope, payment_scene, provider_qr_code,
+        validate_payment_method, validate_payment_product, DEFAULT_PAYMENT_PRODUCT,
     };
 
     #[test]
@@ -548,6 +559,16 @@ mod tests {
     fn native_products_map_to_provider_supported_scenes() {
         assert_eq!(payment_scene("wechat_native"), "wechat_native");
         assert_eq!(payment_scene("alipay_native"), "alipay_qr");
+    }
+
+    #[test]
+    fn membership_payment_uses_the_persisted_organization_scope() {
+        assert_eq!(membership_order_organization_scope(None), "0");
+        assert_eq!(membership_order_organization_scope(Some("   ")), "0");
+        assert_eq!(
+            membership_order_organization_scope(Some(" organization-1 ")),
+            "organization-1"
+        );
     }
 
     #[test]

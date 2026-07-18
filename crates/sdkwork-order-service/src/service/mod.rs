@@ -1,5 +1,6 @@
 mod account_value_fulfillment;
 mod account_value_request_execution;
+mod coupon_recharge_fulfillment;
 mod order_payment_settlement;
 mod points_recharge_fulfillment;
 
@@ -7,6 +8,7 @@ pub use account_value_fulfillment::{
     default_fulfill_account_value_order_command, fulfill_account_value_order,
 };
 pub use account_value_request_execution::execute_account_value_request_review;
+pub use coupon_recharge_fulfillment::redeem_coupon_and_fulfill_account_value_order;
 pub use order_payment_settlement::{
     settle_owner_order_after_payment_success, stable_checkout_order_subject,
     stable_order_settlement_subject, OrderSubjectKind, OwnerOrderSettlementOutcome,

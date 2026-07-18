@@ -4,15 +4,17 @@ use std::sync::{Arc, Mutex};
 use sdkwork_contract_service::{CommerceLedgerBusinessType, CommerceMoney, CommerceServiceError};
 use sdkwork_order_service::{
     default_fulfill_account_value_order_command, fulfill_account_value_order,
-    settle_owner_order_after_payment_success, AccountPointsCreditFuture, AccountPointsCreditPort,
-    AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueFulfillmentFuture,
-    AccountValueFulfillmentStore, AccountValueLedgerCommand, AccountValueLedgerOutcome,
+    redeem_coupon_and_fulfill_account_value_order, settle_owner_order_after_payment_success,
+    AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueAssetCode,
+    AccountValueFulfillmentContext, AccountValueFulfillmentFuture, AccountValueFulfillmentStore,
+    AccountValueFuture, AccountValueLedgerCommand, AccountValueLedgerOutcome,
     AccountValueLedgerPort, AccountValueOrderSubject, ConfirmOwnerOrderPaymentOutcome,
+    CouponRedemptionOutcome, CouponRedemptionPort, CouponRedemptionRequest,
     FulfillAccountValueOrderCommand, FulfillAccountValueOrderOutcome,
     FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
     MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentFuture,
     MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, OrderPaymentSettlementAttempt,
+    MembershipPurchaseFulfillmentRequest, NoopCouponRedemptionPort, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
     OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts, PointsRechargeCreditOutcome,
     PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentFuture,
@@ -35,6 +37,7 @@ async fn fulfill_token_bank_recharge_credits_account_value_ledger_then_commits_o
         payment_attempt_status: "succeeded".to_owned(),
         grant_amount: CommerceMoney::new("30000").expect("grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
+        coupon_code: None,
     });
 
     let command = default_fulfill_account_value_order_command(
@@ -90,6 +93,7 @@ async fn fulfill_account_value_order_replays_without_duplicate_ledger_credit() {
         payment_attempt_status: "succeeded".to_owned(),
         grant_amount: CommerceMoney::new("50000").expect("grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
+        coupon_code: None,
     });
 
     let command = default_fulfill_account_value_order_command(
@@ -121,6 +125,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
     let points_store = Arc::new(UnsupportedPointsRechargeStore);
     let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
     let membership_port = Arc::new(UnsupportedMembershipPurchaseFulfillmentPort);
+    let coupon_port = Arc::new(NoopCouponRedemptionPort);
 
     account_value_store.seed_context(AccountValueFulfillmentContext {
         order_id: "order-token-settle".to_owned(),
@@ -133,6 +138,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
         payment_attempt_status: "succeeded".to_owned(),
         grant_amount: CommerceMoney::new("120000").expect("grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
+        coupon_code: None,
     });
 
     let attempt = OrderPaymentSettlementAttempt {
@@ -152,6 +158,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
             account_value_store: account_value_store.as_ref(),
             credit_port: points_port.as_ref(),
             account_value_ledger_port: account_value_ledger.as_ref(),
+            coupon_redemption_port: coupon_port.as_ref(),
             membership_port: membership_port.as_ref(),
         },
         &attempt,
@@ -187,6 +194,7 @@ async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillmen
     let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
     let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
     let membership_port = Arc::new(UnsupportedMembershipPurchaseFulfillmentPort);
+    let coupon_port = Arc::new(NoopCouponRedemptionPort);
     let attempt = OrderPaymentSettlementAttempt {
         tenant_id: "tenant-1".to_owned(),
         organization_id: Some("org-1".to_owned()),
@@ -204,6 +212,7 @@ async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillmen
             account_value_store: account_value_store.as_ref(),
             credit_port: points_port.as_ref(),
             account_value_ledger_port: account_value_ledger.as_ref(),
+            coupon_redemption_port: coupon_port.as_ref(),
             membership_port: membership_port.as_ref(),
         },
         &attempt,
@@ -219,6 +228,120 @@ async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillmen
     assert_eq!(payment_store.confirm_calls(), 1);
     assert_eq!(order_state_store.mark_calls(), 1);
     assert!(account_value_ledger.commands().is_empty());
+}
+
+#[tokio::test]
+async fn coupon_recharge_consumes_coupon_before_crediting_token_bank() {
+    let store = MockAccountValueFulfillmentStore::default();
+    store.seed_context(coupon_context("50"));
+    let coupon = MockCouponRedemptionPort::new("50");
+    let ledger = MockAccountValueLedgerPort::default();
+    let command = default_fulfill_account_value_order_command(
+        AccountValueOrderSubject::CouponRecharge,
+        "tenant-1",
+        Some("org-1"),
+        "user-1",
+        "order-coupon-1",
+        "request-coupon-1",
+    )
+    .expect("coupon fulfillment command");
+
+    let outcome = redeem_coupon_and_fulfill_account_value_order(&store, &coupon, &ledger, command)
+        .await
+        .expect("coupon recharge fulfillment");
+
+    assert!(outcome.accepted);
+    assert_eq!(1, coupon.requests().len());
+    assert_eq!("WELCOME", coupon.requests()[0].coupon_code);
+    assert_eq!("order-coupon-1", coupon.requests()[0].request_no);
+    assert_eq!(1, ledger.commands().len());
+    assert_eq!("50", ledger.commands()[0].amount.as_str());
+}
+
+#[tokio::test]
+async fn coupon_recharge_fails_closed_when_promotion_benefit_changes() {
+    let store = MockAccountValueFulfillmentStore::default();
+    store.seed_context(coupon_context("50"));
+    let coupon = MockCouponRedemptionPort::new("49");
+    let ledger = MockAccountValueLedgerPort::default();
+    let command = default_fulfill_account_value_order_command(
+        AccountValueOrderSubject::CouponRecharge,
+        "tenant-1",
+        Some("org-1"),
+        "user-1",
+        "order-coupon-1",
+        "request-coupon-1",
+    )
+    .expect("coupon fulfillment command");
+
+    let error = redeem_coupon_and_fulfill_account_value_order(&store, &coupon, &ledger, command)
+        .await
+        .expect_err("benefit mismatch must fail");
+
+    assert_eq!("conflict", error.code());
+    assert!(ledger.commands().is_empty());
+}
+
+fn coupon_context(grant_amount: &str) -> AccountValueFulfillmentContext {
+    AccountValueFulfillmentContext {
+        order_id: "order-coupon-1".to_owned(),
+        order_no: "CP1001".to_owned(),
+        subject: AccountValueOrderSubject::CouponRecharge,
+        target_asset: AccountValueAssetCode::TokenBank,
+        order_status: "paid".to_owned(),
+        fulfillment_status: "unfulfilled".to_owned(),
+        payment_status: "succeeded".to_owned(),
+        payment_attempt_status: "succeeded".to_owned(),
+        grant_amount: CommerceMoney::new(grant_amount).expect("coupon grant"),
+        asset_unit_code: "TOKEN_BANK".to_owned(),
+        coupon_code: Some("WELCOME".to_owned()),
+    }
+}
+
+struct MockCouponRedemptionPort {
+    grant_amount: CommerceMoney,
+    requests: Mutex<Vec<CouponRedemptionRequest>>,
+}
+
+impl MockCouponRedemptionPort {
+    fn new(grant_amount: &str) -> Self {
+        Self {
+            grant_amount: CommerceMoney::new(grant_amount).expect("coupon grant"),
+            requests: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn requests(&self) -> Vec<CouponRedemptionRequest> {
+        self.requests.lock().expect("coupon requests lock").clone()
+    }
+}
+
+impl CouponRedemptionPort for MockCouponRedemptionPort {
+    fn preview_coupon<'a>(
+        &'a self,
+        request: CouponRedemptionRequest,
+    ) -> AccountValueFuture<'a, CouponRedemptionOutcome> {
+        self.redeem_coupon(request)
+    }
+
+    fn redeem_coupon<'a>(
+        &'a self,
+        request: CouponRedemptionRequest,
+    ) -> AccountValueFuture<'a, CouponRedemptionOutcome> {
+        self.requests
+            .lock()
+            .expect("coupon requests lock")
+            .push(request);
+        let grant_amount = self.grant_amount.clone();
+        Box::pin(async move {
+            Ok(CouponRedemptionOutcome {
+                accepted: true,
+                replayed: false,
+                target_asset: AccountValueAssetCode::TokenBank,
+                grant_amount,
+            })
+        })
+    }
 }
 
 #[derive(Default)]

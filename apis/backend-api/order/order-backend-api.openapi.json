@@ -134,7 +134,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/orders/cancellations": {
@@ -233,7 +236,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/orders/{orderId}": {
@@ -305,7 +311,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/orders/{orderId}/cancel": {
@@ -373,7 +382,10 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/orders/{orderId}/close": {
@@ -441,7 +453,10 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/orders/{orderId}/events": {
@@ -541,7 +556,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/orders/{orderId}/payment_confirmations": {
@@ -609,7 +627,10 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/after_sales/requests": {
@@ -691,7 +712,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/after_sales/requests/{afterSalesRequestId}": {
@@ -739,7 +763,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/after_sales/requests/{afterSalesRequestId}/reviews": {
@@ -807,7 +834,10 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/shipments": {
@@ -889,7 +919,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/shipments/{shipmentId}": {
@@ -937,7 +970,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/shipments/{shipmentId}/packages": {
@@ -1006,7 +1042,10 @@
             "AuthToken": [],
             "AccessToken": []
           }
-        ]
+        ],
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
       "post": {
         "operationId": "shipments.packages.create",
@@ -1072,7 +1111,10 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/shipments/{shipmentId}/packages/{packageId}": {
@@ -1148,7 +1190,10 @@
             "AccessToken": []
           }
         ],
-        "x-sdkwork-idempotent": true
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/account_value_packages": {
@@ -1280,7 +1325,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
       "post": {
         "tags": [
@@ -1393,7 +1439,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/account_value_packages/{packageId}": {
@@ -1516,7 +1563,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/account_value_packages/{packageId}/retire": {
@@ -1639,7 +1687,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.accountValuePackages",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/token_bank_plans": {
@@ -1763,7 +1812,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       },
       "post": {
         "tags": [
@@ -1876,7 +1926,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/token_bank_plans/{planCode}": {
@@ -1999,7 +2050,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/token_bank_plans/{planCode}/retire": {
@@ -2122,7 +2174,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.tokenBankPlans",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/refund_requests": {
@@ -2246,7 +2299,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/refund_requests/{refundRequestId}/approve": {
@@ -2369,7 +2423,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/refund_requests/{refundRequestId}/reject": {
@@ -2492,7 +2547,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/refund_requests/{refundRequestId}/retry": {
@@ -2615,7 +2671,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.refundRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/withdrawal_requests": {
@@ -2739,7 +2796,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.read"
       }
     },
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/approve": {
@@ -2862,7 +2920,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/reject": {
@@ -2985,7 +3044,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     },
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/retry": {
@@ -3108,7 +3168,8 @@
         "x-sdkwork-domain": "commerce",
         "x-sdkwork-resource": "backend.withdrawalRequests",
         "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "backend-api"
+        "x-sdkwork-api-surface": "backend-api",
+        "x-sdkwork-permission": "commerce.orders.manage"
       }
     }
   },

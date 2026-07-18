@@ -17,16 +17,19 @@ use sdkwork_order_repository_sqlx::{
     SqliteCommerceRechargeStore,
 };
 use sdkwork_order_service::{
-    AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueOrderSubject,
-    AccountValueRequestDetailQuery, AccountValueRequestListPage, AccountValueRequestListQuery,
-    AccountValueRequestView, CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
-    CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
+    default_fulfill_account_value_order_command, redeem_coupon_and_fulfill_account_value_order,
+    AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueFulfillmentStore,
+    AccountValueLedgerPort, AccountValueOrderSubject, AccountValueRequestDetailQuery,
+    AccountValueRequestListPage, AccountValueRequestListQuery, AccountValueRequestView,
+    CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot, CouponRedemptionPort,
+    CouponRedemptionRequest, CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
     CreateOrderRefundRequestCommand, CreatePointsRechargeOrderCommand,
-    CreatePointsRechargeOrderOutcome, OrderOwnerListQuery, PayOwnerOrderCommand,
-    PayOwnerOrderCommandInput, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
-    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
-    RechargeSettingsSnapshot, TokenBankPlanItem, TokenBankPlanListPage, TokenBankPlanPeriod,
+    CreatePointsRechargeOrderOutcome, NoopAccountValueLedgerPort, NoopCouponRedemptionPort,
+    OrderOwnerListQuery, PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
+    RechargeGrantPreview, RechargePackageItem, RechargePackageListPage, RechargePackageListQuery,
+    RechargeSettingsQuery, RechargeSettingsSnapshot, TokenBankPlanItem, TokenBankPlanListPage,
+    TokenBankPlanPeriod,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
@@ -122,8 +125,64 @@ pub trait CommerceRechargeCheckoutStore: Send + Sync {
 #[derive(Clone)]
 struct AppRechargeCheckoutState {
     store: Arc<dyn CommerceRechargeCheckoutStore>,
+    fulfillment_store: Arc<dyn AccountValueFulfillmentStore>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     orders: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
+}
+
+struct NoopAccountValueFulfillmentStore;
+
+impl AccountValueFulfillmentStore for NoopAccountValueFulfillmentStore {
+    fn load_account_value_fulfillment_context<'a>(
+        &'a self,
+        _command: &'a sdkwork_order_service::FulfillAccountValueOrderCommand,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<
+        'a,
+        Option<sdkwork_order_service::AccountValueFulfillmentContext>,
+    > {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "account value fulfillment store is not configured",
+            ))
+        })
+    }
+
+    fn reserve_account_value_fulfillment<'a>(
+        &'a self,
+        _command: &'a sdkwork_order_service::FulfillAccountValueOrderCommand,
+        _context: &'a sdkwork_order_service::AccountValueFulfillmentContext,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, ()> {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "account value fulfillment store is not configured",
+            ))
+        })
+    }
+
+    fn release_account_value_fulfillment_reservation<'a>(
+        &'a self,
+        _command: &'a sdkwork_order_service::FulfillAccountValueOrderCommand,
+        _context: &'a sdkwork_order_service::AccountValueFulfillmentContext,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<'a, ()> {
+        Box::pin(async move { Ok(()) })
+    }
+
+    fn commit_account_value_fulfillment<'a>(
+        &'a self,
+        _command: sdkwork_order_service::FulfillAccountValueOrderCommand,
+        _context: &'a sdkwork_order_service::AccountValueFulfillmentContext,
+    ) -> sdkwork_order_service::AccountValueFulfillmentFuture<
+        'a,
+        sdkwork_order_service::FulfillAccountValueOrderOutcome,
+    > {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "account value fulfillment store is not configured",
+            ))
+        })
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -576,8 +635,12 @@ pub fn app_recharge_checkout_router_with_sqlite_pool(
     credentials: ProviderCredentialBundle,
 ) -> Router {
     let pool_for_orders = pool.clone();
-    build_app_recharge_checkout_router(
-        Arc::new(SqliteCommerceRechargeStore::new(pool)),
+    let store = Arc::new(SqliteCommerceRechargeStore::new(pool));
+    build_app_recharge_checkout_router_with_integrations(
+        store.clone(),
+        store,
+        Arc::new(NoopCouponRedemptionPort),
+        Arc::new(NoopAccountValueLedgerPort),
         Arc::new(SqliteCommerceOrderStore::new(pool_for_orders.clone())),
         enriched_sqlite_owner_order_payments(pool_for_orders, registry, credentials),
     )
@@ -589,8 +652,12 @@ pub fn app_recharge_checkout_router_with_postgres_pool(
     credentials: ProviderCredentialBundle,
 ) -> Router {
     let pool_for_orders = pool.clone();
-    build_app_recharge_checkout_router(
-        Arc::new(PostgresCommerceRechargeStore::new(pool)),
+    let store = Arc::new(PostgresCommerceRechargeStore::new(pool));
+    build_app_recharge_checkout_router_with_integrations(
+        store.clone(),
+        store,
+        Arc::new(NoopCouponRedemptionPort),
+        Arc::new(NoopAccountValueLedgerPort),
         Arc::new(PostgresCommerceOrderStore::new(pool_for_orders.clone())),
         enriched_postgres_owner_order_payments(pool_for_orders, registry, credentials),
     )
@@ -598,6 +665,24 @@ pub fn app_recharge_checkout_router_with_postgres_pool(
 
 pub fn build_app_recharge_checkout_router(
     store: Arc<dyn CommerceRechargeCheckoutStore>,
+    orders: Arc<dyn CommerceOrderStore>,
+    payments: Arc<dyn OwnerOrderPaymentStore>,
+) -> Router {
+    build_app_recharge_checkout_router_with_integrations(
+        store,
+        Arc::new(NoopAccountValueFulfillmentStore),
+        Arc::new(NoopCouponRedemptionPort),
+        Arc::new(NoopAccountValueLedgerPort),
+        orders,
+        payments,
+    )
+}
+
+pub fn build_app_recharge_checkout_router_with_integrations(
+    store: Arc<dyn CommerceRechargeCheckoutStore>,
+    fulfillment_store: Arc<dyn AccountValueFulfillmentStore>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     orders: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
 ) -> Router {
@@ -641,6 +726,9 @@ pub fn build_app_recharge_checkout_router(
         )
         .with_state(AppRechargeCheckoutState {
             store,
+            fulfillment_store,
+            coupon_redemption_port,
+            account_value_ledger_port,
             orders,
             payments,
         })
@@ -1178,11 +1266,55 @@ async fn submit_recharge(
             Ok(value) => value,
             Err(error) => return map_service_error(ctx, error),
         };
-    let grant_amount =
+    let grant_amount = if matches!(order_subject, AccountValueOrderSubject::CouponRecharge) {
+        if request.grant_amount_value().is_some() {
+            return validation(ctx, "coupon recharge grantAmount is server-controlled");
+        }
+        let coupon_code = match request
+            .coupon_code()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(value) => value,
+            None => return validation(ctx, "coupon recharge requires couponCode"),
+        };
+        let preview = state
+            .coupon_redemption_port
+            .preview_coupon(CouponRedemptionRequest {
+                tenant_id: subject.tenant_id.clone(),
+                organization_id: subject.organization_id.clone(),
+                owner_user_id: subject.user_id.clone(),
+                coupon_code: coupon_code.to_owned(),
+                order_id: write_headers.request_no.clone(),
+                request_no: write_headers.request_no.clone(),
+                idempotency_key: format!(
+                    "coupon-recharge:preview:{}",
+                    write_headers.idempotency_key
+                ),
+            })
+            .await;
+        match preview {
+            Ok(value)
+                if value.accepted && value.target_asset == AccountValueAssetCode::TokenBank =>
+            {
+                value.grant_amount
+            }
+            Ok(_) => {
+                return map_service_error(
+                    ctx,
+                    CommerceServiceError::conflict(
+                        "coupon does not grant a supported Token Bank benefit",
+                    ),
+                )
+            }
+            Err(error) => return map_service_error(ctx, error),
+        }
+    } else {
         match resolve_grant_amount(order_subject, &amount, request.grant_amount_value()) {
             Ok(value) => value,
             Err(error) => return map_service_error(ctx, error),
-        };
+        }
+    };
     let plan_period = match request
         .plan_period()
         .map(TokenBankPlanPeriod::parse)
@@ -1232,7 +1364,34 @@ async fn submit_recharge(
                 )
                 .await
             }
-            Ok(outcome) => success_created_item(ctx, map_account_recharge_outcome(outcome)),
+            Ok(mut outcome) => {
+                let fulfill_command = match default_fulfill_account_value_order_command(
+                    AccountValueOrderSubject::CouponRecharge,
+                    &subject.tenant_id,
+                    subject.organization_id.as_deref(),
+                    &subject.user_id,
+                    &outcome.order_id,
+                    &write_headers.request_no,
+                ) {
+                    Ok(value) => value,
+                    Err(error) => return map_service_error(ctx, error),
+                };
+                match redeem_coupon_and_fulfill_account_value_order(
+                    &*state.fulfillment_store,
+                    &*state.coupon_redemption_port,
+                    &*state.account_value_ledger_port,
+                    fulfill_command,
+                )
+                .await
+                {
+                    Ok(fulfillment) => {
+                        outcome.status = fulfillment.fulfillment_status;
+                        outcome.next_action = "completed".to_owned();
+                        success_created_item(ctx, map_account_recharge_outcome(outcome))
+                    }
+                    Err(error) => map_service_error(ctx, error),
+                }
+            }
             Err(error) => map_service_error(ctx, error),
         };
     }
@@ -1784,6 +1943,11 @@ fn resolve_grant_amount(
     amount: &CommerceMoney,
     grant_amount: Option<&serde_json::Value>,
 ) -> Result<CommerceMoney, CommerceServiceError> {
+    if matches!(subject, AccountValueOrderSubject::CouponRecharge) {
+        return Err(CommerceServiceError::validation(
+            "coupon recharge grantAmount is server-controlled",
+        ));
+    }
     if let Some(value) = grant_amount {
         return validate_positive_money_amount(Some(value), "grantAmount")
             .map_err(CommerceServiceError::validation);
@@ -1794,7 +1958,6 @@ fn resolve_grant_amount(
             | AccountValueOrderSubject::TokenBankPlanPurchase
             | AccountValueOrderSubject::TokenBankPlanRenewal
             | AccountValueOrderSubject::AccountRechargePackage
-            | AccountValueOrderSubject::CouponRecharge
     ) {
         return Err(CommerceServiceError::validation(
             "account value recharge requires grantAmount",
@@ -2245,6 +2408,21 @@ mod tests {
         assert!(!command.payment_required);
         assert!(command.order_no.starts_with("CP"));
         assert!(command.out_trade_no.starts_with("COUPON"));
+    }
+
+    #[test]
+    fn coupon_recharge_grant_is_not_resolved_from_client_input() {
+        let amount = CommerceMoney::new("0").expect("zero amount");
+        let client_grant = serde_json::json!(5000);
+
+        let error = resolve_grant_amount(
+            AccountValueOrderSubject::CouponRecharge,
+            &amount,
+            Some(&client_grant),
+        )
+        .expect_err("coupon grant must be supplied by Promotion preview instead");
+
+        assert_eq!("validation", error.code());
     }
 
     #[test]

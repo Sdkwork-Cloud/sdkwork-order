@@ -14,7 +14,8 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
-    MembershipPurchaseFulfillmentPort, OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts,
+    CouponRedemptionPort, MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort,
+    OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts,
 };
 use sdkwork_payment_providers::{
     normalize_provider_code, peek_webhook_routing_fields, provider_registry_for_account,
@@ -45,6 +46,7 @@ enum PaymentWebhookState {
         orders: Arc<SqliteCommerceOrderStore>,
         credit_port: Arc<dyn AccountPointsCreditPort>,
         account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+        coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
         membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     },
     Postgres {
@@ -56,6 +58,7 @@ enum PaymentWebhookState {
         orders: Arc<PostgresCommerceOrderStore>,
         credit_port: Arc<dyn AccountPointsCreditPort>,
         account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+        coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
         membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     },
 }
@@ -91,6 +94,22 @@ pub fn app_payment_webhook_router_with_sqlite_pool(
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
+    app_payment_webhook_router_with_sqlite_pool_and_coupon(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        Arc::new(NoopCouponRedemptionPort),
+        membership_port,
+    )
+}
+
+pub fn app_payment_webhook_router_with_sqlite_pool_and_coupon(
+    pool: SqlitePool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
@@ -109,6 +128,7 @@ pub fn app_payment_webhook_router_with_sqlite_pool(
             orders: Arc::new(SqliteCommerceOrderStore::new(pool)),
             credit_port,
             account_value_ledger_port,
+            coupon_redemption_port,
             membership_port,
         })
 }
@@ -117,6 +137,22 @@ pub fn app_payment_webhook_router_with_postgres_pool(
     pool: PgPool,
     credit_port: Arc<dyn AccountPointsCreditPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+) -> Router {
+    app_payment_webhook_router_with_postgres_pool_and_coupon(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        Arc::new(NoopCouponRedemptionPort),
+        membership_port,
+    )
+}
+
+pub fn app_payment_webhook_router_with_postgres_pool_and_coupon(
+    pool: PgPool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
@@ -137,6 +173,7 @@ pub fn app_payment_webhook_router_with_postgres_pool(
             orders: Arc::new(PostgresCommerceOrderStore::new(pool)),
             credit_port,
             account_value_ledger_port,
+            coupon_redemption_port,
             membership_port,
         })
 }
@@ -159,6 +196,7 @@ async fn receive_provider_webhook(
             orders,
             credit_port,
             account_value_ledger_port,
+            coupon_redemption_port,
             membership_port,
         } => {
             receive_provider_webhook_inner(
@@ -174,6 +212,7 @@ async fn receive_provider_webhook(
                         account_value_store: recharge.as_ref(),
                         credit_port: credit_port.as_ref(),
                         account_value_ledger_port: account_value_ledger_port.as_ref(),
+                        coupon_redemption_port: coupon_redemption_port.as_ref(),
                         membership_port: membership_port.as_ref(),
                     },
                 },
@@ -195,6 +234,7 @@ async fn receive_provider_webhook(
             orders,
             credit_port,
             account_value_ledger_port,
+            coupon_redemption_port,
             membership_port,
         } => {
             receive_provider_webhook_inner(
@@ -210,6 +250,7 @@ async fn receive_provider_webhook(
                         account_value_store: recharge.as_ref(),
                         credit_port: credit_port.as_ref(),
                         account_value_ledger_port: account_value_ledger_port.as_ref(),
+                        coupon_redemption_port: coupon_redemption_port.as_ref(),
                         membership_port: membership_port.as_ref(),
                     },
                 },

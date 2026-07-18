@@ -7,13 +7,15 @@ use crate::{
     backend_commerce_admin_router_with_postgres_pool_and_ports,
     backend_commerce_admin_router_with_sqlite_pool_and_ports,
     backend_order_admin_router_with_postgres_pool, backend_order_admin_router_with_sqlite_pool,
-    openapi_contract::mount_backend_openapi, payment_confirmation_router_with_postgres_pool,
-    payment_confirmation_router_with_sqlite_pool,
+    openapi_contract::mount_backend_openapi,
+    payment_confirmation_router_with_postgres_pool_and_coupon,
+    payment_confirmation_router_with_sqlite_pool_and_coupon,
 };
 
 pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
     let credit_port = host.account_credit_port();
     let account_value_ledger_port = host.account_value_ledger_port();
+    let coupon_redemption_port = host.coupon_redemption_port();
     let membership_port = host.membership_fulfillment_port();
     let payment_refund_executor_port = host.payment_refund_executor_port();
     let payment_payout_executor_port = host.payment_payout_executor_port();
@@ -26,10 +28,11 @@ pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
                 payment_refund_executor_port.clone(),
                 payment_payout_executor_port.clone(),
             ))
-            .merge(payment_confirmation_router_with_postgres_pool(
+            .merge(payment_confirmation_router_with_postgres_pool_and_coupon(
                 pool.clone(),
                 credit_port,
                 account_value_ledger_port,
+                coupon_redemption_port,
                 membership_port,
             )),
         DatabasePool::Sqlite(pool, _) => Router::new()
@@ -40,10 +43,11 @@ pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
                 payment_refund_executor_port,
                 payment_payout_executor_port,
             ))
-            .merge(payment_confirmation_router_with_sqlite_pool(
+            .merge(payment_confirmation_router_with_sqlite_pool_and_coupon(
                 pool.clone(),
                 credit_port,
                 account_value_ledger_port,
+                coupon_redemption_port,
                 membership_port,
             )),
     };

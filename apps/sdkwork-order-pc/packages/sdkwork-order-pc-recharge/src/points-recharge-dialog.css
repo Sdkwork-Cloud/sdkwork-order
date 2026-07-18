@@ -118,9 +118,14 @@
   text-align: center;
 }
 
-.sdkwork-points-recharge-dialog__package:hover,
+.sdkwork-points-recharge-dialog__package:hover:not(:disabled),
 .sdkwork-points-recharge-dialog__package.is-selected {
   border-color: var(--sdk-color-text-primary, #f4f7fb);
+}
+
+.sdkwork-points-recharge-dialog__package:disabled {
+  cursor: wait;
+  opacity: .68;
 }
 
 .sdkwork-points-recharge-dialog__points {

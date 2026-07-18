@@ -4,11 +4,12 @@ use crate::{
     default_fulfill_account_value_order_command, default_fulfill_points_recharge_command,
     fulfill_account_value_order, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
-    points_recharge_payment_success_idempotency_key, AccountPointsCreditPort,
-    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
-    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, PointsRechargeFulfillmentStore,
+    points_recharge_payment_success_idempotency_key, redeem_coupon_and_fulfill_account_value_order,
+    AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
+    AccountValueOrderSubject, CouponRedemptionPort, MarkPointsRechargePaymentSucceededCommand,
+    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
+    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort,
+    PointsRechargeFulfillmentStore,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -165,6 +166,7 @@ pub struct OwnerOrderSettlementPorts<'a> {
     pub account_value_store: &'a dyn AccountValueFulfillmentStore,
     pub credit_port: &'a dyn AccountPointsCreditPort,
     pub account_value_ledger_port: &'a dyn AccountValueLedgerPort,
+    pub coupon_redemption_port: &'a dyn CouponRedemptionPort,
     pub membership_port: &'a dyn MembershipPurchaseFulfillmentPort,
 }
 
@@ -234,11 +236,20 @@ async fn dispatch_subject_fulfillment(
         OrderSubjectKind::TokenBankRecharge
         | OrderSubjectKind::TokenBankPlanPurchase
         | OrderSubjectKind::TokenBankPlanRenewal
-        | OrderSubjectKind::AccountRechargePackage
-        | OrderSubjectKind::CouponRecharge => {
+        | OrderSubjectKind::AccountRechargePackage => {
             settle_account_value_subject(
                 subject,
                 ports.account_value_store,
+                ports.account_value_ledger_port,
+                attempt,
+                request_no,
+            )
+            .await
+        }
+        OrderSubjectKind::CouponRecharge => {
+            settle_coupon_recharge_subject(
+                ports.account_value_store,
+                ports.coupon_redemption_port,
                 ports.account_value_ledger_port,
                 attempt,
                 request_no,
@@ -279,6 +290,41 @@ async fn dispatch_subject_fulfillment(
             })
         }
     }
+}
+
+async fn settle_coupon_recharge_subject<A, C, L>(
+    account_value_store: &A,
+    coupon_redemption_port: &C,
+    account_value_ledger_port: &L,
+    attempt: &OrderPaymentSettlementAttempt,
+    request_no: &str,
+) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
+where
+    A: AccountValueFulfillmentStore + ?Sized,
+    C: CouponRedemptionPort + ?Sized,
+    L: AccountValueLedgerPort + ?Sized,
+{
+    let command = default_fulfill_account_value_order_command(
+        AccountValueOrderSubject::CouponRecharge,
+        &attempt.tenant_id,
+        attempt.organization_id.as_deref(),
+        &attempt.owner_user_id,
+        &attempt.order_id,
+        request_no,
+    )?;
+    let outcome = redeem_coupon_and_fulfill_account_value_order(
+        account_value_store,
+        coupon_redemption_port,
+        account_value_ledger_port,
+        command,
+    )
+    .await?;
+    Ok(SubjectFulfillmentOutcome {
+        accepted: outcome.accepted,
+        replayed: outcome.replayed,
+        points_credited: 0,
+        status: outcome.fulfillment_status,
+    })
 }
 
 async fn settle_account_value_subject<A, L>(

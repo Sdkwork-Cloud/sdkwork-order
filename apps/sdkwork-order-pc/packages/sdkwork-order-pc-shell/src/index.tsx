@@ -67,7 +67,10 @@ export function OrderAppShell({
     ),
     [orderController, locale, messages],
   );
-  const adminPage = useMemo(() => <SdkworkOrderAdminOrdersPage />, []);
+  const adminPage = useMemo(
+    () => <SdkworkOrderAdminOrdersPage capabilities={{ canManageOrders: true }} />,
+    [],
+  );
 
   return (
     <SdkworkThemeProvider defaultTheme={theme}>

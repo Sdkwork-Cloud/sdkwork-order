@@ -1,11 +1,5 @@
 export { createOrderAdminService, type OrderAdminService } from "./order-admin-service";
 export {
-  SdkworkOrderAdminOrdersPage,
-  type SdkworkOrderAdminCapabilities,
-  type SdkworkOrderAdminOrdersPageProps,
-} from "./pages/AdminOrdersPage";
-export { sdkworkOrderPcAdminOrdersRoutes } from "./routes";
-export {
   createTradeOperationsService,
   type TradeOperationsPage,
   type TradeOperationsQuery,

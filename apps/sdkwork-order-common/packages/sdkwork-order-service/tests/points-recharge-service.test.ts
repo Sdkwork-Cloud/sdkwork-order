@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSdkworkPointsRechargeService,
+  createSdkworkCouponRechargeService,
+  configureSdkworkOrderSessionTokenProvider,
   type SdkworkOrderAppService,
 } from "../src/index.ts";
 
@@ -20,6 +22,7 @@ function createAppService(overrides: {
   });
   return {
     appService: {
+      memberships: {} as SdkworkOrderAppService["memberships"],
       orders: {} as SdkworkOrderAppService["orders"],
       recharges: {
         packages: {
@@ -93,5 +96,47 @@ describe("createSdkworkPointsRechargeService", () => {
     await expect(service.getOrderStatus("order-1")).resolves.toEqual(
       expect.objectContaining({ orderId: "order-1", status: "completed" }),
     );
+  });
+});
+
+describe("createSdkworkCouponRechargeService", () => {
+  it("sends only the coupon code and server-controlled Token Bank target", async () => {
+    const { appService, create } = createAppService({
+      create: {
+        item: {
+          grantAmount: "50",
+          orderId: "order-coupon-1",
+          orderNo: "CP1001",
+          status: "fulfilled",
+          targetAsset: "token_bank",
+        },
+      },
+    });
+    configureSdkworkOrderSessionTokenProvider(() => ({ accessToken: "session-token" }));
+    const service = createSdkworkCouponRechargeService({ appService });
+
+    await expect(service.redeem("  WELCOME  ")).resolves.toEqual({
+      grantAmount: 50,
+      orderId: "order-coupon-1",
+      orderNo: "CP1001",
+      replayed: false,
+      status: "completed",
+      targetAsset: "token_bank",
+    });
+    expect(create).toHaveBeenCalledWith(
+      {
+        amount: 0,
+        couponCode: "WELCOME",
+        currencyCode: "CNY",
+        subject: "coupon_recharge",
+        targetAsset: "token_bank",
+      },
+      expect.objectContaining({
+        idempotencyKey: expect.any(String),
+        sdkworkRequestHash: expect.stringContaining("recharges.orders.create"),
+      }),
+    );
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("grantAmount");
+    configureSdkworkOrderSessionTokenProvider(null);
   });
 });

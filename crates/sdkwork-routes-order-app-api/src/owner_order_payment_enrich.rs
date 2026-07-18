@@ -16,6 +16,14 @@ use sqlx::{PgPool, SqlitePool};
 
 use crate::order_router::{CommerceOrderFuture, OwnerOrderPaymentStore};
 
+const RUNTIME_ENVIRONMENT_KEYS: &[&str] = &[
+    "SDKWORK_ORDER_ENVIRONMENT",
+    "ORDER_ENVIRONMENT",
+    "SDKWORK_ENVIRONMENT",
+    "SDKWORK_ENV",
+    "SDKWORK_CLAW_ROUTER_ENVIRONMENT",
+];
+
 pub struct ProviderEnrichedSqliteOwnerOrderPayments {
     inner: Arc<SqliteCommerceOwnerOrderPaymentStore>,
     pool: SqlitePool,
@@ -182,14 +190,15 @@ fn checkout_enrichment_or_development_fallback(
 }
 
 fn runtime_environment() -> Option<String> {
-    ["SDKWORK_ORDER_ENVIRONMENT", "SDKWORK_ENV"]
-        .into_iter()
-        .find_map(|key| {
-            std::env::var(key)
-                .ok()
-                .map(|value| value.trim().to_ascii_lowercase())
-                .filter(|value| !value.is_empty())
-        })
+    runtime_environment_from(|key| std::env::var(key).ok())
+}
+
+fn runtime_environment_from(mut read: impl FnMut(&str) -> Option<String>) -> Option<String> {
+    RUNTIME_ENVIRONMENT_KEYS.iter().copied().find_map(|key| {
+        read(key)
+            .map(|value| value.trim().to_ascii_lowercase())
+            .filter(|value| !value.is_empty())
+    })
 }
 
 fn should_use_development_cashier_fallback(
@@ -208,7 +217,39 @@ fn should_use_development_cashier_fallback(
 mod tests {
     use sdkwork_contract_service::CommerceServiceError;
 
-    use super::should_use_development_cashier_fallback;
+    use super::{runtime_environment_from, should_use_development_cashier_fallback};
+
+    #[test]
+    fn runtime_environment_accepts_claw_router_host_environment() {
+        let environment = runtime_environment_from(|key| match key {
+            "SDKWORK_CLAW_ROUTER_ENVIRONMENT" => Some(" Development ".to_owned()),
+            _ => None,
+        });
+
+        assert_eq!(environment.as_deref(), Some("development"));
+    }
+
+    #[test]
+    fn runtime_environment_prefers_order_environment_over_host_environment() {
+        let environment = runtime_environment_from(|key| match key {
+            "SDKWORK_ORDER_ENVIRONMENT" => Some("production".to_owned()),
+            "SDKWORK_CLAW_ROUTER_ENVIRONMENT" => Some("development".to_owned()),
+            _ => None,
+        });
+
+        assert_eq!(environment.as_deref(), Some("production"));
+    }
+
+    #[test]
+    fn runtime_environment_skips_empty_values() {
+        let environment = runtime_environment_from(|key| match key {
+            "SDKWORK_ORDER_ENVIRONMENT" => Some("  ".to_owned()),
+            "SDKWORK_ENVIRONMENT" => Some("test".to_owned()),
+            _ => None,
+        });
+
+        assert_eq!(environment.as_deref(), Some("test"));
+    }
 
     #[test]
     fn development_cashier_fallback_only_accepts_unconfigured_provider_errors() {

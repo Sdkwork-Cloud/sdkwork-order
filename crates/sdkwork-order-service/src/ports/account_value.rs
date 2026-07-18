@@ -193,10 +193,41 @@ impl PaymentPayoutExecutorPort for NoopPaymentPayoutExecutorPort {
 }
 
 pub trait CouponRedemptionPort: Send + Sync {
+    fn preview_coupon<'a>(
+        &'a self,
+        request: CouponRedemptionRequest,
+    ) -> AccountValueFuture<'a, CouponRedemptionOutcome>;
+
     fn redeem_coupon<'a>(
         &'a self,
         request: CouponRedemptionRequest,
     ) -> AccountValueFuture<'a, CouponRedemptionOutcome>;
+}
+
+pub struct NoopCouponRedemptionPort;
+
+impl CouponRedemptionPort for NoopCouponRedemptionPort {
+    fn preview_coupon<'a>(
+        &'a self,
+        _request: CouponRedemptionRequest,
+    ) -> AccountValueFuture<'a, CouponRedemptionOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "coupon redemption port is not configured",
+            ))
+        })
+    }
+
+    fn redeem_coupon<'a>(
+        &'a self,
+        _request: CouponRedemptionRequest,
+    ) -> AccountValueFuture<'a, CouponRedemptionOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "coupon redemption port is not configured",
+            ))
+        })
+    }
 }
 
 pub trait AccountValueRequestExecutionStore: Send + Sync {
@@ -472,6 +503,10 @@ pub fn account_package_fulfillment_idempotency_key(order_id: &str) -> String {
 
 pub fn coupon_recharge_fulfillment_idempotency_key(order_id: &str) -> String {
     format!("coupon-recharge:fulfill:{order_id}")
+}
+
+pub fn coupon_recharge_redemption_idempotency_key(order_id: &str) -> String {
+    format!("coupon-recharge:redeem:{order_id}")
 }
 
 pub fn refund_account_hold_idempotency_key(refund_request_id: &str) -> String {

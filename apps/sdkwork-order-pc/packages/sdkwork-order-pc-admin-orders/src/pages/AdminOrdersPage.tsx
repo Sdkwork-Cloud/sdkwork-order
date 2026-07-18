@@ -5,14 +5,23 @@ import {
   type OrderDetail,
   type OrderSummary,
 } from "@sdkwork/order-pc-admin-core";
-import { createOrderAdminService } from "../order-admin-service";
+import { createOrderAdminService, type OrderAdminService } from "../order-admin-service";
 
 const DEFAULT_PAGE_SIZE = 20;
 
-export function SdkworkOrderAdminOrdersPage() {
+export interface SdkworkOrderAdminOrdersPageProps {
+  capabilities: SdkworkOrderAdminCapabilities;
+  service?: OrderAdminService;
+}
+
+export interface SdkworkOrderAdminCapabilities {
+  canManageOrders: boolean;
+}
+
+export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedService }: SdkworkOrderAdminOrdersPageProps) {
   const service = useMemo(
-    () => createOrderAdminService(getSdkworkOrderBackendSdkClient()),
-    [],
+    () => injectedService ?? createOrderAdminService(getSdkworkOrderBackendSdkClient()),
+    [injectedService],
   );
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [page, setPage] = useState(1);
@@ -181,12 +190,16 @@ export function SdkworkOrderAdminOrdersPage() {
                     <Button disabled={busyId === order.orderId} onClick={() => setSelectedId(order.orderId)} type="button">
                       详情
                     </Button>
-                    <Button disabled={busyId === order.orderId} onClick={() => void mutateOrder(order.orderId, "cancel")} type="button">
-                      取消
-                    </Button>
-                    <Button disabled={busyId === order.orderId} onClick={() => void mutateOrder(order.orderId, "close")} type="button">
-                      关闭
-                    </Button>
+                    {capabilities.canManageOrders ? (
+                      <>
+                        <Button disabled={busyId === order.orderId} onClick={() => void mutateOrder(order.orderId, "cancel")} type="button">
+                          取消
+                        </Button>
+                        <Button disabled={busyId === order.orderId} onClick={() => void mutateOrder(order.orderId, "close")} type="button">
+                          关闭
+                        </Button>
+                      </>
+                    ) : null}
                   </td>
                 </tr>
               ))}

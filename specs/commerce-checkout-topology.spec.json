@@ -56,7 +56,7 @@
       ]
     }
   },
-  "dependencyDirection": "order -> payment (OwnerOrderPaymentStore, PaymentWebhookStore, provider refund executor, future provider payout executor boundary); order -> account (AccountValueLedgerPort for points, token_bank, cash holds, settlement, release, and reversal); order -> membership (MembershipPurchaseFulfillmentPort wired at OrderServiceHost); payment MUST NOT depend on order service crates; payment MUST NOT depend on account; membership MUST NOT depend on order service crates or insert commerce_order in production",
+  "dependencyDirection": "order -> payment (OwnerOrderPaymentStore, PaymentWebhookStore, provider refund executor, future provider payout executor boundary); order -> account (AccountValueLedgerPort for points, token_bank, cash holds, settlement, release, and reversal); order -> promotion (CouponRedemptionPort for server-controlled coupon preview and order-scoped redemption evidence); order -> membership (MembershipPurchaseFulfillmentPort wired at OrderServiceHost); payment MUST NOT depend on order service crates; payment MUST NOT depend on account; membership MUST NOT depend on order service crates or insert commerce_order in production",
   "paymentSettlement": {
     "webhookOwner": "order",
     "webhookRoute": "POST /app/v3/api/orders/payments/webhooks/{providerCode}",
@@ -199,7 +199,10 @@
     ],
     "couponRecharge": [
       "recharges.orders.create subject=coupon_recharge",
+      "server derives grantAmount from Promotion; client grantAmount is rejected",
       "coupon validation and redemption evidence snapshot",
+      "Promotion redemption is order-scoped and replay-safe; Promotion does not write Account tables",
+      "AccountValueLedgerPort credits token_bank only after benefit equality verification",
       "optional mixed-payment orders.payments.create",
       "order settlement -> account target asset credit"
     ],

@@ -248,6 +248,7 @@ pub struct AccountValueFulfillmentContext {
     pub payment_attempt_status: String,
     pub grant_amount: CommerceMoney,
     pub asset_unit_code: String,
+    pub coupon_code: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

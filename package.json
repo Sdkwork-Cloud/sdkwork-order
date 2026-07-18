@@ -35,6 +35,8 @@
     "align:openapi": "node ../sdkwork-specs/tools/align-openapi-response-envelope.mjs --file apis/app-api/order/order-app-api.openapi.json --legacy-envelope CommerceApiResult",
     "sdk:generate": "node sdks/sdkwork-order-app-sdk/bin/generate-sdk.mjs",
     "sdk:generate:backend": "node sdks/sdkwork-order-backend-sdk/bin/generate-sdk.mjs",
+    "sdk:permissions:align": "node tools/order_backend_permission_align.mjs",
+    "sdk:permissions:check": "node tools/order_backend_permission_align.mjs --check",
     "check:app-composition": "node ../sdkwork-specs/tools/verify-repo.mjs --root ."
   },
   "devDependencies": {

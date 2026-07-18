@@ -421,7 +421,8 @@ SELECT
         ) = 'points' THEN 'POINT'
         ELSE ''
       END
-    ) AS asset_unit_code
+    ) AS asset_unit_code,
+    NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.couponCode'), '') AS coupon_code
 FROM commerce_order o
 LEFT JOIN commerce_order_item oi
     ON oi.tenant_id = o.tenant_id
@@ -2441,6 +2442,7 @@ fn map_account_value_fulfillment_context(
         payment_attempt_status: string_cell(row, "payment_attempt_status"),
         grant_amount: commerce_money_cell(row, "grant_amount", "account value grant amount")?,
         asset_unit_code: string_cell(row, "asset_unit_code"),
+        coupon_code: optional_string_cell(row, "coupon_code"),
     })
 }
 

@@ -1871,6 +1871,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdkwork-order-integration-promotion"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-contract-service",
+ "sdkwork-database-sqlx",
+ "sdkwork-order-service",
+ "sdkwork-promotion-repository-sqlx",
+ "sdkwork-promotion-service",
+]
+
+[[package]]
 name = "sdkwork-order-repository-sqlx"
 version = "0.1.0"
 dependencies = [
@@ -1911,6 +1922,7 @@ dependencies = [
  "sdkwork-order-integration-account",
  "sdkwork-order-integration-membership",
  "sdkwork-order-integration-payment",
+ "sdkwork-order-integration-promotion",
  "sdkwork-order-service",
  "sqlx",
 ]
@@ -1969,6 +1981,24 @@ dependencies = [
 
 [[package]]
 name = "sdkwork-payment-service"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-contract-service",
+]
+
+[[package]]
+name = "sdkwork-promotion-repository-sqlx"
+version = "0.1.0"
+dependencies = [
+ "sdkwork-contract-service",
+ "sdkwork-promotion-service",
+ "serde",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
+name = "sdkwork-promotion-service"
 version = "0.1.0"
 dependencies = [
  "sdkwork-contract-service",

@@ -21,7 +21,10 @@ pub use backend_order_admin_router::{
     backend_order_admin_router_with_postgres_pool, backend_order_admin_router_with_sqlite_pool,
 };
 pub use payment_confirmation_router::{
-    payment_confirmation_router_with_postgres_pool, payment_confirmation_router_with_sqlite_pool,
+    payment_confirmation_router_with_postgres_pool,
+    payment_confirmation_router_with_postgres_pool_and_coupon,
+    payment_confirmation_router_with_sqlite_pool,
+    payment_confirmation_router_with_sqlite_pool_and_coupon,
 };
 pub use routes::build_order_backend_router_with_framework;
 

@@ -45,12 +45,15 @@ pub use order_router::{
     CommerceOrderFuture, CommerceOrderStore, OwnerOrderPaymentStore,
 };
 pub use payment_webhook_router::{
-    app_payment_webhook_router_with_postgres_pool, app_payment_webhook_router_with_sqlite_pool,
+    app_payment_webhook_router_with_postgres_pool,
+    app_payment_webhook_router_with_postgres_pool_and_coupon,
+    app_payment_webhook_router_with_sqlite_pool,
+    app_payment_webhook_router_with_sqlite_pool_and_coupon,
 };
 pub use recharge_router::{
     app_recharge_checkout_router_with_postgres_pool, app_recharge_checkout_router_with_sqlite_pool,
-    build_app_recharge_checkout_router, CommerceRechargeCheckoutFuture,
-    CommerceRechargeCheckoutStore,
+    build_app_recharge_checkout_router, build_app_recharge_checkout_router_with_integrations,
+    CommerceRechargeCheckoutFuture, CommerceRechargeCheckoutStore,
 };
 pub use shipment_router::{
     app_shipment_router_with_postgres_pool, app_shipment_router_with_sqlite_pool,
