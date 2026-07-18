@@ -46,3 +46,9 @@ pub async fn assemble_application_router(host: Arc<OrderServiceHost>) -> Applica
     router = router.merge(sdkwork_routes_order_backend_api::gateway_mount(host).await);
     ApplicationAssembly { router }
 }
+
+pub async fn assemble_backend_business_router(host: Arc<OrderServiceHost>) -> ApplicationAssembly {
+    ApplicationAssembly {
+        router: sdkwork_routes_order_backend_api::gateway_mount(host).await,
+    }
+}
