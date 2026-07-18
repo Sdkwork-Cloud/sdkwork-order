@@ -69,14 +69,14 @@ export function createOrderAdminService(
     async cancelOrder(orderId, body) {
       const requestBody = body ?? { reason: "platform-cancel" };
       const payload = writePayloadWithRouteParam("orderId", orderId, requestBody);
-      const writeHeaders = createSdkworkWriteCommandHeaders("orders.admin.cancel", payload);
-      await client.orders.admin.cancel(orderId, writeHeaders, requestBody);
+      const { idempotencyKey } = createSdkworkWriteCommandHeaders("orders.admin.cancel", payload);
+      await client.orders.admin.cancel(orderId, requestBody, { idempotencyKey });
     },
     async closeOrder(orderId, body) {
       const requestBody = body ?? { reason: "platform-close" };
       const payload = writePayloadWithRouteParam("orderId", orderId, requestBody);
-      const writeHeaders = createSdkworkWriteCommandHeaders("orders.admin.close", payload);
-      await client.orders.admin.close(orderId, writeHeaders, requestBody);
+      const { idempotencyKey } = createSdkworkWriteCommandHeaders("orders.admin.close", payload);
+      await client.orders.admin.close(orderId, requestBody, { idempotencyKey });
     },
   };
 }

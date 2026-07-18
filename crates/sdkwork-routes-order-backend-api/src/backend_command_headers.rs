@@ -17,13 +17,11 @@ pub const REQUEST_NO_HEADER: &str = "Sdkwork-Request-No";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackendWriteCommandHeaders {
     pub idempotency_key: String,
-    pub request_hash: String,
     pub request_no: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WriteCommandHeaderError {
-    MissingHeader(&'static str),
     InvalidHeader(String),
 }
 
@@ -49,15 +47,15 @@ pub fn validate_backend_write_payload(
     payload: &impl Serialize,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<BackendWriteCommandHeaders, Box<Response>> {
-    let parsed = parse_required_write_command_headers(headers, fallback_request_no)
-        .map_err(|error| Box::new(write_command_header_error_to_response(context, error)))?;
     let expected_hash = stable_json_request_hash(scope, payload).map_err(|_| {
         Box::new(write_command_header_error_to_response(
             context,
             WriteCommandHeaderError::InvalidHeader("command payload must serialize".to_string()),
         ))
     })?;
-    if expected_hash.trim() != parsed.request_hash.trim() {
+    if optional_text_header(headers, REQUEST_HASH_HEADER)
+        .is_some_and(|request_hash| expected_hash.trim() != request_hash.trim())
+    {
         let trace_id = resolve_trace_id(context);
         return Err(Box::new(problem_response(
             StatusCode::BAD_REQUEST,
@@ -66,40 +64,32 @@ pub fn validate_backend_write_payload(
             &trace_id,
         )));
     }
-    Ok(parsed)
-}
-
-fn parse_required_write_command_headers(
-    headers: &HeaderMap,
-    fallback_request_no: impl FnOnce(&str) -> String,
-) -> Result<BackendWriteCommandHeaders, WriteCommandHeaderError> {
-    let idempotency_key = required_text_header(headers, IDEMPOTENCY_KEY_HEADER)?;
-    let request_hash = required_text_header(headers, REQUEST_HASH_HEADER)?;
+    let idempotency_key = match optional_text_header(headers, IDEMPOTENCY_KEY_HEADER) {
+        Some(value) => validate_idempotency_key(value)
+            .map_err(|error| Box::new(write_command_header_error_to_response(context, error)))?,
+        None => sdkwork_utils_rust::uuid(),
+    };
     let request_no = optional_text_header(headers, REQUEST_NO_HEADER)
         .unwrap_or_else(|| fallback_request_no(&idempotency_key));
     Ok(BackendWriteCommandHeaders {
         idempotency_key,
-        request_hash,
         request_no,
     })
 }
 
-fn required_text_header(
-    headers: &HeaderMap,
-    name: &'static str,
-) -> Result<String, WriteCommandHeaderError> {
-    let value = headers
-        .get(name)
-        .ok_or(WriteCommandHeaderError::MissingHeader(name))?
-        .to_str()
-        .map(str::trim)
-        .map_err(|_| {
-            WriteCommandHeaderError::InvalidHeader(format!("{name} header value is invalid"))
-        })?;
-    if value.is_empty() {
-        return Err(WriteCommandHeaderError::MissingHeader(name));
+fn validate_idempotency_key(value: String) -> Result<String, WriteCommandHeaderError> {
+    let valid_length = (8..=128).contains(&value.len());
+    let valid_characters = value.chars().all(|character| {
+        character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | ':' | '-')
+    });
+    if valid_length && valid_characters {
+        Ok(value)
+    } else {
+        Err(WriteCommandHeaderError::InvalidHeader(
+            "Idempotency-Key must contain 8 to 128 letters, digits, dots, underscores, colons, or hyphens"
+                .to_string(),
+        ))
     }
-    Ok(value.to_owned())
 }
 
 fn optional_text_header(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -117,12 +107,6 @@ fn write_command_header_error_to_response(
 ) -> Response {
     let trace_id = resolve_trace_id(context);
     match error {
-        WriteCommandHeaderError::MissingHeader(name) => problem_response(
-            StatusCode::BAD_REQUEST,
-            SdkWorkResultCode::MissingRequiredField,
-            format!("{name} header is required"),
-            &trace_id,
-        ),
         WriteCommandHeaderError::InvalidHeader(message) => problem_response(
             StatusCode::BAD_REQUEST,
             SdkWorkResultCode::ValidationError,
@@ -140,4 +124,41 @@ fn problem_response(
 ) -> Response {
     let problem = SdkWorkProblemDetail::platform(result_code, detail, trace_id.to_owned());
     (status, Json(problem)).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::HeaderValue;
+
+    use super::*;
+
+    #[test]
+    fn omitted_client_idempotency_headers_are_generated_server_side() {
+        let parsed = validate_backend_write_payload(
+            None,
+            &HeaderMap::new(),
+            "orders.cancel",
+            &serde_json::json!({"orderId": "order-1"}),
+            |key| format!("cancel-{key}"),
+        )
+        .expect("optional headers");
+
+        assert!(!parsed.idempotency_key.is_empty());
+        assert!(parsed.request_no.starts_with("cancel-"));
+    }
+
+    #[test]
+    fn malformed_client_idempotency_key_is_rejected() {
+        let mut headers = HeaderMap::new();
+        headers.insert(IDEMPOTENCY_KEY_HEADER, HeaderValue::from_static("short"));
+
+        assert!(validate_backend_write_payload(
+            None,
+            &headers,
+            "orders.cancel",
+            &serde_json::json!({"orderId": "order-1"}),
+            |key| format!("cancel-{key}"),
+        )
+        .is_err());
+    }
 }

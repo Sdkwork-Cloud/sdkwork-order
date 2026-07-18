@@ -11,21 +11,15 @@ export interface BackendWithdrawalRequestsListParams {
 }
 
 export interface BackendWithdrawalRequestsApproveParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendWithdrawalRequestsRejectParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendWithdrawalRequestsRetryParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class BackendWithdrawalRequestsApi {
@@ -47,12 +41,10 @@ export class BackendWithdrawalRequestsApi {
   }
 
 /** Withdrawal requests approve. */
-  async approve(withdrawalRequestId: string, params: BackendWithdrawalRequestsApproveParams, body?: AccountValueRequestReviewCommand): Promise<SdkWorkCommandData> {
+  async approve(withdrawalRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendWithdrawalRequestsApproveParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -60,12 +52,10 @@ export class BackendWithdrawalRequestsApi {
   }
 
 /** Withdrawal requests reject. */
-  async reject(withdrawalRequestId: string, params: BackendWithdrawalRequestsRejectParams, body?: AccountValueRequestReviewCommand): Promise<SdkWorkCommandData> {
+  async reject(withdrawalRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendWithdrawalRequestsRejectParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -73,12 +63,10 @@ export class BackendWithdrawalRequestsApi {
   }
 
 /** Withdrawal requests retry. */
-  async retry(withdrawalRequestId: string, params: BackendWithdrawalRequestsRetryParams, body?: AccountValueRequestReviewCommand): Promise<SdkWorkCommandData> {
+  async retry(withdrawalRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendWithdrawalRequestsRetryParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -93,21 +81,15 @@ export interface BackendRefundRequestsListParams {
 }
 
 export interface BackendRefundRequestsApproveParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendRefundRequestsRejectParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendRefundRequestsRetryParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class BackendRefundRequestsApi {
@@ -129,12 +111,10 @@ export class BackendRefundRequestsApi {
   }
 
 /** Refund requests approve. */
-  async approve(refundRequestId: string, params: BackendRefundRequestsApproveParams, body?: AccountValueRequestReviewCommand): Promise<SdkWorkCommandData> {
+  async approve(refundRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendRefundRequestsApproveParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -142,12 +122,10 @@ export class BackendRefundRequestsApi {
   }
 
 /** Refund requests reject. */
-  async reject(refundRequestId: string, params: BackendRefundRequestsRejectParams, body?: AccountValueRequestReviewCommand): Promise<SdkWorkCommandData> {
+  async reject(refundRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendRefundRequestsRejectParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -155,12 +133,10 @@ export class BackendRefundRequestsApi {
   }
 
 /** Refund requests retry. */
-  async retry(refundRequestId: string, params: BackendRefundRequestsRetryParams, body?: AccountValueRequestReviewCommand): Promise<SdkWorkCommandData> {
+  async retry(refundRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendRefundRequestsRetryParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -175,21 +151,15 @@ export interface BackendTokenBankPlansListParams {
 }
 
 export interface BackendTokenBankPlansCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendTokenBankPlansUpdateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendTokenBankPlansRetireParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class BackendTokenBankPlansApi {
@@ -211,12 +181,10 @@ export class BackendTokenBankPlansApi {
   }
 
 /** Token Bank plans create. */
-  async create(body: TokenBankPlanWriteCommand, params: BackendTokenBankPlansCreateParams): Promise<Record<string, unknown>> {
+  async create(body: TokenBankPlanWriteCommand, params?: BackendTokenBankPlansCreateParams): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -224,12 +192,10 @@ export class BackendTokenBankPlansApi {
   }
 
 /** Token Bank plans update. */
-  async update(planCode: string, body: TokenBankPlanWriteCommand, params: BackendTokenBankPlansUpdateParams): Promise<Record<string, unknown>> {
+  async update(planCode: string, body: TokenBankPlanWriteCommand, params?: BackendTokenBankPlansUpdateParams): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -237,12 +203,10 @@ export class BackendTokenBankPlansApi {
   }
 
 /** Token Bank plans retire. */
-  async retire(planCode: string, params: BackendTokenBankPlansRetireParams, body?: unknown): Promise<SdkWorkCommandData> {
+  async retire(planCode: string, body?: unknown, params?: BackendTokenBankPlansRetireParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -258,21 +222,15 @@ export interface BackendAccountValuePackagesListParams {
 }
 
 export interface BackendAccountValuePackagesCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendAccountValuePackagesUpdateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface BackendAccountValuePackagesRetireParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class BackendAccountValuePackagesApi {
@@ -295,12 +253,10 @@ export class BackendAccountValuePackagesApi {
   }
 
 /** Account value packages create. */
-  async create(body: AccountValuePackageWriteCommand, params: BackendAccountValuePackagesCreateParams): Promise<Record<string, unknown>> {
+  async create(body: AccountValuePackageWriteCommand, params?: BackendAccountValuePackagesCreateParams): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -308,12 +264,10 @@ export class BackendAccountValuePackagesApi {
   }
 
 /** Account value packages update. */
-  async update(packageId: string, body: AccountValuePackageWriteCommand, params: BackendAccountValuePackagesUpdateParams): Promise<Record<string, unknown>> {
+  async update(packageId: string, body: AccountValuePackageWriteCommand, params?: BackendAccountValuePackagesUpdateParams): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -321,12 +275,10 @@ export class BackendAccountValuePackagesApi {
   }
 
 /** Account value packages retire. */
-  async retire(packageId: string, params: BackendAccountValuePackagesRetireParams, body?: unknown): Promise<SdkWorkCommandData> {
+  async retire(packageId: string, body?: unknown, params?: BackendAccountValuePackagesRetireParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );

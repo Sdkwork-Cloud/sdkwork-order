@@ -5,9 +5,7 @@ import type { AfterSalesRequestSummary, PageInfo, ReviewAfterSalesRequest } from
 
 
 export interface AfterSalesReviewsCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class AfterSalesReviewsApi {
@@ -19,12 +17,10 @@ export class AfterSalesReviewsApi {
 
 
 /** Review after-sales request */
-  async create(afterSalesRequestId: string, body: ReviewAfterSalesRequest, params: AfterSalesReviewsCreateParams): Promise<AfterSalesRequestSummary> {
+  async create(afterSalesRequestId: string, body: ReviewAfterSalesRequest, params?: AfterSalesReviewsCreateParams): Promise<AfterSalesRequestSummary> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );

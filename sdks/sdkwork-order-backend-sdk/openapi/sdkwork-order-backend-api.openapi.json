@@ -336,12 +336,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -407,12 +401,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -581,12 +569,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -788,12 +770,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -1065,12 +1041,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -1144,12 +1114,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -1415,12 +1379,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -1539,12 +1497,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -1663,12 +1615,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -1902,12 +1848,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -2026,12 +1966,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -2150,12 +2084,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -2399,12 +2327,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -2523,12 +2445,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -2647,12 +2563,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -2896,12 +2806,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -3020,12 +2924,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -3144,12 +3042,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -4236,33 +4128,13 @@
       "WriteCommandIdempotencyKey": {
         "name": "Idempotency-Key",
         "in": "header",
-        "required": true,
+        "required": false,
         "schema": {
           "type": "string",
           "minLength": 8,
           "maxLength": 128
         },
-        "description": "Client retry key scoped by tenant, principal, method, and path."
-      },
-      "WriteCommandRequestHash": {
-        "name": "Sdkwork-Request-Hash",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "minLength": 1
-        },
-        "description": "Stable digest of the canonical command payload; must match the request body and route params where applicable."
-      },
-      "WriteCommandIdempotencyFingerprint": {
-        "name": "X-Idempotency-Fingerprint",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "minLength": 1
-        },
-        "description": "Stable request-body fingerprint required by the SDKWork idempotency framework for write commands with a payload."
+        "description": "Optional client retry key scoped by tenant, principal, method, and path. The server generates a unique key when omitted."
       }
     }
   }

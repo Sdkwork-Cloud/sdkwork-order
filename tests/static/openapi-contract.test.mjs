@@ -46,7 +46,7 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
     ),
   );
 
-  for (const spec of [appSpec, backendSpec]) {
+  for (const [surface, spec] of [["app", appSpec], ["backend", backendSpec]]) {
     for (const [path, methods] of Object.entries(spec.paths ?? {})) {
       for (const [method, operation] of Object.entries(methods ?? {})) {
         if (!operation?.["x-sdkwork-idempotent"]) {
@@ -68,13 +68,22 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
             entry?.$ref === "#/components/parameters/WriteCommandIdempotencyFingerprint" ||
             entry?.name === "X-Idempotency-Fingerprint",
         );
-        assert.ok(
-          hasIdempotency && hasRequestHash && hasBodyFingerprint,
-          `${method.toUpperCase()} ${path} (${operation.operationId}) must declare write-command headers`,
-        );
+        assert.ok(hasIdempotency, `${method.toUpperCase()} ${path} (${operation.operationId}) must declare Idempotency-Key`);
+        if (surface === "backend") {
+          assert.equal(hasRequestHash, false, `${method.toUpperCase()} ${path} must not expose Sdkwork-Request-Hash`);
+          assert.equal(hasBodyFingerprint, false, `${method.toUpperCase()} ${path} must not expose X-Idempotency-Fingerprint`);
+        } else {
+          assert.ok(hasRequestHash && hasBodyFingerprint, `${method.toUpperCase()} ${path} must keep app write-command compatibility headers`);
+        }
       }
     }
   }
+
+  assert.equal(
+    backendSpec.components.parameters.WriteCommandIdempotencyKey.required,
+    false,
+    "backend Idempotency-Key must remain optional for generated SDK consumers",
+  );
 });
 
 test("sdk openapi inputs stay aligned with api authorities", () => {

@@ -31,6 +31,7 @@
       "sdkwork_order_gateway_assembly::assemble_application_router",
       "sdkwork_order_gateway_assembly::assemble_application_router_from_env",
       "sdkwork_order_gateway_assembly::assemble_backend_business_router_from_env",
+      "sdkwork_order_gateway_assembly::order_contract_fallback_config",
       "sdkwork_order_gateway_assembly::ApplicationAssembly::from_database_pool",
       "sdkwork_order_gateway_assembly::ApplicationAssembly::app_route_manifest",
       "sdkwork_order_gateway_assembly::ApplicationAssembly::database_module"

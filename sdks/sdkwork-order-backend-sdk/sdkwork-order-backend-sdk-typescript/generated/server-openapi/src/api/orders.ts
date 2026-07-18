@@ -5,9 +5,7 @@ import type { CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest,
 
 
 export interface OrdersPaymentConfirmationsCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class OrdersPaymentConfirmationsApi {
@@ -19,12 +17,10 @@ export class OrdersPaymentConfirmationsApi {
 
 
 /** Manually confirm payment and run order settlement saga */
-  async create(orderId: string, body: ConfirmOrderPaymentRequest, params: OrdersPaymentConfirmationsCreateParams): Promise<Record<string, unknown>> {
+  async create(orderId: string, body: ConfirmOrderPaymentRequest, params?: OrdersPaymentConfirmationsCreateParams): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -88,15 +84,11 @@ export interface OrdersAdminListParams {
 }
 
 export interface OrdersAdminCancelParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface OrdersAdminCloseParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class OrdersAdminApi {
@@ -128,12 +120,10 @@ export class OrdersAdminApi {
   }
 
 /** Cancel an order from the admin surface */
-  async cancel(orderId: string, params: OrdersAdminCancelParams, body?: CancelOrderRequest): Promise<SdkWorkCommandData> {
+  async cancel(orderId: string, body?: CancelOrderRequest, params?: OrdersAdminCancelParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -141,12 +131,10 @@ export class OrdersAdminApi {
   }
 
 /** Close an order from the admin surface */
-  async close(orderId: string, params: OrdersAdminCloseParams, body?: CloseOrderRequest): Promise<SdkWorkCommandData> {
+  async close(orderId: string, body?: CloseOrderRequest, params?: OrdersAdminCloseParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );

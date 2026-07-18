@@ -19,6 +19,10 @@ pub async fn assemble_backend_business_router_from_env() -> Result<ApplicationAs
     Ok(assemble_backend_business_router(host).await)
 }
 
+pub fn order_contract_fallback_config() -> sdkwork_web_bootstrap::ContractFallbackConfig {
+    ApplicationAssembly::contract_fallback_config()
+}
+
 pub fn assembly_route_count() -> usize {
     generated::ROUTE_CRATE_COUNT
 }

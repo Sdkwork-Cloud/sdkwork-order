@@ -31,7 +31,7 @@ describe("createTradeOperationsService", () => {
     expect(result.totalPages).toBe(2);
   });
 
-  it("sends generated idempotency headers when approving a refund", async () => {
+  it("sends the generated idempotency parameter when approving a refund", async () => {
     const client = clientFixture();
     client.backend.refundRequests.approve.mockResolvedValue({ accepted: true });
 
@@ -40,12 +40,10 @@ describe("createTradeOperationsService", () => {
 
     expect(client.backend.refundRequests.approve).toHaveBeenCalledWith(
       "refund-1",
-      expect.objectContaining({
-        idempotencyKey: expect.any(String),
-        sdkworkRequestHash: expect.any(String),
-        xIdempotencyFingerprint: expect.any(String),
-      }),
       { reviewComment: "manager trade operation" },
+      {
+        idempotencyKey: expect.any(String),
+      },
     );
   });
 });

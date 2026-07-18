@@ -28,15 +28,11 @@ export class ShipmentsPackagesManagementApi {
 }
 
 export interface ShipmentsPackagesCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export interface ShipmentsPackagesUpdateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
+  idempotencyKey?: string;
 }
 
 export class ShipmentsPackagesApi {
@@ -50,12 +46,10 @@ export class ShipmentsPackagesApi {
 
 
 /** Create shipment package */
-  async create(shipmentId: string, body: CreateShipmentPackageRequest, params: ShipmentsPackagesCreateParams): Promise<ShipmentPackageSummary> {
+  async create(shipmentId: string, body: CreateShipmentPackageRequest, params?: ShipmentsPackagesCreateParams): Promise<ShipmentPackageSummary> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
@@ -63,12 +57,10 @@ export class ShipmentsPackagesApi {
   }
 
 /** Update shipment package */
-  async update(shipmentId: string, packageId: string, body: UpdateShipmentPackageRequest, params: ShipmentsPackagesUpdateParams): Promise<ShipmentPackageSummary> {
+  async update(shipmentId: string, packageId: string, body: UpdateShipmentPackageRequest, params?: ShipmentsPackagesUpdateParams): Promise<ShipmentPackageSummary> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );

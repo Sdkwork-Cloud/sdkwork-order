@@ -66,8 +66,8 @@ export function createTradeOperationsService(client: SdkworkOrderBackendClient):
     api: { approve: Function; reject: Function; retry: Function },
   ) => {
     const body = { reviewComment: "manager trade operation" };
-    const headers = createSdkworkWriteCommandHeaders(`${scope}.${action}`, { id, ...body });
-    await api[action](id, headers, body);
+    const { idempotencyKey } = createSdkworkWriteCommandHeaders(`${scope}.${action}`, { id, ...body });
+    await api[action](id, body, { idempotencyKey });
   };
 
   return {
