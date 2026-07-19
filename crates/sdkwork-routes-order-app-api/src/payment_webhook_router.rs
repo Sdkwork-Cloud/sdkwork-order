@@ -620,6 +620,9 @@ fn provider_account_binding(record: &PaymentProviderAccountRecord) -> ProviderAc
         secret_ref: record.secret_ref.clone(),
         webhook_secret_ref: record.webhook_secret_ref.clone(),
         certificate_ref: record.certificate_ref.clone(),
+        primary_secret: record.primary_secret.clone(),
+        webhook_secret: record.webhook_secret.clone(),
+        certificate: record.certificate.clone(),
         metadata: record.metadata.clone(),
     }
 }

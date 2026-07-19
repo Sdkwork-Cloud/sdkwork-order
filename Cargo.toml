@@ -61,8 +61,8 @@ sdkwork_order_integration_account = { path = "crates/sdkwork-order-integration-a
 sdkwork_order_integration_payment = { path = "crates/sdkwork-order-integration-payment", package = "sdkwork-order-integration-payment" }
 sdkwork_order_integration_membership = { path = "crates/sdkwork-order-integration-membership", package = "sdkwork-order-integration-membership" }
 sdkwork_order_integration_promotion = { path = "crates/sdkwork-order-integration-promotion", package = "sdkwork-order-integration-promotion" }
-sdkwork_promotion_service = { path = "../sdkwork-promotion/crates/sdkwork-promotion-service", package = "sdkwork-promotion-service" }
-sdkwork_promotion_repository_sqlx = { path = "../sdkwork-promotion/crates/sdkwork-promotion-repository-sqlx", package = "sdkwork-promotion-repository-sqlx" }
+sdkwork_commerce_promotion_service = { path = "../sdkwork-promotion/crates/sdkwork-commerce-promotion-service", package = "sdkwork-commerce-promotion-service" }
+sdkwork_commerce_promotion_repository_sqlx = { path = "../sdkwork-promotion/crates/sdkwork-commerce-promotion-repository-sqlx", package = "sdkwork-commerce-promotion-repository-sqlx" }
 sdkwork_account_service = { path = "../sdkwork-account/crates/sdkwork-account-service", package = "sdkwork-account-service" }
 sdkwork_account_repository_sqlx = { path = "../sdkwork-account/crates/sdkwork-account-repository-sqlx", package = "sdkwork-account-repository-sqlx" }
 sdkwork-utils-rust = { path = "../sdkwork-utils/packages/sdkwork-utils-rust" }

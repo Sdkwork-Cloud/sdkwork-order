@@ -203,6 +203,7 @@ CREATE TABLE commerce_payment_attempt (
     attempt_no TEXT,
     payment_method TEXT NOT NULL,
     provider_code TEXT NOT NULL,
+    channel_id TEXT,
     out_trade_no TEXT,
     amount TEXT NOT NULL,
     currency_code TEXT NOT NULL,
@@ -214,6 +215,11 @@ CREATE TABLE commerce_payment_attempt (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     deleted_at TEXT
+);
+
+CREATE TABLE commerce_payment_channel (
+    id TEXT NOT NULL PRIMARY KEY,
+    provider_account_id TEXT
 );
 
 CREATE TABLE commerce_refund (

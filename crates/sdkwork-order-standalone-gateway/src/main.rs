@@ -9,8 +9,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::http::header::{ACCEPT, ACCEPT_LANGUAGE, AUTHORIZATION, CONTENT_TYPE};
-use axum::http::HeaderName;
 use sdkwork_order_gateway_assembly::{assemble_application_router, ApplicationAssembly};
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_web_bootstrap::{service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig};
@@ -38,32 +36,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let business = assemble_application_router(host.clone())
         .await
         .router
-        .layer(TraceLayer::new_for_http())
-        .layer(
-            sdkwork_web_bootstrap::application_cors_layer_from_env(
-                &["SDKWORK_ORDER_ENVIRONMENT", "ORDER_ENVIRONMENT"],
-                &[
-                    "ORDER_CORS_ALLOW_ORIGINS",
-                    "SDKWORK_ORDER_CORS_ALLOWED_ORIGINS",
-                    "SDKWORK_CORS_ALLOWED_ORIGINS",
-                ],
-            )
-            .allow_headers([
-                ACCEPT,
-                ACCEPT_LANGUAGE,
-                AUTHORIZATION,
-                CONTENT_TYPE,
-                HeaderName::from_static("access-token"),
-                HeaderName::from_static("idempotency-key"),
-                HeaderName::from_static("if-match"),
-                HeaderName::from_static("sdkwork-request-hash"),
-                HeaderName::from_static("sdkwork-request-no"),
-                HeaderName::from_static("traceparent"),
-                HeaderName::from_static("tracestate"),
-                HeaderName::from_static("x-idempotency-fingerprint"),
-                HeaderName::from_static("x-sdkwork-locale"),
-            ]),
-        );
+        .layer(TraceLayer::new_for_http());
 
     let readiness = Arc::new(OrderReadiness { host: host.clone() });
     let app = service_router(

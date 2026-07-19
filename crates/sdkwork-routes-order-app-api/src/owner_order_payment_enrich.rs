@@ -79,6 +79,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
             let order_id = command.order_id.clone();
             let idempotency_key = command.idempotency_key.clone();
             let payment_scene = command.payment_scene.clone();
+            let payment_metadata = command.payment_metadata.clone();
             let outcome = inner.pay_owner_order(command).await?;
             let fallback = outcome.clone();
             let enriched = enrich_owner_order_payment_sqlite(
@@ -91,6 +92,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
                     order_id: &order_id,
                     idempotency_key: &idempotency_key,
                     payment_scene: payment_scene.as_deref(),
+                    payment_metadata: Some(&payment_metadata),
                 },
                 outcome,
             )
@@ -131,6 +133,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
             let order_id = command.order_id.clone();
             let idempotency_key = command.idempotency_key.clone();
             let payment_scene = command.payment_scene.clone();
+            let payment_metadata = command.payment_metadata.clone();
             let outcome = inner.pay_owner_order(command).await?;
             let fallback = outcome.clone();
             let enriched = enrich_owner_order_payment_postgres(
@@ -143,6 +146,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
                     order_id: &order_id,
                     idempotency_key: &idempotency_key,
                     payment_scene: payment_scene.as_deref(),
+                    payment_metadata: Some(&payment_metadata),
                 },
                 outcome,
             )

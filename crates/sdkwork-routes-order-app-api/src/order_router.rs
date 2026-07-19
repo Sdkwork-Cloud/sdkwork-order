@@ -789,6 +789,7 @@ async fn pay_order(
         payment_method,
         payment_scene: None,
         payment_attempt_callback_payload: callback_payload,
+        payment_metadata: serde_json::json!({}),
         request_no: write_headers.request_no.clone(),
         idempotency_key: write_headers.idempotency_key.clone(),
     }) {

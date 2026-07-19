@@ -274,6 +274,7 @@ async fn create_membership_order(
         payment_method: method,
         payment_scene: Some(payment_scene(&payment_product).to_string()),
         payment_attempt_callback_payload: None,
+        payment_metadata: serde_json::json!({}),
         request_no: format!("{}-payment", write_headers.request_no),
         idempotency_key: format!(
             "{}:payment:{}",

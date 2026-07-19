@@ -1460,6 +1460,7 @@ async fn pay_coupon_recharge_order(
         payment_method: method.to_owned(),
         payment_scene: None,
         payment_attempt_callback_payload: Some(callback_payload),
+        payment_metadata: serde_json::json!({}),
         request_no: format!("{request_no}:pay"),
         idempotency_key: format!("{idempotency_key}:pay"),
     }) {
@@ -1540,6 +1541,7 @@ async fn submit_points_recharge_order(
                 payment_method: method.to_owned(),
                 payment_scene: None,
                 payment_attempt_callback_payload: Some(callback_payload),
+                payment_metadata: serde_json::json!({}),
                 request_no: format!("{request_no}:pay"),
                 idempotency_key: format!("{idempotency_key}:pay"),
             }) {
@@ -1597,6 +1599,7 @@ async fn pay_account_value_order(
         payment_method: method.to_owned(),
         payment_scene: None,
         payment_attempt_callback_payload: Some(callback_payload),
+        payment_metadata: serde_json::json!({}),
         request_no: format!("{request_no}:pay"),
         idempotency_key: format!("{idempotency_key}:pay"),
     }) {

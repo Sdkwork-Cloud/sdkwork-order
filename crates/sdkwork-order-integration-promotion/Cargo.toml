@@ -12,5 +12,5 @@ path = "src/lib.rs"
 sdkwork-database-sqlx.workspace = true
 sdkwork_contract_service.workspace = true
 sdkwork_order_service.workspace = true
-sdkwork_promotion_service.workspace = true
-sdkwork_promotion_repository_sqlx.workspace = true
+sdkwork_commerce_promotion_service.workspace = true
+sdkwork_commerce_promotion_repository_sqlx.workspace = true
