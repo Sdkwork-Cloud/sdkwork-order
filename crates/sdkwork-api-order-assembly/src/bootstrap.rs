@@ -5,11 +5,41 @@
 //! so `/healthz`, `/livez`, `/readyz`, and `/metrics` are not duplicated per surface.
 
 use axum::Router;
+use sdkwork_database_spi::{DefaultDatabaseModule, SpiError};
+use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service_host::OrderServiceHost;
+use sdkwork_web_bootstrap::ContractFallbackConfig;
+use sdkwork_web_core::HttpRouteManifest;
 use std::sync::Arc;
 
 pub struct ApiAssembly {
     pub router: Router,
+}
+
+impl ApiAssembly {
+    pub async fn from_database_pool(pool: DatabasePool) -> Result<Self, String> {
+        let host = Arc::new(OrderServiceHost::from_database_pool(pool).await?);
+        Ok(Self {
+            router: sdkwork_routes_order_app_api::build_order_app_business_router(host),
+        })
+    }
+
+    pub fn database_module() -> Result<DefaultDatabaseModule, SpiError> {
+        sdkwork_order_database_host::database_module()
+    }
+
+    pub fn app_route_manifest() -> HttpRouteManifest {
+        sdkwork_routes_order_app_api::http_route_manifest::app_route_manifest()
+    }
+
+    pub fn contract_fallback_config() -> ContractFallbackConfig {
+        let mut config = ContractFallbackConfig::from_manifest(&Self::app_route_manifest());
+        let backend = ContractFallbackConfig::from_manifest(
+            &sdkwork_routes_order_backend_api::http_route_manifest::backend_route_manifest(),
+        );
+        config.manifest_paths.extend(backend.manifest_paths);
+        config
+    }
 }
 
 pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> ApiAssembly {
@@ -17,4 +47,10 @@ pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> ApiAssembly {
     router = router.merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await);
     router = router.merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
     ApiAssembly { router }
+}
+
+pub async fn assemble_backend_business_router(host: Arc<OrderServiceHost>) -> ApiAssembly {
+    ApiAssembly {
+        router: sdkwork_routes_order_backend_api::gateway_mount(host).await,
+    }
 }
