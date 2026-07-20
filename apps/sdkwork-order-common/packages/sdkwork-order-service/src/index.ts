@@ -17,11 +17,13 @@ type ServiceTemplate = { readonly [key: string]: true | ServiceTemplate };
 export type SdkworkOrderOrdersService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["orders"]>;
 export type SdkworkOrderRechargesService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["recharges"]>;
 export type SdkworkOrderMembershipsService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["memberships"]>;
+export type SdkworkOrderWithdrawalsService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["withdrawals"]>;
 
 export type SdkworkOrderAppService = {
   memberships: SdkworkOrderMembershipsService;
   orders: SdkworkOrderOrdersService;
   recharges: SdkworkOrderRechargesService;
+  withdrawals: SdkworkOrderWithdrawalsService;
 };
 
 export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade";
@@ -208,6 +210,11 @@ export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppService
       APP_ORDER_METHOD_TREE.recharges,
       input.appClient.commerce.recharges,
       ["commerce", "recharges"],
+    ),
+    withdrawals: buildServiceTree<SdkworkOrderWithdrawalsService>(
+      APP_ORDER_METHOD_TREE.withdrawals,
+      input.appClient.commerce.withdrawals,
+      ["commerce", "withdrawals"],
     ),
   };
 }

@@ -29,6 +29,12 @@ export const APP_ORDER_METHOD_TREE = {
       cancel: true,
     },
   },
+  withdrawals: {
+    requests: {
+      create: true,
+      retrieve: true,
+    },
+  },
 } as const;
 
 export type OrderRequestParams = Record<string, unknown>;

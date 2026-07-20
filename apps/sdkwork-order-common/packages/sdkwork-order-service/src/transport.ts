@@ -24,8 +24,9 @@ export function createOrderAppSdkClientFromTransport(
       memberships: transport.memberships,
       orders: transport.orders,
       recharges: transport.recharges,
+      withdrawals: transport.withdrawals,
     },
-  } as OrderAppSdkClient;
+  };
 }
 
 export interface BootstrapSdkworkOrderAppServiceInput {

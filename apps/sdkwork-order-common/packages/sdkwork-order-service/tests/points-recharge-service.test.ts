@@ -43,6 +43,7 @@ function createAppService(overrides: {
         },
         settings: { retrieve: vi.fn() },
       },
+      withdrawals: {} as SdkworkOrderAppService["withdrawals"],
     },
     create,
   };
