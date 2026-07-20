@@ -120,7 +120,15 @@ async fn execute_sqlite_refund(
     .await
     {
         let _ = refunds
-            .mark_owner_refund_provider_submission_failed(&request.tenant_id, &refund.refund_id)
+            .mark_owner_refund_provider_submission_failed(
+                &request.tenant_id,
+                request.organization_id.as_deref(),
+                &refund.refund_id,
+                "buyer",
+                Some(&request.owner_user_id),
+                &request.request_no,
+                &request.idempotency_key,
+            )
             .await;
         return Err(error);
     }
@@ -146,7 +154,15 @@ async fn execute_postgres_refund(
     .await
     {
         let _ = refunds
-            .mark_owner_refund_provider_submission_failed(&request.tenant_id, &refund.refund_id)
+            .mark_owner_refund_provider_submission_failed(
+                &request.tenant_id,
+                request.organization_id.as_deref(),
+                &refund.refund_id,
+                "buyer",
+                Some(&request.owner_user_id),
+                &request.request_no,
+                &request.idempotency_key,
+            )
             .await;
         return Err(error);
     }

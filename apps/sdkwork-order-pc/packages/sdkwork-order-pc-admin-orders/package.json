@@ -26,7 +26,8 @@
   "dependencies": {
     "@sdkwork/order-pc-admin-core": "workspace:*",
     "@sdkwork/order-pc-core": "workspace:*",
-    "@sdkwork/order-service": "workspace:*"
+    "@sdkwork/order-service": "workspace:*",
+    "lucide-react": "catalog:"
   },
   "devDependencies": {
     "@sdkwork/ui-pc-react": "workspace:*",
