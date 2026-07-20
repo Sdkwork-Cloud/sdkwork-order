@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/sdkwork-api-order-assembly",
-    "crates/sdkwork-order-gateway-assembly",
+    "crates/sdkwork-api-order-assembly",
   "crates/sdkwork-order-service",
   "crates/sdkwork-order-repository-sqlx",
   "crates/sdkwork-order-integration-account",
@@ -13,7 +13,7 @@ members = [
   "crates/sdkwork-routes-order-backend-api",
   "crates/sdkwork-order-database-host",
   "crates/sdkwork-order-service-host",
-  "crates/sdkwork-order-standalone-gateway",
+  "crates/sdkwork-api-order-standalone-gateway",
 ]
 
 [workspace.package]
@@ -55,7 +55,7 @@ sdkwork_payment_repository_sqlx = { path = "../sdkwork-payment/crates/sdkwork-pa
 sdkwork_payment_providers = { path = "../sdkwork-payment/crates/sdkwork-payment-providers", package = "sdkwork-payment-providers" }
 sdkwork-routes-order-app-api = { path = "crates/sdkwork-routes-order-app-api" }
 sdkwork-routes-order-backend-api = { path = "crates/sdkwork-routes-order-backend-api" }
-sdkwork_order_gateway_assembly = { path = "crates/sdkwork-order-gateway-assembly", package = "sdkwork-order-gateway-assembly" }
+sdkwork_api_order_assembly = { path = "crates/sdkwork-api-order-assembly", package = "sdkwork-api-order-assembly" }
 sdkwork_order_database_host = { path = "crates/sdkwork-order-database-host", package = "sdkwork-order-database-host" }
 sdkwork_order_service_host = { path = "crates/sdkwork-order-service-host", package = "sdkwork-order-service-host" }
 sdkwork_order_integration_account = { path = "crates/sdkwork-order-integration-account", package = "sdkwork-order-integration-account" }

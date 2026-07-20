@@ -5,7 +5,7 @@ Updated: 2026-07-07
 
 ## Deployment Topology
 
-`sdkwork-order` ships as a standalone Axum gateway (`sdkwork-order-standalone-gateway`) exposing:
+`sdkwork-order` ships as a standalone Axum gateway (`sdkwork-api-order-standalone-gateway`) exposing:
 
 | Surface | Prefix | Auth |
 | --- | --- | --- |

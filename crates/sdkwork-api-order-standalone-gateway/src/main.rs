@@ -9,7 +9,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sdkwork_order_gateway_assembly::{assemble_application_router, ApplicationAssembly};
+use sdkwork_api_order_assembly::{assemble_api_router, ApiAssembly};
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_web_bootstrap::{service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig};
 use tower_http::trace::TraceLayer;
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let business = assemble_application_router(host.clone())
+    let business = assemble_api_router(host.clone())
         .await
         .router
         .layer(TraceLayer::new_for_http());
@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         business,
         ServiceRouterConfig::default()
             .with_readiness_check(readiness.clone())
-            .with_contract_fallback(ApplicationAssembly::contract_fallback_config()),
+            .with_contract_fallback(ApiAssembly::contract_fallback_config()),
     );
 
     let addr = std::env::var("ORDER_API_BIND").unwrap_or_else(|_| "0.0.0.0:18093".to_owned());

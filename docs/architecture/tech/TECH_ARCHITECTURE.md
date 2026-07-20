@@ -19,7 +19,7 @@ For account value movement, order is the orchestration layer. It owns commercial
 | SQL repositories | `crates/sdkwork-order-repository-sqlx/` |
 | HTTP routers (app) | `crates/sdkwork-routes-order-app-api/` |
 | HTTP routers (backend) | `crates/sdkwork-routes-order-backend-api/` |
-| API server | `crates/sdkwork-order-standalone-gateway/` |
+| API server | `crates/sdkwork-api-order-standalone-gateway/` |
 | PC client | `apps/sdkwork-order-pc/` |
 | Composed service facade | `apps/sdkwork-order-common/packages/sdkwork-order-service/` |
 | App SDK | `sdks/sdkwork-order-app-sdk/` |
@@ -221,7 +221,7 @@ Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK r
 
 ## 10. Observability
 
-The standalone gateway mounts `/healthz`, `/livez`, `/readyz`, and `/metrics` via `sdkwork-web-bootstrap::service_router`. Contract fallback merges app-api and backend-api `HttpRouteManifest` entries through `sdkwork-order-gateway-assembly::order_contract_fallback_config`.
+The standalone gateway mounts `/healthz`, `/livez`, `/readyz`, and `/metrics` via `sdkwork-web-bootstrap::service_router`. Contract fallback merges app-api and backend-api `HttpRouteManifest` entries through `sdkwork-api-order-assembly::order_contract_fallback_config`.
 
 Structured tracing uses targets `order.bootstrap`, `order.runtime`, `order.readiness`, and `order.security`. API handlers propagate `traceId` through `SdkWorkApiResponse` and `ProblemDetail`. Readiness probes database connectivity via `SELECT 1`.
 

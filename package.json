@@ -8,7 +8,7 @@
     "stop": "node ../sdkwork-specs/tools/stop-sdkwork-workspace-processes.mjs --workspace .",
     "dev": "pnpm --dir apps/sdkwork-order-pc dev",
     "build": "pnpm --dir apps/sdkwork-order-pc build",
-    "start": "cargo run -p sdkwork-order-standalone-gateway --bin sdkwork-order-standalone-gateway",
+    "start": "cargo run -p sdkwork-api-order-standalone-gateway --bin sdkwork-api-order-standalone-gateway",
     "test": "pnpm test:node && pnpm test:vitest && cargo test --workspace",
     "test:node": "node --test --test-reporter=spec tests/static/openapi-contract.test.mjs",
     "test:vitest": "vitest run --config vitest.config.ts --configLoader native --pool vmThreads",

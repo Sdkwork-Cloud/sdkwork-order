@@ -111,7 +111,7 @@ test("sdk openapi inputs stay aligned with api authorities", () => {
 
 test("order route manifests are exported from gateway assembly", () => {
   const assemblyLib = fs.readFileSync(
-    path.join(repoRoot, "crates/sdkwork-order-gateway-assembly/src/lib.rs"),
+    path.join(repoRoot, "crates/sdkwork-api-order-assembly/src/lib.rs"),
     "utf8",
   );
   assert.match(assemblyLib, /order_contract_fallback_config/);
@@ -119,7 +119,7 @@ test("order route manifests are exported from gateway assembly", () => {
 
 test("standalone gateway CORS allows SDK write-command headers", () => {
   const mainRs = fs.readFileSync(
-    path.join(repoRoot, "crates/sdkwork-order-standalone-gateway/src/main.rs"),
+    path.join(repoRoot, "crates/sdkwork-api-order-standalone-gateway/src/main.rs"),
     "utf8",
   );
 
