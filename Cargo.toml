@@ -1,4 +1,4 @@
-[workspace]
+﻿[workspace]
 resolver = "2"
 members = [
     "crates/sdkwork-api-order-assembly",
@@ -19,7 +19,7 @@ members = [
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
-license = "UNLICENSED"
+license = "AGPL-3.0-or-later"
 publish = false
 
 [workspace.dependencies]

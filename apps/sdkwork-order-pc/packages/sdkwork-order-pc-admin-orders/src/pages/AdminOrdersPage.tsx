@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   Archive,
   Ban,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   RefreshCw,
   RotateCcw,
@@ -283,11 +285,43 @@ export function SdkworkOrderAdminOrdersPage({ capabilities, service: injectedSer
         emptyDescription={activeFilterCount ? "请调整筛选条件后重试。" : "平台订单将在这里集中展示。"}
         emptyTitle={activeFilterCount ? "没有符合条件的订单" : "暂无订单"}
         footer={(
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <span className="text-xs text-[var(--sdk-color-text-muted)]">第 {page} / {totalPages} 页</span>
-            <div className="flex items-center gap-2">
-              <Button disabled={page <= 1 || loading} size="sm" type="button" variant="outline" onClick={() => setPage((value) => value - 1)}>上一页</Button>
-              <Button disabled={page >= totalPages || loading} size="sm" type="button" variant="outline" onClick={() => setPage((value) => value + 1)}>下一页</Button>
+          <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span className="min-w-0 truncate text-sm tabular-nums text-[var(--sdk-color-text-secondary)]">
+              共 {totalItems.toLocaleString()} 条记录
+            </span>
+            <div className="grid w-full grid-cols-[2.25rem_minmax(4.5rem,1fr)_2.25rem] items-center gap-1 sm:w-auto sm:grid-cols-[2.25rem_minmax(4.5rem,auto)_2.25rem]">
+              <Button
+                aria-label="上一页"
+                className="h-9 w-9 p-0"
+                disabled={page <= 1 || loading}
+                size="icon"
+                title="上一页"
+                type="button"
+                variant="outline"
+                onClick={() => setPage((value) => value - 1)}
+              >
+                <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+              </Button>
+              <span
+                aria-label={`第 ${page} 页，共 ${totalPages} 页`}
+                className="flex h-9 items-center justify-center gap-2 rounded-[var(--sdk-radius-field)] border border-[var(--sdk-color-border-default)] bg-[var(--sdk-color-surface-panel)] px-3 text-sm tabular-nums text-[var(--sdk-color-text-muted)]"
+              >
+                <strong className="font-semibold text-[var(--sdk-color-text-primary)]">{page}</strong>
+                <span aria-hidden="true">/</span>
+                <span aria-hidden="true">{totalPages}</span>
+              </span>
+              <Button
+                aria-label="下一页"
+                className="h-9 w-9 p-0"
+                disabled={page >= totalPages || loading}
+                size="icon"
+                title="下一页"
+                type="button"
+                variant="outline"
+                onClick={() => setPage((value) => value + 1)}
+              >
+                <ChevronRight aria-hidden="true" className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         )}
