@@ -18,12 +18,12 @@ export class ShipmentsPackagesManagementApi {
 
 
 /** List shipment packages */
-  async list(shipmentId: string, params?: ShipmentsPackagesManagementListParams): Promise<Record<string, unknown>> {
+  async list(shipmentId: string, params?: ShipmentsPackagesManagementListParams): Promise<{ items: ShipmentPackageSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<Record<string, unknown>>(appendQueryString(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages`), query));
+    return this.client.get<{ items: ShipmentPackageSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages`), query));
   }
 }
 
@@ -87,7 +87,7 @@ export class ShipmentsApi {
 
 
 /** List shipments for operator review */
-  async list(params?: ShipmentsListParams): Promise<Record<string, unknown>> {
+  async list(params?: ShipmentsListParams): Promise<{ items: ShipmentSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'order_id', value: params?.orderId, style: 'form', explode: true, allowReserved: false },
@@ -95,7 +95,7 @@ export class ShipmentsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<Record<string, unknown>>(appendQueryString(backendApiPath(`/shipments`), query));
+    return this.client.get<{ items: ShipmentSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments`), query));
   }
 
 /** Retrieve shipment for operator review */

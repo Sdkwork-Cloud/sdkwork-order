@@ -106,7 +106,7 @@
       "wrap_router_with_web_framework",
       "wrap_router_with_web_framework_from_env"
     ],
-    "routeManifest": "sdks/_route-manifests/app-api/sdkwork-routes-order-app-api.route-manifest.json",
+    "routeManifest": "src/http_route_manifest.rs#app_route_manifest",
     "sdkClients": [],
     "sdkDependencies": [],
     "dependencyApiExports": [],

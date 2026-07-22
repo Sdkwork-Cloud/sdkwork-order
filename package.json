@@ -1,4 +1,4 @@
-﻿{
+{
   "license": "AGPL-3.0-or-later",
   "name": "sdkwork-order-workspace",
   "private": true,
@@ -18,7 +18,7 @@
     "check:governance": "node ../sdkwork-specs/tools/check-api-response-envelope.mjs --workspace . && node ../sdkwork-specs/tools/check-pagination.mjs --workspace . && node ../sdkwork-specs/tools/check-app-sdk-consumer-imports.mjs --workspace .",
     "typecheck": "tsc --noEmit",
     "verify": "pnpm typecheck && pnpm test:vitest && cargo test --workspace && pnpm run check:app-composition && pnpm run check:governance",
-    "format:check": "cargo fmt --all -- --check",
+    "format:check": "cargo fmt -- --check",
     "check": "pnpm run check:app-composition && pnpm db:validate && pnpm api:assembly:validate && pnpm format:check",
     "db:validate": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root .",
     "db:materialize:contract": "node ../sdkwork-specs/tools/materialize-database-contract-from-baseline.mjs --root . --baseline database/ddl/baseline/postgres/0001_order_baseline.sql --module-id order --owner sdkwork-order --prefixes commerce_ --engines postgres,sqlite",

@@ -32,13 +32,6 @@ export default defineConfig(({ mode }) => {
           ),
         },
         {
-          find: "@sdkwork/order-sdk-ports",
-          replacement: path.resolve(
-            repoRoot,
-            "apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports/src/index.ts",
-          ),
-        },
-        {
           find: "@sdkwork/order-service",
           replacement: path.resolve(
             repoRoot,

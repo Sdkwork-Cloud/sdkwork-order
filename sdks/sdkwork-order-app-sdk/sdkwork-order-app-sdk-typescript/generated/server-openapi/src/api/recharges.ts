@@ -38,14 +38,10 @@ export interface RechargesOrdersListParams {
 
 export interface RechargesOrdersCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export interface RechargesOrdersCancelParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class RechargesOrdersApi {
@@ -72,8 +68,6 @@ export class RechargesOrdersApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -90,8 +84,6 @@ export class RechargesOrdersApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -137,14 +129,14 @@ export class RechargesPackagesApi {
 }
 
 export class RechargesApi {
-  private client: HttpClient;
+
   public readonly packages: RechargesPackagesApi;
   public readonly settings: RechargesSettingsApi;
   public readonly orders: RechargesOrdersApi;
   public readonly plans: RechargesPlansApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.packages = new RechargesPackagesApi(client);
     this.settings = new RechargesSettingsApi(client);
     this.orders = new RechargesOrdersApi(client);

@@ -2,7 +2,7 @@ import type { AfterSalesReturnShipmentResponse } from './after-sales-return-ship
 
 export interface AfterSalesReturnShipmentsCreateResponse201 {
   code: 0;
-  data: unknown & Record<string, unknown>;
+  data: unknown & { item: AfterSalesReturnShipmentResponse; };
   /** Server-owned request correlation id. */
   traceId: string;
 }

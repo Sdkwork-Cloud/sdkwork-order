@@ -35,8 +35,6 @@ export interface AfterSalesReturnShipmentsListParams {
 
 export interface AfterSalesReturnShipmentsCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class AfterSalesReturnShipmentsApi {
@@ -62,8 +60,6 @@ export class AfterSalesReturnShipmentsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -80,14 +76,10 @@ export interface AfterSalesRequestsListParams {
 
 export interface AfterSalesRequestsCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export interface AfterSalesRequestsUpdateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class AfterSalesRequestsApi {
@@ -114,8 +106,6 @@ export class AfterSalesRequestsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -132,8 +122,6 @@ export class AfterSalesRequestsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -142,13 +130,13 @@ export class AfterSalesRequestsApi {
 }
 
 export class AfterSalesApi {
-  private client: HttpClient;
+
   public readonly requests: AfterSalesRequestsApi;
   public readonly returnShipments: AfterSalesReturnShipmentsApi;
   public readonly events: AfterSalesEventsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.requests = new AfterSalesRequestsApi(client);
     this.returnShipments = new AfterSalesReturnShipmentsApi(client);
     this.events = new AfterSalesEventsApi(client);

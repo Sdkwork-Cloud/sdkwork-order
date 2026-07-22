@@ -203,14 +203,14 @@ export class BackendTokenBankPlansApi {
   }
 
 /** Token Bank plans retire. */
-  async retire(planCode: string, body?: unknown, params?: BackendTokenBankPlansRetireParams): Promise<SdkWorkCommandData> {
+  async retire(planCode: string, params?: BackendTokenBankPlansRetireParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}/retire`), body, undefined, requestHeaders, 'application/json');
+    return this.client.post<SdkWorkCommandData>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}/retire`), undefined, undefined, requestHeaders);
   }
 }
 
@@ -275,26 +275,26 @@ export class BackendAccountValuePackagesApi {
   }
 
 /** Account value packages retire. */
-  async retire(packageId: string, body?: unknown, params?: BackendAccountValuePackagesRetireParams): Promise<SdkWorkCommandData> {
+  async retire(packageId: string, params?: BackendAccountValuePackagesRetireParams): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}/retire`), body, undefined, requestHeaders, 'application/json');
+    return this.client.post<SdkWorkCommandData>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}/retire`), undefined, undefined, requestHeaders);
   }
 }
 
 export class BackendApi {
-  private client: HttpClient;
+
   public readonly accountValuePackages: BackendAccountValuePackagesApi;
   public readonly tokenBankPlans: BackendTokenBankPlansApi;
   public readonly refundRequests: BackendRefundRequestsApi;
   public readonly withdrawalRequests: BackendWithdrawalRequestsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.accountValuePackages = new BackendAccountValuePackagesApi(client);
     this.tokenBankPlans = new BackendTokenBankPlansApi(client);
     this.refundRequests = new BackendRefundRequestsApi(client);

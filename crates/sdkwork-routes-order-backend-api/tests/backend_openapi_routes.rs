@@ -5,12 +5,12 @@ use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::{AuthLevel, DeploymentMode, Environment, IamAppContext};
 use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
 use sdkwork_order_service::{
-    stable_json_request_hash, AccountPointsCreditFuture, AccountPointsCreditPort,
-    AccountValueFuture, AccountValueLedgerCommand, AccountValueLedgerOperation,
-    AccountValueLedgerOutcome, AccountValueLedgerPort, NoopAccountValueLedgerPort,
-    NoopMembershipPurchaseFulfillmentPort, PaymentExecutorOutcome, PaymentPayoutExecutionRequest,
-    PaymentPayoutExecutorPort, PaymentRefundExecutionRequest, PaymentRefundExecutorPort,
-    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueFuture,
+    AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
+    AccountValueLedgerPort, NoopAccountValueLedgerPort, NoopMembershipPurchaseFulfillmentPort,
+    PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
+    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, PointsRechargeCreditOutcome,
+    PointsRechargeCreditRequest,
 };
 use sdkwork_order_service_host::OrderServiceHost;
 use sdkwork_routes_order_backend_api::{
@@ -251,14 +251,6 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
         "reasonCode": "approved",
         "reviewComment": "approved by operator"
     });
-    let mut payload = body.clone();
-    payload.as_object_mut().expect("payload object").insert(
-        "refundRequestId".to_owned(),
-        Value::String("refund-request-1".to_owned()),
-    );
-    let request_hash =
-        stable_json_request_hash("backend.refundRequests.approve", &payload).expect("request hash");
-
     let response = app
         .oneshot(
             Request::builder()
@@ -267,7 +259,6 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
                 .header("content-type", "application/json")
                 .header("Idempotency-Key", "approve-refund-1")
                 .header("Sdkwork-Request-No", "approve-refund-1")
-                .header("Sdkwork-Request-Hash", request_hash)
                 .extension(backend_iam_context())
                 .body(Body::from(body.to_string()))
                 .unwrap(),

@@ -68,12 +68,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -82,7 +76,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                  "$ref": "#/components/schemas/CreateCheckoutSessionResponse"
                 }
               }
             }
@@ -165,7 +159,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
+                "$ref": "#/components/schemas/CreateCheckoutSessionRequest"
               }
             }
           }
@@ -196,7 +190,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                  "$ref": "#/components/schemas/CheckoutSessionResponse"
                 }
               }
             }
@@ -294,12 +288,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -308,7 +296,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                  "$ref": "#/components/schemas/CreateCheckoutQuoteResponse"
                 }
               }
             }
@@ -386,16 +374,6 @@
         "x-sdkwork-resource": "checkout.sessions.quotes",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
         "x-sdkwork-idempotent": true
       }
     },
@@ -417,12 +395,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -431,7 +403,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
+                  "$ref": "#/components/schemas/CreateCheckoutOrderResponse"
                 }
               }
             }
@@ -509,16 +481,6 @@
         "x-sdkwork-resource": "checkout.sessions.orders",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
         "x-sdkwork-idempotent": true
       }
     },
@@ -644,121 +606,6 @@
         "x-sdkwork-resource": "orders",
         "x-sdkwork-request-context": "WebRequestContext",
         "x-sdkwork-api-surface": "app-api"
-      },
-      "post": {
-        "tags": [
-          "orders"
-        ],
-        "summary": "Orders create.",
-        "description": "Deprecated: prefer `checkout.sessions.orders.create` for new integrators. Pre-launch compatibility only.",
-        "deprecated": true,
-        "operationId": "orders.create",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SdkWorkResourceResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "AuthToken": [],
-            "AccessToken": []
-          }
-        ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "orders",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
-        "x-sdkwork-idempotent": true
       }
     },
     "/app/v3/api/orders/{orderId}": {
@@ -882,12 +729,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -1109,129 +950,6 @@
         "x-sdkwork-api-surface": "app-api"
       }
     },
-    "/app/v3/api/orders/{orderId}/cancel": {
-      "post": {
-        "tags": [
-          "orders"
-        ],
-        "summary": "Orders cancel.",
-        "operationId": "orders.cancel",
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SdkWorkCommandResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "AuthToken": [],
-            "AccessToken": []
-          }
-        ],
-        "x-sdkwork-owner": "sdkwork-order",
-        "x-sdkwork-api-authority": "sdkwork-order-app-api",
-        "x-sdkwork-domain": "commerce",
-        "x-sdkwork-resource": "orders",
-        "x-sdkwork-request-context": "WebRequestContext",
-        "x-sdkwork-api-surface": "app-api",
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
-        "x-sdkwork-idempotent": true
-      }
-    },
     "/app/v3/api/orders/{orderId}/events": {
       "get": {
         "tags": [
@@ -1374,12 +1092,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -1976,12 +1688,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -2249,12 +1955,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -2528,12 +2228,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "responses": {
@@ -3789,12 +3483,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -4015,12 +3703,6 @@
           },
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -4136,12 +3818,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -4491,12 +4167,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -4709,12 +4379,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandRequestHash"
-          },
-          {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyFingerprint"
           }
         ],
         "requestBody": {
@@ -5207,6 +4871,246 @@
             "type": "string"
           }
         }
+      },
+      "CheckoutLineRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "skuId"
+        ],
+        "properties": {
+          "skuId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "default": 1
+          }
+        }
+      },
+      "CreateCheckoutSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/CheckoutLineRequest"
+            }
+          },
+          "currencyCode": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 3,
+            "default": "CNY"
+          }
+        }
+      },
+      "CheckoutSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "checkoutSessionId",
+          "status",
+          "currencyCode",
+          "originalAmount",
+          "discountAmount",
+          "payableAmount"
+        ],
+        "properties": {
+          "checkoutSessionId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "originalAmount": {
+            "type": "string"
+          },
+          "discountAmount": {
+            "type": "string"
+          },
+          "payableAmount": {
+            "type": "string"
+          },
+          "quoteId": {
+            "type": "string"
+          }
+        }
+      },
+      "CheckoutQuote": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "checkoutSessionId",
+          "quoteId",
+          "currencyCode",
+          "originalAmount",
+          "discountAmount",
+          "payableAmount"
+        ],
+        "properties": {
+          "checkoutSessionId": {
+            "type": "string"
+          },
+          "quoteId": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "originalAmount": {
+            "type": "string"
+          },
+          "discountAmount": {
+            "type": "string"
+          },
+          "payableAmount": {
+            "type": "string"
+          }
+        }
+      },
+      "CheckoutOrder": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "orderNo",
+          "orderSn",
+          "status",
+          "totalAmount"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "orderSn": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totalAmount": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateCheckoutSessionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CheckoutSession"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CheckoutSessionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CheckoutSession"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CreateCheckoutQuoteResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CheckoutQuote"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "CreateCheckoutOrderResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CheckoutOrder"
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "CommerceOperationCommand": {
         "type": "object",
@@ -6135,26 +6039,6 @@
           "maxLength": 128
         },
         "description": "Client retry key scoped by tenant, principal, method, and path."
-      },
-      "WriteCommandRequestHash": {
-        "name": "Sdkwork-Request-Hash",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "minLength": 1
-        },
-        "description": "Stable digest of the canonical command payload; must match the request body and route params where applicable."
-      },
-      "WriteCommandIdempotencyFingerprint": {
-        "name": "X-Idempotency-Fingerprint",
-        "in": "header",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "minLength": 1
-        },
-        "description": "Stable request-body fingerprint required by the SDKWork idempotency framework for write commands with a payload."
       }
     }
   },

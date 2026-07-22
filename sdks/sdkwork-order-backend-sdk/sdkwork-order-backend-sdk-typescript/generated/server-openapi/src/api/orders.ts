@@ -42,12 +42,12 @@ export class OrdersAdminEventsApi {
 
 
 /** List order lifecycle events */
-  async list(orderId: string, params?: OrdersAdminEventsListParams): Promise<Record<string, unknown>> {
+  async list(orderId: string, params?: OrdersAdminEventsListParams): Promise<{ items: OrderEvent[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<Record<string, unknown>>(appendQueryString(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query));
+    return this.client.get<{ items: OrderEvent[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query));
   }
 }
 
@@ -66,13 +66,13 @@ export class OrdersAdminCancellationsApi {
 
 
 /** List order cancellation audit records */
-  async list(params?: OrdersAdminCancellationsListParams): Promise<Record<string, unknown>> {
+  async list(params?: OrdersAdminCancellationsListParams): Promise<{ items: OrderCancellation[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<Record<string, unknown>>(appendQueryString(backendApiPath(`/orders/cancellations`), query));
+    return this.client.get<{ items: OrderCancellation[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/cancellations`), query));
   }
 }
 
@@ -104,14 +104,14 @@ export class OrdersAdminApi {
 
 
 /** List orders for operator review */
-  async list(params?: OrdersAdminListParams): Promise<Record<string, unknown>> {
+  async list(params?: OrdersAdminListParams): Promise<{ items: OrderSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'q', value: params?.q, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<Record<string, unknown>>(appendQueryString(backendApiPath(`/orders`), query));
+    return this.client.get<{ items: OrderSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders`), query));
   }
 
 /** Retrieve order detail for operator review */
@@ -143,12 +143,12 @@ export class OrdersAdminApi {
 }
 
 export class OrdersApi {
-  private client: HttpClient;
+
   public readonly admin: OrdersAdminApi;
   public readonly paymentConfirmations: OrdersPaymentConfirmationsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.admin = new OrdersAdminApi(client);
     this.paymentConfirmations = new OrdersPaymentConfirmationsApi(client);
   }

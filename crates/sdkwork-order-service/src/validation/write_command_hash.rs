@@ -1,4 +1,4 @@
-//! Stable request-hash helpers for idempotent write commands (`API_SPEC.md` §17).
+//! Stable server-side request fingerprints for idempotent write commands (`API_SPEC.md` §17).
 
 use serde::Serialize;
 
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn stable_json_request_hash_ignores_null_object_fields() {
         let payload = serde_json::json!({ "a": 1, "b": null });
-        let hash = stable_json_request_hash("orders.cancel", &payload).expect("hash");
+        let hash = stable_json_request_hash("orders.cancellations.create", &payload).expect("hash");
         assert!(!hash.is_empty());
     }
 }

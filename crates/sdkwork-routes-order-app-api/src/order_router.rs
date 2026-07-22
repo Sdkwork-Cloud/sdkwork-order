@@ -11,8 +11,7 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
-    checkout_owner_order_request_hash, CancelOwnerOrderCommand, CreateOwnerOrderCommand,
-    CreateOwnerOrderOutcome, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
+    CancelOwnerOrderCommand, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
     OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
     OrderOwnerPaymentStatus, OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand,
     PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
@@ -32,10 +31,7 @@ use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_command,
     success_created_item, success_item, success_items, unauthorized, validation,
 };
-use crate::command_headers::{
-    ensure_request_hash_matches, required_app_write_command_headers, validate_app_write_payload,
-    write_payload_with_route_param,
-};
+use crate::command_headers::required_app_write_command_headers;
 use crate::owner_order_cancel::cancel_owner_order_with_payments;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
@@ -77,11 +73,6 @@ pub trait CommerceOrderStore: Send + Sync {
         &'a self,
         command: CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()>;
-
-    fn create_owner_order<'a>(
-        &'a self,
-        command: CreateOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, CreateOwnerOrderOutcome>;
 }
 
 #[derive(Clone)]
@@ -276,21 +267,6 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
     Ok(method)
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CreateOrderRequest {
-    checkout_session_id: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CreateOrderResponse {
-    order_id: String,
-    order_sn: String,
-    status: String,
-    total_amount: String,
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OrderPaymentParamsResponse {
@@ -347,16 +323,12 @@ pub fn build_app_order_router(
     payment_records: Arc<dyn OrderPaymentRecordStore>,
 ) -> Router {
     Router::new()
-        .route("/app/v3/api/orders", get(list_orders).post(create_order))
+        .route("/app/v3/api/orders", get(list_orders))
         .route("/app/v3/api/orders/statistics", get(fetch_order_statistics))
         .route("/app/v3/api/orders/{orderId}", get(fetch_order))
         .route(
             "/app/v3/api/orders/{orderId}/payments",
             get(list_order_payments).post(pay_order),
-        )
-        .route(
-            "/app/v3/api/orders/{orderId}/cancel",
-            post(cancel_order_legacy),
         )
         .route(
             "/app/v3/api/orders/{orderId}/status",
@@ -614,26 +586,6 @@ async fn fetch_order_events(
     }
 }
 
-async fn cancel_order_legacy(
-    state: State<AppOrderState>,
-    runtime_context: Option<Extension<IamAppContext>>,
-    request_context: Option<Extension<WebRequestContext>>,
-    headers: HeaderMap,
-    Path(order_id): Path<String>,
-    body: Option<Json<CancelOrderRequest>>,
-) -> Response {
-    cancel_order_impl(
-        state,
-        runtime_context,
-        request_context,
-        headers,
-        order_id,
-        body,
-        "orders.cancel",
-    )
-    .await
-}
-
 async fn create_order_cancellation(
     state: State<AppOrderState>,
     runtime_context: Option<Extension<IamAppContext>>,
@@ -649,7 +601,6 @@ async fn create_order_cancellation(
         headers,
         order_id,
         body,
-        "orders.cancellations.create",
     )
     .await
 }
@@ -661,7 +612,6 @@ async fn cancel_order_impl(
     headers: HeaderMap,
     order_id: String,
     body: Option<Json<CancelOrderRequest>>,
-    hash_scope: &'static str,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
@@ -672,9 +622,8 @@ async fn cancel_order_impl(
         cancel_reason: None,
         cancel_type: None,
     });
-    let payload = write_payload_with_route_param("orderId", &order_id, &body);
     let _write_headers =
-        match validate_app_write_payload(ctx, &headers, hash_scope, &payload, |idempotency_key| {
+        match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("order-cancel-{order_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -768,13 +717,9 @@ async fn pay_order(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "orders.payments.create",
-        &body,
-        |idempotency_key| format!("pay-{order_id}-{idempotency_key}"),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("pay-{order_id}-{idempotency_key}")
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };
@@ -800,58 +745,6 @@ async fn pay_order(
     match state.payments.pay_owner_order(command).await {
         Ok(outcome) => success_created_item(ctx, map_pay_outcome(outcome)),
         Err(error) => map_service_error(ctx, error),
-    }
-}
-
-async fn create_order(
-    State(state): State<AppOrderState>,
-    runtime_context: Option<Extension<IamAppContext>>,
-    request_context: Option<Extension<WebRequestContext>>,
-    headers: HeaderMap,
-    body: Json<CreateOrderRequest>,
-) -> Response {
-    let ctx = request_context.as_ref().map(|value| &value.0);
-    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
-        Ok(subject) => subject,
-        Err(message) => return unauthorized(ctx, message),
-    };
-    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
-        fallback_order_request_no(&subject, &body.checkout_session_id, idempotency_key)
-    }) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
-    let command = match CreateOwnerOrderCommand::new(
-        &subject.tenant_id,
-        subject.organization_id.as_deref(),
-        &subject.user_id,
-        &body.checkout_session_id,
-        &write_headers.request_no,
-        &write_headers.idempotency_key,
-    ) {
-        Ok(command) => command,
-        Err(error) => return map_service_error(ctx, error),
-    };
-    if let Err(response) = ensure_request_hash_matches(
-        ctx,
-        &checkout_owner_order_request_hash(&command),
-        &write_headers.request_hash,
-    ) {
-        return *response;
-    }
-
-    match state.store.create_owner_order(command).await {
-        Ok(outcome) => success_created_item(ctx, map_create_order(outcome)),
-        Err(error) => map_service_error(ctx, error),
-    }
-}
-
-fn map_create_order(value: CreateOwnerOrderOutcome) -> CreateOrderResponse {
-    CreateOrderResponse {
-        order_id: value.order_id,
-        order_sn: value.order_sn,
-        status: value.status,
-        total_amount: value.total_amount.as_str().to_owned(),
     }
 }
 
@@ -982,17 +875,6 @@ fn format_order_payment_status_name(status: &str) -> String {
     }
 }
 
-fn fallback_order_request_no(
-    subject: &AppRuntimeSubject,
-    checkout_session_id: &str,
-    idempotency_key: &str,
-) -> String {
-    format!(
-        "ORD-{}-{}-{}",
-        subject.tenant_id, checkout_session_id, idempotency_key
-    )
-}
-
 impl CommerceOrderStore for SqliteCommerceOrderStore {
     fn list_owner_orders<'a>(
         &'a self,
@@ -1043,13 +925,6 @@ impl CommerceOrderStore for SqliteCommerceOrderStore {
         command: CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()> {
         Box::pin(async move { self.cancel_owner_order(command).await })
-    }
-
-    fn create_owner_order<'a>(
-        &'a self,
-        command: CreateOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, CreateOwnerOrderOutcome> {
-        Box::pin(async move { self.create_owner_order(command).await })
     }
 }
 
@@ -1103,13 +978,6 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
         command: CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()> {
         Box::pin(async move { self.cancel_owner_order(command).await })
-    }
-
-    fn create_owner_order<'a>(
-        &'a self,
-        command: CreateOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, CreateOwnerOrderOutcome> {
-        Box::pin(async move { self.create_owner_order(command).await })
     }
 }
 

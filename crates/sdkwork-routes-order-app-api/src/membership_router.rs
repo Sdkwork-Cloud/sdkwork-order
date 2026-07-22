@@ -25,7 +25,7 @@ use sqlx::{PgPool, SqlitePool};
 use uuid::Uuid;
 
 use crate::api_response::{map_service_error, success_created_item, unauthorized, validation};
-use crate::command_headers::validate_app_write_payload;
+use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::OwnerOrderPaymentStore;
 use crate::owner_order_payment_enrich::{
     enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
@@ -221,13 +221,9 @@ async fn create_membership_order(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "memberships.orders.create",
-        &request,
-        |idempotency_key| fallback_request_no(&subject, &package_id, &method, idempotency_key),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        fallback_request_no(&subject, &package_id, &method, idempotency_key)
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };

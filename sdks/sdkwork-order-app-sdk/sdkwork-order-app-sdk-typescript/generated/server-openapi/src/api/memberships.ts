@@ -6,8 +6,6 @@ import type { MembershipOrderCreateCommand, MembershipOrderCreateResult } from '
 
 export interface MembershipsOrdersCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class MembershipsOrdersApi {
@@ -23,8 +21,6 @@ export class MembershipsOrdersApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -33,11 +29,11 @@ export class MembershipsOrdersApi {
 }
 
 export class MembershipsApi {
-  private client: HttpClient;
+
   public readonly orders: MembershipsOrdersApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.orders = new MembershipsOrdersApi(client);
   }
 
@@ -47,13 +43,7 @@ export function createMembershipsApi(client: HttpClient): MembershipsApi {
   return new MembershipsApi(client);
 }
 
-function appendQueryString(path: string, rawQueryString: string): string {
-  const query = rawQueryString.replace(/^\?+/, '');
-  if (!query) {
-    return path;
-  }
-  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
-}
+
 
 
 

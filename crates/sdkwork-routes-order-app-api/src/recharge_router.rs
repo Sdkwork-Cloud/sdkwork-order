@@ -41,7 +41,7 @@ use crate::api_response::{
     parse_offset_list_params_validated, success_command, success_created_item, success_item,
     success_items, unauthorized, validation,
 };
-use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
+use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
 use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
 use crate::owner_order_payment_enrich::{
@@ -824,13 +824,9 @@ async fn create_refund_request(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "orders.refundRequests.create",
-        &body,
-        |idempotency_key| format!("refund-request-{}-{idempotency_key}", subject.user_id),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("refund-request-{}-{idempotency_key}", subject.user_id)
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };
@@ -926,13 +922,9 @@ async fn create_withdrawal_request(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "withdrawals.requests.create",
-        &body,
-        |idempotency_key| format!("withdrawal-request-{}-{idempotency_key}", subject.user_id),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("withdrawal-request-{}-{idempotency_key}", subject.user_id)
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };
@@ -1133,17 +1125,13 @@ async fn cancel_recharge_order(
         Err(message) => return unauthorized(ctx, message),
     };
     let body = body.map(|Json(value)| value).unwrap_or_default();
-    let payload = write_payload_with_route_param("orderId", &order_id, &body);
-    let _write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "recharges.orders.cancel",
-        &payload,
-        |idempotency_key| format!("recharge-cancel-{order_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let _write_headers =
+        match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("recharge-cancel-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let cancel_reason = body
         .cancel_reason
         .as_deref()
@@ -1224,21 +1212,15 @@ async fn submit_recharge(
             Err(message) => return validation(ctx, message),
         }
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "recharges.orders.create",
-        &request,
-        |idempotency_key| {
-            fallback_account_value_request_no(
-                &subject,
-                order_subject,
-                amount.as_str(),
-                method.as_deref(),
-                idempotency_key,
-            )
-        },
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        fallback_account_value_request_no(
+            &subject,
+            order_subject,
+            amount.as_str(),
+            method.as_deref(),
+            idempotency_key,
+        )
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };

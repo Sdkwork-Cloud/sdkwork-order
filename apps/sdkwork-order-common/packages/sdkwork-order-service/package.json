@@ -16,7 +16,6 @@
   "dependencies": {
     "@sdkwork/order-app-sdk": "workspace:*",
     "@sdkwork/order-backend-sdk": "workspace:*",
-    "@sdkwork/order-sdk-ports": "workspace:*",
     "@sdkwork/sdk-common": "workspace:*",
     "@sdkwork/utils": "workspace:*"
   }

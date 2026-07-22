@@ -29,10 +29,9 @@ describe("sdkwork-order-pc-order service", () => {
   it("maps orders, statistics, details, and payment actions into a reusable order center", async () => {
     const orderAppService = createOrderAppServiceMock({
       orders: {
-        cancel: vi.fn().mockResolvedValue({
-          code: 0,
-          data: { accepted: true },
-        }),
+        cancellations: {
+          create: vi.fn().mockResolvedValue({ accepted: true }),
+        },
         retrieve: vi.fn().mockResolvedValue({
           createdAt: "2026-04-02T08:00:00.000Z",
           items: [
@@ -198,14 +197,12 @@ describe("sdkwork-order-pc-order service", () => {
       orderId: "ORDER-3",
     });
 
-    const cancelMock = orderAppService.orders.cancel as ReturnType<typeof vi.fn>;
+    const cancelMock = orderAppService.orders.cancellations.create as ReturnType<typeof vi.fn>;
     const payMock = orderAppService.orders.payments.create as ReturnType<typeof vi.fn>;
     expect(cancelMock).toHaveBeenCalledWith(
       "ORDER-3",
       expect.objectContaining({
         idempotencyKey: expect.any(String),
-        sdkworkRequestHash: expect.any(String),
-        xIdempotencyFingerprint: expect.any(String),
       }),
       expect.objectContaining({ cancelReason: "Switched plan" }),
     );
@@ -214,8 +211,6 @@ describe("sdkwork-order-pc-order service", () => {
       expect.objectContaining({ paymentMethod: "ALIPAY" }),
       expect.objectContaining({
         idempotencyKey: expect.any(String),
-        sdkworkRequestHash: expect.any(String),
-        xIdempotencyFingerprint: expect.any(String),
       }),
     );
   });

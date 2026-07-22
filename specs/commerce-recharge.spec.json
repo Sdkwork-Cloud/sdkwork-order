@@ -107,9 +107,8 @@
     "orders": [
       "orders.list",
       "orders.retrieve",
-      "orders.create",
       "orders.payments.create",
-      "orders.cancel"
+      "orders.cancellations.create"
     ]
   },
   "upstreamDependencies": [
@@ -162,20 +161,18 @@
     "account-owned recharge/refund/withdrawal orchestration",
     "naked token account naming"
   ],
-  "sdkPortsExtension": {
-    "file": "apps/sdkwork-order-common/packages/sdkwork-order-sdk-ports/src/index.ts",
-    "addTree": {
-      "recharges": {
-        "packages": { "list": true },
-        "settings": { "retrieve": true },
-        "orders": {
-          "create": true,
-          "retrieve": true,
-          "list": true,
-          "cancel": true
-        }
-      }
-    }
+  "sdkSurface": {
+    "family": "sdkwork-order-app-sdk",
+    "authority": "sdkwork-order-app-api",
+    "consumerPackage": "@sdkwork/order-app-sdk",
+    "resources": [
+      "recharges.packages.list",
+      "recharges.settings.retrieve",
+      "recharges.orders.create",
+      "recharges.orders.retrieve",
+      "recharges.orders.list",
+      "recharges.orders.cancel"
+    ]
   },
   "migrationFromPayment": {
     "status": "complete",

@@ -3,7 +3,7 @@ import type { PageInfo } from './page-info';
 
 export interface AfterSalesRequestListResponse {
   code: 0;
-  data: unknown & Record<string, unknown>;
+  data: unknown & { items: AfterSalesRequestSummary[]; pageInfo: PageInfo; };
   /** Server-owned request correlation id. */
   traceId: string;
 }

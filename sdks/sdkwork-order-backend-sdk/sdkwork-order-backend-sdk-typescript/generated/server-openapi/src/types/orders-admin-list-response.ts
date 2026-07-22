@@ -3,7 +3,7 @@ import type { PageInfo } from './page-info';
 
 export interface OrdersAdminListResponse {
   code: 0;
-  data: unknown & Record<string, unknown>;
+  data: unknown & { items: OrderSummary[]; pageInfo: PageInfo; };
   /** Server-owned request correlation id. */
   traceId: string;
 }

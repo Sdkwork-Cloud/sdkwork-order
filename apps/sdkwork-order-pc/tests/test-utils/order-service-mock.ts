@@ -14,8 +14,10 @@ export function createOrderAppServiceMock(
   overrides: DeepPartial<SdkworkOrderAppService> = {},
 ): SdkworkOrderAppService {
   const base: SdkworkOrderAppService = {
+    memberships: {} as SdkworkOrderAppService["memberships"],
     orders: createMissingOrdersTree(),
     recharges: createMissingRechargesTree(),
+    withdrawals: {} as SdkworkOrderAppService["withdrawals"],
   };
   return mergeOrderAppService(base, overrides);
 }
@@ -34,17 +36,16 @@ function createMissingOrdersTree(): SdkworkOrderAppService["orders"] {
   const tree: Record<string, unknown> = {};
   for (const method of [
     "list",
-    "create",
     "retrieve",
     "payments.create",
-    "cancel",
+    "cancellations.create",
     "paymentSuccess.retrieve",
     "statistics.retrieve",
     "status.retrieve",
   ]) {
     addMissingMethod(tree, method);
   }
-  return tree as SdkworkOrderAppService["orders"];
+  return tree as unknown as SdkworkOrderAppService["orders"];
 }
 
 function createMissingRechargesTree(): SdkworkOrderAppService["recharges"] {
@@ -59,7 +60,7 @@ function createMissingRechargesTree(): SdkworkOrderAppService["recharges"] {
   ]) {
     addMissingMethod(tree, method, "recharges");
   }
-  return tree as SdkworkOrderAppService["recharges"];
+  return tree as unknown as SdkworkOrderAppService["recharges"];
 }
 
 function addMissingMethod(root: Record<string, unknown>, method: string, prefix = "orders"): void {

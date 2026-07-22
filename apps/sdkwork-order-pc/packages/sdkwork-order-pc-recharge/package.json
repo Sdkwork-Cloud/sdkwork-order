@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "PC points recharge package picker and QR checkout dialog.",
+  "description": "PC points recharge package picker and QR checkout dialog or inline surface.",
   "exports": {
     ".": {
       "types": "./src/index.ts",

@@ -45,13 +45,6 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "orders.list",
     ),
     HttpRoute::dual_token(
-        HttpMethod::Post,
-        "/app/v3/api/orders",
-        "orders",
-        "orders.create",
-    )
-    .with_idempotent(true),
-    HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/orders/statistics",
         "orders",
@@ -74,13 +67,6 @@ const HTTP_ROUTES: &[HttpRoute] = &[
         "/app/v3/api/orders/{orderId}/payments",
         "orders",
         "orders.payments.create",
-    )
-    .with_idempotent(true),
-    HttpRoute::dual_token(
-        HttpMethod::Post,
-        "/app/v3/api/orders/{orderId}/cancel",
-        "orders",
-        "orders.cancel",
     )
     .with_idempotent(true),
     HttpRoute::dual_token(

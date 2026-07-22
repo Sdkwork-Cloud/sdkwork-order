@@ -25,7 +25,7 @@ use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_created_item,
     success_item, success_items, unauthorized, validation,
 };
-use crate::command_headers::{validate_app_write_payload, write_payload_with_route_param};
+use crate::command_headers::required_app_write_command_headers;
 use crate::subject::app_runtime_subject_from_contexts;
 
 pub type CommerceAfterSalesFuture<'a, T> =
@@ -290,13 +290,9 @@ async fn create_after_sales_request(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "afterSales.requests.create",
-        &body,
-        |idempotency_key| format!("after-sales-{}-{}", subject.user_id, idempotency_key),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("after-sales-{}-{}", subject.user_id, idempotency_key)
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };
@@ -376,15 +372,9 @@ async fn update_after_sales_request(
     if body.reviewer_note.is_some() {
         return validation(ctx, "reviewer_note is not writable by owner");
     }
-    let payload =
-        write_payload_with_route_param("afterSalesRequestId", &after_sales_request_id, &body);
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "afterSales.requests.update",
-        &payload,
-        |idempotency_key| format!("after-sales-update-{}-{}", subject.user_id, idempotency_key),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("after-sales-update-{}-{}", subject.user_id, idempotency_key)
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };
@@ -569,15 +559,9 @@ async fn create_after_sales_return_shipment(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let payload =
-        write_payload_with_route_param("afterSalesRequestId", &after_sales_request_id, &*body);
-    let write_headers = match validate_app_write_payload(
-        ctx,
-        &headers,
-        "afterSales.returnShipments.create",
-        &payload,
-        |idempotency_key| format!("after-sales-return-{}-{}", subject.user_id, idempotency_key),
-    ) {
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("after-sales-return-{}-{}", subject.user_id, idempotency_key)
+    }) {
         Ok(value) => value,
         Err(response) => return *response,
     };

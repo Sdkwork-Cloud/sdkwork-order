@@ -46,11 +46,9 @@ fn order_web_security_policy_from_env() -> (WebEnvironment, SecurityPolicy) {
         ],
     );
     for header in [
-        "sdkwork-request-hash",
         "sdkwork-request-no",
         "traceparent",
         "tracestate",
-        "x-idempotency-fingerprint",
         "x-sdkwork-locale",
     ] {
         if !policy

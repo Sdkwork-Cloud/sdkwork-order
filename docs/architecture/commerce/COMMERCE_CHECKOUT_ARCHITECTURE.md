@@ -72,8 +72,6 @@ sequenceDiagram
     Order->>Order: in-process settlement saga
 ```
 
-Legacy payment gateway path `POST /app/v3/api/payments/webhooks/{provider}` returns **410 Gone** with migration guidance.
-
 Manual operator replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations`.
 
 ### 2.4 Membership purchase

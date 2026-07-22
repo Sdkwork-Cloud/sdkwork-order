@@ -1617,16 +1617,6 @@
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
           }
         ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
         "x-sdkwork-idempotent": true,
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",
@@ -2086,16 +2076,6 @@
             "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
           }
         ],
-        "requestBody": {
-          "required": false,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CommerceOperationCommand"
-              }
-            }
-          }
-        },
         "x-sdkwork-idempotent": true,
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",

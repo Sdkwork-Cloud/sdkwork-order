@@ -42,7 +42,7 @@ OperationIds per `RPC_SPEC.md` — routes owned by **order** repository:
 | Create recharge order | `recharges.orders.create` | Writes `commerce_order`, `subject=points_recharge` |
 | Retrieve recharge order | `recharges.orders.retrieve` | Same as order detail |
 | List recharge orders | `recharges.orders.list` | Filter on unified `orders.list` |
-| Cancel | `recharges.orders.cancel` / `orders.cancel` | |
+| Cancel | `recharges.orders.cancel` | Recharge-specific cancellation command |
 | Create payment | `orders.payments.create` | Orchestrates Payment intent for `orderId` |
 
 Backend admin: `RechargeAdminService` (package publish) on order-backend-api.
@@ -59,8 +59,6 @@ Backend admin: `RechargeAdminService` (package publish) on order-backend-api.
 ```
 
 Production path: **webhook ingestion** on the **order gateway** (`POST /app/v3/api/orders/payments/webhooks/{providerCode}`) verifies the PSP signature, calls the payment repository port, then runs settlement in-process when status maps to `succeeded`. **Manual replay** uses `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
-
-Legacy `POST /app/v3/api/payments/webhooks/{providerCode}` on the payment gateway returns **410 Gone** with a migration hint.
 
 Saga entrypoints (order-service):
 
@@ -90,9 +88,8 @@ Order **must not** call payment provider SDK directly; use Payment service/repos
 
 | Artifact | Content |
 | --- | --- |
-| `@sdkwork/order-sdk-ports` | Extend `APP_ORDER_METHOD_TREE` with `recharges` |
-| `@sdkwork/order-app-sdk` | Generated `recharges.*` + existing `orders.*` |
-| `@sdkwork/order-service` | Facade; no account methods |
+| `@sdkwork/order-app-sdk` | Generated owner-only `recharges.*` and `orders.*` resources |
+| `@sdkwork/order-service` | Injected facade typed directly from the generated app SDK; no account methods |
 
 ## 7. Create & pay boundary (O5 complete)
 
@@ -100,7 +97,7 @@ Order **must not** call payment provider SDK directly; use Payment service/repos
 
 Points grant metadata is stored on `commerce_order_item.sku_snapshot_json` and copied into payment attempt `callback_payload` when pay orchestrates.
 
-Legacy payment-local recharge SQL and routes were removed (P3). Deprecated `/app/v3/api/recharges/*` proxy in **sdkwork-payment** is **opt-in only** (`SDKWORK_PAYMENT_ENABLE_RECHARGE_PROXY=1`); new clients must call order app-api directly.
+Recharge SQL, routes, and lifecycle ownership belong exclusively to **sdkwork-order**. Clients call order app-api directly.
 
 ## 10. Gateway closure (O6 complete)
 
@@ -116,9 +113,9 @@ Permissions: `commerce.orders.fulfill` (order backend payment_confirmations).
 
 Recharge **app-api** responses use `SdkWorkApiResponse` (`code: 0`, `data.item` / `data.items` + `pageInfo`, `traceId`). Errors use `ProblemDetail` with numeric `code`.
 
-All order **app-api** routers (`orders`, `recharges`, `checkout`, `fulfillments`, `shipments`, `after_sales`) and order **backend** admin routes use the same v3 envelope via `sdkwork-utils-rust` (`SdkWorkApiResponse`, `SdkWorkProblemDetail`). Legacy `CommerceApiResult` / string wire codes are removed from handlers.
+All order **app-api** routers (`orders`, `recharges`, `checkout`, `fulfillments`, `shipments`, `after_sales`) and order **backend** admin routes use the same v3 envelope via `sdkwork-utils-rust` (`SdkWorkApiResponse`, `SdkWorkProblemDetail`).
 
-OpenAPI authority and generated `@sdkwork/order-app-sdk` use `SdkWorkApiResponse` (`pnpm align:openapi` + `pnpm sdk:generate`). Legacy `CommerceApiResult` and `requestId` are removed from the contract.
+OpenAPI authority and generated `@sdkwork/order-app-sdk` use `SdkWorkApiResponse`; `pnpm sync:openapi` and `pnpm sdk:generate` materialize the owner-only SDK family.
 
 Track phases in [commerce-recharge.spec.json](./commerce-recharge.spec.json).
 

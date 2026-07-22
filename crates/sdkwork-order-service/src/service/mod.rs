@@ -33,7 +33,6 @@ pub fn order_service_contract() -> CommerceServiceContract {
             "afterSales.requests.update",
             "afterSales.returnShipments.create",
             "afterSales.reviews.create",
-            "orders.cancel",
             "orders.cancellations.create",
             "orders.payments.create",
             "recharges.orders.create",

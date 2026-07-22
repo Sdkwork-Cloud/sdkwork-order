@@ -6,8 +6,6 @@ import type { WithdrawalRequestCreateCommand } from '../types';
 
 export interface WithdrawalsRequestsCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class WithdrawalsRequestsApi {
@@ -23,8 +21,6 @@ export class WithdrawalsRequestsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -38,11 +34,11 @@ export class WithdrawalsRequestsApi {
 }
 
 export class WithdrawalsApi {
-  private client: HttpClient;
+
   public readonly requests: WithdrawalsRequestsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.requests = new WithdrawalsRequestsApi(client);
   }
 
@@ -52,13 +48,7 @@ export function createWithdrawalsApi(client: HttpClient): WithdrawalsApi {
   return new WithdrawalsApi(client);
 }
 
-function appendQueryString(path: string, rawQueryString: string): string {
-  const query = rawQueryString.replace(/^\?+/, '');
-  if (!query) {
-    return path;
-  }
-  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
-}
+
 
 interface PathParameterSpec {
   name: string;

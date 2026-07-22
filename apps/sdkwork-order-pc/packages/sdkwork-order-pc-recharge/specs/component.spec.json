@@ -25,7 +25,10 @@
   "contracts": {
     "layerRole": "frontend-feature",
     "publicExports": ["."],
-    "providedPorts": [{ "name": "pointsRechargeDialog", "export": "." }],
+    "providedPorts": [
+      { "name": "pointsRechargeDialog", "export": "." },
+      { "name": "pointsRechargeInline", "export": "." }
+    ],
     "requiredPorts": [{ "name": "orderService", "export": ".", "package": "@sdkwork/order-service" }],
     "runtimeEntrypoints": ["package.json#scripts.typecheck"],
     "sdkClients": ["@sdkwork/order-service"],
@@ -35,7 +38,7 @@
   },
   "integration": {
     "authority": "Root SDKWork specs remain authoritative.",
-    "dependencyPolicy": "The dialog consumes the injected order service and never constructs HTTP clients.",
+    "dependencyPolicy": "The dialog and inline component consume the injected order service and never construct HTTP clients.",
     "sdkPolicy": "All app-api calls delegate to @sdkwork/order-service backed by @sdkwork/order-app-sdk."
   },
   "verification": { "commands": ["pnpm --filter @sdkwork/order-pc-recharge typecheck"] }

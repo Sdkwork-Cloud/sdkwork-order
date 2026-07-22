@@ -36,17 +36,16 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
   );
 
   const cancelPost =
-    appSpec.paths["/app/v3/api/orders/{orderId}/cancel"]?.post;
+    appSpec.paths["/app/v3/api/orders/{orderId}/cancellations"]?.post;
   assert.ok(cancelPost?.["x-sdkwork-idempotent"]);
-  assert.ok(
-    cancelPost?.parameters?.some(
-      (entry) =>
-        entry?.$ref === "#/components/parameters/WriteCommandRequestHash" ||
-        entry?.name === "Sdkwork-Request-Hash",
-    ),
+  assert.equal(cancelPost.operationId, "orders.cancellations.create");
+  assert.equal(appSpec.paths["/app/v3/api/orders"]?.post, undefined);
+  assert.equal(
+    appSpec.paths["/app/v3/api/orders/{orderId}/cancel"],
+    undefined,
   );
 
-  for (const [surface, spec] of [["app", appSpec], ["backend", backendSpec]]) {
+  for (const [, spec] of [["app", appSpec], ["backend", backendSpec]]) {
     for (const [path, methods] of Object.entries(spec.paths ?? {})) {
       for (const [method, operation] of Object.entries(methods ?? {})) {
         if (!operation?.["x-sdkwork-idempotent"]) {
@@ -69,15 +68,30 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
             entry?.name === "X-Idempotency-Fingerprint",
         );
         assert.ok(hasIdempotency, `${method.toUpperCase()} ${path} (${operation.operationId}) must declare Idempotency-Key`);
-        if (surface === "backend") {
-          assert.equal(hasRequestHash, false, `${method.toUpperCase()} ${path} must not expose Sdkwork-Request-Hash`);
-          assert.equal(hasBodyFingerprint, false, `${method.toUpperCase()} ${path} must not expose X-Idempotency-Fingerprint`);
-        } else {
-          assert.ok(hasRequestHash && hasBodyFingerprint, `${method.toUpperCase()} ${path} must keep app write-command compatibility headers`);
-        }
+        assert.equal(hasRequestHash, false, `${method.toUpperCase()} ${path} must not expose Sdkwork-Request-Hash`);
+        assert.equal(hasBodyFingerprint, false, `${method.toUpperCase()} ${path} must not expose X-Idempotency-Fingerprint`);
       }
     }
   }
+
+  const checkoutCreate =
+    appSpec.paths["/app/v3/api/checkout/sessions"]?.post;
+  assert.equal(
+    checkoutCreate?.requestBody?.content?.["application/json"]?.schema?.$ref,
+    "#/components/schemas/CreateCheckoutSessionRequest",
+  );
+  assert.equal(
+    checkoutCreate?.responses?.["201"]?.content?.["application/json"]?.schema?.$ref,
+    "#/components/schemas/CreateCheckoutSessionResponse",
+  );
+  assert.equal(
+    appSpec.paths["/app/v3/api/checkout/sessions/{checkoutSessionId}/quotes"]?.post?.requestBody,
+    undefined,
+  );
+  assert.equal(
+    appSpec.paths["/app/v3/api/checkout/sessions/{checkoutSessionId}/orders"]?.post?.requestBody,
+    undefined,
+  );
 
   assert.equal(
     backendSpec.components.parameters.WriteCommandIdempotencyKey.required,
@@ -117,18 +131,19 @@ test("order route manifests are exported from gateway assembly", () => {
   assert.match(assemblyLib, /order_contract_fallback_config/);
 });
 
-test("standalone gateway CORS allows SDK write-command headers", () => {
-  const mainRs = fs.readFileSync(
-    path.join(repoRoot, "crates/sdkwork-api-order-standalone-gateway/src/main.rs"),
-    "utf8",
-  );
-
-  for (const header of [
-    "idempotency-key",
-    "sdkwork-request-hash",
-    "x-idempotency-fingerprint",
+test("order routes do not retain client-owned request fingerprint headers", () => {
+  for (const relativePath of [
+    "crates/sdkwork-routes-order-app-api/src",
+    "crates/sdkwork-routes-order-backend-api/src",
   ]) {
-    assert.match(mainRs, new RegExp(`from_static\\("${header}"\\)`));
+    const source = fs
+      .readdirSync(path.join(repoRoot, relativePath), { recursive: true })
+      .filter((entry) => String(entry).endsWith(".rs"))
+      .map((entry) =>
+        fs.readFileSync(path.join(repoRoot, relativePath, String(entry)), "utf8"),
+      )
+      .join("\n");
+    assert.doesNotMatch(source, /Sdkwork-Request-Hash|X-Idempotency-Fingerprint/);
   }
 });
 

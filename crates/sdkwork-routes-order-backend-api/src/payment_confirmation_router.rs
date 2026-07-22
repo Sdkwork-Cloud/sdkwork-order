@@ -26,9 +26,7 @@ use sqlx::{PgPool, SqlitePool};
 use crate::api_response::{
     forbidden, map_service_error, not_found, success_created_item, unauthorized, validation,
 };
-use crate::backend_command_headers::{
-    validate_backend_write_payload, write_payload_with_route_param,
-};
+use crate::backend_command_headers::resolve_backend_write_command_headers;
 
 use crate::subject::{backend_operator_scope_from_iam, BackendOperatorScope};
 
@@ -174,17 +172,13 @@ async fn confirm_order_payment(
         return validation(ctx, "request_no is required");
     }
 
-    let payload = write_payload_with_route_param("orderId", &order_id, &body);
-    let _write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "orders.paymentConfirmations.create",
-        &payload,
-        |idempotency_key| format!("pay-confirm-{order_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let _write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("pay-confirm-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
 
     let credit_port = state.credit_port.clone();
     let account_value_ledger_port = state.account_value_ledger_port.clone();

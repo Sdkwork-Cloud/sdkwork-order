@@ -1,23 +1,23 @@
-import {
-  APP_ORDER_METHOD_TREE,
-  type ClientFromMethodTree,
-  type OrderAppSdkClient,
-  type OrderSdkMethod,
-} from "@sdkwork/order-sdk-ports";
+import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
 import { formatCurrency as formatSdkworkCurrency } from "@sdkwork/utils";
 import {
-  createOrderAppSdkClientFromTransport,
   createOrderAppTransportClient,
   type BootstrapSdkworkOrderAppServiceInput,
 } from "./transport.ts";
-import { createSdkworkWriteCommandHeaders } from "./write-command-headers.ts";
+import { createSdkworkIdempotencyParams } from "./idempotency.ts";
 
-type ServiceTemplate = { readonly [key: string]: true | ServiceTemplate };
+type PublicSdkPort<T> = {
+  readonly [TKey in keyof T]: T[TKey] extends (...args: infer TArgs) => infer TResult
+    ? (...args: TArgs) => TResult
+    : T[TKey] extends object
+      ? PublicSdkPort<T[TKey]>
+      : T[TKey];
+};
 
-export type SdkworkOrderOrdersService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["orders"]>;
-export type SdkworkOrderRechargesService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["recharges"]>;
-export type SdkworkOrderMembershipsService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["memberships"]>;
-export type SdkworkOrderWithdrawalsService = ClientFromMethodTree<(typeof APP_ORDER_METHOD_TREE)["withdrawals"]>;
+export type SdkworkOrderOrdersService = PublicSdkPort<SdkworkAppClient["orders"]>;
+export type SdkworkOrderRechargesService = PublicSdkPort<SdkworkAppClient["recharges"]>;
+export type SdkworkOrderMembershipsService = PublicSdkPort<SdkworkAppClient["memberships"]>;
+export type SdkworkOrderWithdrawalsService = PublicSdkPort<SdkworkAppClient["withdrawals"]>;
 
 export type SdkworkOrderAppService = {
   memberships: SdkworkOrderMembershipsService;
@@ -123,7 +123,7 @@ export type SdkworkOrderSessionTokenProvider = () => SdkworkOrderSessionTokens;
 let sdkworkOrderSessionTokenProvider: SdkworkOrderSessionTokenProvider = () => ({});
 
 export interface CreateSdkworkOrderAppServiceInput {
-  appClient: OrderAppSdkClient;
+  appClient: PublicSdkPort<SdkworkAppClient>;
 }
 
 export interface SdkworkOrderResponseEnvelope<T> {
@@ -196,26 +196,10 @@ export function requireSdkworkOrderSession(message = "Authentication required"):
 
 export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppServiceInput): SdkworkOrderAppService {
   return {
-    memberships: buildServiceTree<SdkworkOrderMembershipsService>(
-      APP_ORDER_METHOD_TREE.memberships,
-      input.appClient.commerce.memberships,
-      ["commerce", "memberships"],
-    ),
-    orders: buildServiceTree<SdkworkOrderOrdersService>(
-      APP_ORDER_METHOD_TREE.orders,
-      input.appClient.commerce.orders,
-      ["commerce", "orders"],
-    ),
-    recharges: buildServiceTree<SdkworkOrderRechargesService>(
-      APP_ORDER_METHOD_TREE.recharges,
-      input.appClient.commerce.recharges,
-      ["commerce", "recharges"],
-    ),
-    withdrawals: buildServiceTree<SdkworkOrderWithdrawalsService>(
-      APP_ORDER_METHOD_TREE.withdrawals,
-      input.appClient.commerce.withdrawals,
-      ["commerce", "withdrawals"],
-    ),
+    memberships: input.appClient.memberships,
+    orders: input.appClient.orders,
+    recharges: input.appClient.recharges,
+    withdrawals: input.appClient.withdrawals,
   };
 }
 
@@ -251,8 +235,8 @@ export function createSdkworkPointsRechargeService(
         subject: "points_recharge" as const,
         targetAsset: "points" as const,
       };
-      const headers = createSdkworkWriteCommandHeaders("recharges.orders.create", body);
-      const response = await resolveAppService().recharges.orders.create(body, headers);
+      const params = createSdkworkIdempotencyParams();
+      const response = await resolveAppService().recharges.orders.create(body, params);
       return normalizePointsRechargePayment(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to create points recharge order."),
       );
@@ -290,11 +274,8 @@ export function createSdkworkCouponRechargeService(
         subject: "coupon_recharge" as const,
         targetAsset: "token_bank" as const,
       };
-      const headers = createSdkworkWriteCommandHeaders(
-        "recharges.orders.create",
-        body,
-      );
-      const response = await resolveAppService().recharges.orders.create(body, headers);
+      const params = createSdkworkIdempotencyParams();
+      const response = await resolveAppService().recharges.orders.create(body, params);
       return normalizeCouponRechargeResult(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to redeem this coupon."),
       );
@@ -322,12 +303,8 @@ export function createSdkworkMembershipCheckoutService(
         paymentMethod,
         paymentProduct,
       };
-      const headers = createSdkworkWriteCommandHeaders(
-        "memberships.orders.create",
-        body,
-        `membership-checkout:${packageId}:${input.action}`,
-      );
-      const response = await resolveAppService().memberships.orders.create(body, headers);
+      const params = createSdkworkIdempotencyParams();
+      const response = await resolveAppService().memberships.orders.create(body, params);
       return normalizeMembershipCheckoutPayment(
         unwrapSdkworkOrderResource<unknown>(response, "Unable to create membership order."),
         input.packageId,
@@ -604,57 +581,6 @@ function normalizePointsRechargeStatus(value: unknown): SdkworkPointsRechargePay
   return "pending";
 }
 
-function buildServiceTree<TService>(
-  template: ServiceTemplate,
-  client: unknown,
-  missingPathPrefix: readonly string[],
-  servicePath: readonly string[] = [],
-): TService {
-  const service: Record<string, unknown> = {};
-  for (const [key, marker] of Object.entries(template)) {
-    const nextServicePath = [...servicePath, key];
-    if (marker === true) {
-      const missingPath = [...missingPathPrefix, ...nextServicePath].join(".");
-      service[key] = (...args: Parameters<OrderSdkMethod>) =>
-        callOrder(readMethod(client, nextServicePath), missingPath, ...args);
-    } else {
-      service[key] = buildServiceTree<Record<string, unknown>>(
-        marker,
-        client,
-        missingPathPrefix,
-        nextServicePath,
-      );
-    }
-  }
-  return service as TService;
-}
-
-function readMethod(root: unknown, path: readonly string[]): OrderSdkMethod | undefined {
-  let node: unknown = root;
-  for (const segment of path) {
-    if (!node || typeof node !== "object") {
-      return undefined;
-    }
-    const parent = node;
-    node = (parent as Record<string, unknown>)[segment];
-    if (typeof node === "function") {
-      return node.bind(parent) as OrderSdkMethod;
-    }
-  }
-  return typeof node === "function" ? (node as OrderSdkMethod) : undefined;
-}
-
-async function callOrder(
-  method: OrderSdkMethod | undefined,
-  name: string,
-  ...args: Parameters<OrderSdkMethod>
-): Promise<unknown> {
-  if (!method) {
-    throw new Error(`Missing SDKWork order SDK resource: ${name}`);
-  }
-  return method(...args);
-}
-
 function normalizeSessionToken(value: unknown): string | undefined {
   const normalized = typeof value === "string" ? value.trim() : "";
   return normalized || undefined;
@@ -675,14 +601,13 @@ export function bootstrapSdkworkOrderAppService(
 ): SdkworkOrderAppService {
   const transport = createOrderAppTransportClient(input);
   const service = createSdkworkOrderAppService({
-    appClient: createOrderAppSdkClientFromTransport(transport),
+    appClient: transport,
   });
   configureSdkworkOrderAppServiceProvider(() => service);
   return service;
 }
 
 export {
-  createOrderAppSdkClientFromTransport,
   createOrderAppTransportClient,
   resolveOrderAppApiOrigin,
   type BootstrapSdkworkOrderAppServiceInput,
@@ -698,18 +623,6 @@ export {
 } from "./backend-transport.ts";
 
 export {
-  checkoutOwnerOrderRequestHash,
-  checkoutQuoteRequestHash,
-  checkoutSessionRequestHash,
-  createCheckoutOwnerOrderWriteHeaders,
-  createCheckoutQuoteWriteHeaders,
-  createCheckoutSessionWriteHeaders,
-  createSdkworkWriteCommandHeaders,
-  stableCommandRequestHash,
-  stableJsonRequestHash,
-  writePayloadWithRouteParam,
-  type CheckoutOwnerOrderHashInput,
-  type CheckoutQuoteHashInput,
-  type CheckoutSessionHashInput,
-  type SdkworkWriteCommandHeaders,
-} from "./write-command-headers.ts";
+  createSdkworkIdempotencyParams,
+  type SdkworkIdempotencyParams,
+} from "./idempotency.ts";

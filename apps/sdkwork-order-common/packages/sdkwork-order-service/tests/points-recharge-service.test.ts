@@ -25,6 +25,7 @@ function createAppService(overrides: {
       memberships: {} as SdkworkOrderAppService["memberships"],
       orders: {} as SdkworkOrderAppService["orders"],
       recharges: {
+        plans: { list: vi.fn() },
         packages: {
           list: vi.fn().mockResolvedValue(overrides.packages ?? {
             items: [
@@ -75,7 +76,6 @@ describe("createSdkworkPointsRechargeService", () => {
       },
       expect.objectContaining({
         idempotencyKey: expect.any(String),
-        sdkworkRequestHash: expect.stringContaining("recharges.orders.create"),
       }),
     );
   });
@@ -134,7 +134,6 @@ describe("createSdkworkCouponRechargeService", () => {
       },
       expect.objectContaining({
         idempotencyKey: expect.any(String),
-        sdkworkRequestHash: expect.stringContaining("recharges.orders.create"),
       }),
     );
     expect(create.mock.calls[0]?.[0]).not.toHaveProperty("grantAmount");

@@ -44,7 +44,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "54539192dafe64ddc20beb8d4e3b6e6e70b9d276734896d78e8cffa78d859d0e"
+      "sha256": "52477b3fea9c6f0eaca22008be1b96e59e58265654401331c1c078f6dc307e63"
     },
     {
       "path": "sdkwork-sdk.json",
@@ -52,7 +52,7 @@
     },
     {
       "path": "src/api/after-sales.ts",
-      "sha256": "0630f27b110e091c14c867cbbcefc768830faedfb76908c876ef8c9533670ed9"
+      "sha256": "41a887a2716a85dd6b164ac35c4e5a15961c3373bd4133d8da6571b5399c33f0"
     },
     {
       "path": "src/api/base.ts",
@@ -60,7 +60,7 @@
     },
     {
       "path": "src/api/checkout.ts",
-      "sha256": "5ca41fec5b3efd152b6313a045ce2b705e581156cb76e86f324487ee7c4d5a3d"
+      "sha256": "6b50daa02421b0239a42401285d3c91f0bb55262644fe883807f8ff1eec913f9"
     },
     {
       "path": "src/api/fulfillments.ts",
@@ -72,11 +72,11 @@
     },
     {
       "path": "src/api/memberships.ts",
-      "sha256": "1104108311dd4c6c8982ae63fb955d869116f5276599a4e37e9e607347068c85"
+      "sha256": "aacee3970ff79470d05abcb19ae74acf7f783b3b3d08f8f01d6d9f5c385da96b"
     },
     {
       "path": "src/api/orders.ts",
-      "sha256": "5cab1bc2f2983e304b24787cd6ea195445a0523d247fb42547cbaf4bb51f3275"
+      "sha256": "d625016f6abf0cfe45a4c4f2fe22e50a82f874cebbb20a176f4dd21953d0c6b2"
     },
     {
       "path": "src/api/paths.ts",
@@ -84,11 +84,11 @@
     },
     {
       "path": "src/api/payments.ts",
-      "sha256": "a7f4770234ef5c6a0257edb059ad9bd5aa4b49d8755ce38054d270b666283e65"
+      "sha256": "cc1a5716d19cbd43e412fb5f202e10daf1dd83cf109b6f5beea734d972003ced"
     },
     {
       "path": "src/api/recharges.ts",
-      "sha256": "fe0013fd89e009f8f535e6736692004343a59b172d73267d1bdad16abf2abf08"
+      "sha256": "3f5d8eac1ee545dd4de2289272509ad33aaf769c5c77812482bdf32ebb98f0a9"
     },
     {
       "path": "src/api/shipments.ts",
@@ -96,7 +96,7 @@
     },
     {
       "path": "src/api/withdrawals.ts",
-      "sha256": "be5d62542528c48f6ac95096f40a1fc6b18b7b8fa9356bbea1aafceabb3398df"
+      "sha256": "ff55089e1914d06bc0ef4332b39740bba0e6b5b5a324d231db38ca66cfcf2173"
     },
     {
       "path": "src/auth/index.ts",
@@ -136,15 +136,15 @@
     },
     {
       "path": "src/types/after-sales-requests-create-response201.ts",
-      "sha256": "ec2720e6ba24d00becfb8f53e2fba1ff71fb6e405e7b7f87d154a960d70b8ef6"
+      "sha256": "c32ed15fa2e2c8845870aae3b4204e3363fca4a668a239a9879da4c03bbf12dc"
     },
     {
       "path": "src/types/after-sales-requests-retrieve-response.ts",
-      "sha256": "4174762bef4280513db5486c264d08c0bb4c5dff0df3e89c274b920580c9d7e4"
+      "sha256": "917f904fa2fd5beccae0bc055c94de735c76e7c4f83cc7bab2c6f59bfb8fd412"
     },
     {
       "path": "src/types/after-sales-requests-update-response.ts",
-      "sha256": "0f6dac4875e5b568725db473b3dc1a9335bcd329da494c9a1fc0923ffed74f97"
+      "sha256": "b044146d80b6c329e1b158b8a0578171e9514e940a7a8ac57059ea8de20dcb67"
     },
     {
       "path": "src/types/after-sales-return-shipment-response.ts",
@@ -156,7 +156,27 @@
     },
     {
       "path": "src/types/after-sales-return-shipments-create-response201.ts",
-      "sha256": "15f64c43ab9d081a66c5485130dd671db12fe1e0df292eac84667e2ecaf882ee"
+      "sha256": "ad78dc11093678f62288baba6ce54e5454a35b9b8785650781e6121bb17696b8"
+    },
+    {
+      "path": "src/types/checkout-line-request.ts",
+      "sha256": "39bba24a3481dcbf95d501e0a75eb2f645e2d52394da20a63b18c0aaadaeadde"
+    },
+    {
+      "path": "src/types/checkout-order.ts",
+      "sha256": "757c813d981f076f6658e98eeefcf704e92fb049b1d01b436c602c0d1a0d88ec"
+    },
+    {
+      "path": "src/types/checkout-quote.ts",
+      "sha256": "8d0633985d5fc753a1e99281d5ec3225f29336ad5cb62b3ccd873733f02f4e48"
+    },
+    {
+      "path": "src/types/checkout-session-response.ts",
+      "sha256": "ba14899abd05ca09328a5231d3ac84e83447a3242260f63d579421465679aeb4"
+    },
+    {
+      "path": "src/types/checkout-session.ts",
+      "sha256": "e89ef8e78c11f3e6b468bd5e9cfd3400883dc6a0476bba62fe1ea628e5d15d9b"
     },
     {
       "path": "src/types/commerce-operation-command.ts",
@@ -179,12 +199,28 @@
       "sha256": "ba226aa759e7cecd427afd56af660d7e4e2e75f2211098a05275e81e2a6f9f52"
     },
     {
+      "path": "src/types/create-checkout-order-response.ts",
+      "sha256": "4d087a41779db20218f0917e409937299b8c59dee8eef2ca0f0f58e1a76b7a1b"
+    },
+    {
+      "path": "src/types/create-checkout-quote-response.ts",
+      "sha256": "15e0410911e4e92260825759953154f488923e0d24b22d9ec426c42fd53aa193"
+    },
+    {
+      "path": "src/types/create-checkout-session-request.ts",
+      "sha256": "42191ec3b654f32e342b898333972d3cc53142989825ba378fbff717cb23bc70"
+    },
+    {
+      "path": "src/types/create-checkout-session-response.ts",
+      "sha256": "6af7c90729229616b2827b4be88440d31385e77682103790eda4c9173fa71046"
+    },
+    {
       "path": "src/types/field-error.ts",
       "sha256": "df70e331e6bff0817bc35428286fa8de5d7274ab83a6c60d7184759bf680a088"
     },
     {
       "path": "src/types/index.ts",
-      "sha256": "91b0f888c8315b95a5979903efab8cb0669165e9db1c246d073f7ff841bd5fbc"
+      "sha256": "873f7a40b9f537a61a5102241316cd0db43c51f5ac95bd86832a766866cd1821"
     },
     {
       "path": "src/types/membership-order-create-command.ts",
@@ -192,7 +228,7 @@
     },
     {
       "path": "src/types/membership-order-create-response.ts",
-      "sha256": "24ff4547949cb9656a53c980df732091a62211c97c2cf1b3d6795d66f83952fa"
+      "sha256": "248261eb8f186b17be3561955a5a5903735bcc5c89b3744e60b54f4dc1593d90"
     },
     {
       "path": "src/types/membership-order-create-result.ts",

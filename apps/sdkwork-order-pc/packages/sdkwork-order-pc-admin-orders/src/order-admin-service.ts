@@ -6,11 +6,10 @@ import type {
   SdkworkOrderBackendClient,
 } from "@sdkwork/order-pc-admin-core";
 import {
-  createSdkworkWriteCommandHeaders,
+  createSdkworkIdempotencyParams,
   resolveSdkworkOffsetPagination,
   unwrapSdkworkOrderListPage,
   unwrapSdkworkOrderResource,
-  writePayloadWithRouteParam,
 } from "@sdkwork/order-service";
 
 export interface OrderAdminListQuery {
@@ -68,15 +67,19 @@ export function createOrderAdminService(
     },
     async cancelOrder(orderId, body) {
       const requestBody = body ?? { reason: "platform-cancel" };
-      const payload = writePayloadWithRouteParam("orderId", orderId, requestBody);
-      const { idempotencyKey } = createSdkworkWriteCommandHeaders("orders.admin.cancel", payload);
-      await client.orders.admin.cancel(orderId, requestBody, { idempotencyKey });
+      await client.orders.admin.cancel(
+        orderId,
+        requestBody,
+        createSdkworkIdempotencyParams(),
+      );
     },
     async closeOrder(orderId, body) {
       const requestBody = body ?? { reason: "platform-close" };
-      const payload = writePayloadWithRouteParam("orderId", orderId, requestBody);
-      const { idempotencyKey } = createSdkworkWriteCommandHeaders("orders.admin.close", payload);
-      await client.orders.admin.close(orderId, requestBody, { idempotencyKey });
+      await client.orders.admin.close(
+        orderId,
+        requestBody,
+        createSdkworkIdempotencyParams(),
+      );
     },
   };
 }

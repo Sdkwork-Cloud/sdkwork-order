@@ -4,7 +4,6 @@ import {
   type SdkworkAppClient as OrderAppTransportClient,
   type SdkworkAppConfig,
 } from "@sdkwork/order-app-sdk";
-import type { OrderAppSdkClient } from "@sdkwork/order-sdk-ports";
 
 const APP_API_SUFFIX = "/app/v3/api";
 
@@ -14,19 +13,6 @@ export function resolveOrderAppApiOrigin(baseUrl: string): string {
     return trimmed.slice(0, -APP_API_SUFFIX.length);
   }
   return trimmed;
-}
-
-export function createOrderAppSdkClientFromTransport(
-  transport: OrderAppTransportClient,
-): OrderAppSdkClient {
-  return {
-    commerce: {
-      memberships: transport.memberships,
-      orders: transport.orders,
-      recharges: transport.recharges,
-      withdrawals: transport.withdrawals,
-    },
-  };
 }
 
 export interface BootstrapSdkworkOrderAppServiceInput {

@@ -29,25 +29,17 @@ All business responses use `SdkWorkApiResponse` (`code: 0`, `data`, `traceId`). 
 
 List endpoints accept `page` and `page_size` (default 20, max 200). Invalid pagination returns HTTP 400; values are not silently clamped. Nested lists (`orders/{orderId}/events`, `orders/{orderId}/payments`, `shipments/{shipmentId}/packages`, `shipments/{shipmentId}/tracking_events`, `recharges/packages`) use the same pagination contract. Order-scoped payment history is available at `GET /app/v3/api/orders/{orderId}/payments`. After-sales return shipments list at `GET /app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments`.
 
-Cancel commands (`orders.cancel`, `orders.cancellations.create`, `recharges.orders.cancel`) return `SdkWorkCommandResponse` with `data.accepted: true`.
+Cancel commands (`orders.cancellations.create`, `recharges.orders.cancel`) return `SdkWorkCommandResponse` with `data.accepted: true`.
 
 ## Write Command Headers
 
-All idempotent write operations (checkout, order create/pay/cancel, recharge submit/cancel, after-sales, backend cancel/close/review/shipment) require:
+All idempotent write operations (checkout, order create/pay/cancel, recharge submit/cancel, after-sales, backend cancel/close/review/shipment) use:
 
 | Header | Purpose |
 | --- | --- |
 | `Idempotency-Key` | Unique per logical command attempt (UUID recommended) |
-| `Sdkwork-Request-Hash` | Stable digest of operation scope + canonical JSON payload (includes route params where applicable) |
 
-OpenAPI marks these operations with `x-sdkwork-idempotent: true`. Generated TypeScript SDKs expose `idempotencyKey` and `sdkworkRequestHash` on each write call.
-
-| Hash style | Operations | Client helper |
-| --- | --- | --- |
-| Canonical JSON + route params | `orders.cancel`, `orders.cancellations.create`, `orders.payments.create`, `recharges.orders.create`, `memberships.orders.create`, after-sales, backend admin | `createSdkworkWriteCommandHeaders(operationId, payload)` |
-| Command digest (same operationId scope) | `checkout.sessions.create`, `checkout.sessions.quotes.create`, `checkout.sessions.orders.create` | `createCheckoutSessionWriteHeaders`, `createCheckoutQuoteWriteHeaders`, `createCheckoutOwnerOrderWriteHeaders` |
-
-Use the **operationId** as the hash scope for JSON-body writes. `/orders/{orderId}/cancel` (`orders.cancel`) and `/orders/{orderId}/cancellations` (`orders.cancellations.create`) are distinct routes with distinct scopes but identical behavior.
+OpenAPI marks these operations with `x-sdkwork-idempotent: true`. Generated SDKs expose only `idempotencyKey`; the service computes a canonical request fingerprint inside the authenticated tenant/principal and method/path scope. A replay with the same key and command returns the original/current result, while the same key with a different command returns HTTP 409.
 
 Replays against terminal order states (`cancelled`, `closed`) return success without duplicate audit rows.
 
@@ -65,11 +57,11 @@ Full topology: `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md`.
 | Points recharge | `recharges.orders.create` → `orders.payments.create` | Same; settlement via order webhook + in-process saga |
 | Membership purchase | `memberships.orders.create` → `orders.payments.create` | Same; settlement activates subscription via membership fulfillment port |
 
-PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**. Legacy payment webhook path returns 410 Gone.
+PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**.
 
 Operator settlement replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
 
-Webhook settlement carries the exact payment attempt identity through Payment and Order. The order-only operator replay remains backward compatible, but fails with `409` when multiple attempts make the target ambiguous; replay the exact Payment webhook event for that case. A successful late payment preserves a terminal Order status and records the Order-owned late-payment audit event once.
+Webhook settlement carries the exact payment attempt identity through Payment and Order. The order-only operator replay fails with `409` when multiple attempts make the target ambiguous; replay the exact Payment webhook event for that case. A successful late payment preserves a terminal Order status and records the Order-owned late-payment audit event once.
 
 Cashier URL is returned in `orders.payments.create` outcome `paymentParams.cashierUrl`. Configure base URL with `SDKWORK_COMMERCE_CASHIER_BASE_URL` (default `https://im.sdkwork.com/cashier`).
 

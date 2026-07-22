@@ -1,5 +1,5 @@
 import {
-  createSdkworkWriteCommandHeaders,
+  createSdkworkIdempotencyParams,
   getSdkworkOrderService,
   hasSdkworkOrderSession,
   requireSdkworkOrderSession,
@@ -11,7 +11,6 @@ import {
   unwrapSdkworkOrderListPage,
   unwrapSdkworkOrderResponse,
   readSdkworkMediaResource,
-  writePayloadWithRouteParam,
   type SdkworkOrderAppService,
   type SdkworkMediaResource,
 } from "@sdkwork/order-service";
@@ -484,10 +483,9 @@ export function createSdkworkOrderService(
         cancelReason: toSdkworkOrderOptionalString(input.cancelReason),
         cancelType: toSdkworkOrderOptionalString(input.cancelType),
       };
-      const payload = writePayloadWithRouteParam("orderId", input.orderId, body);
-      const writeHeaders = createSdkworkWriteCommandHeaders("orders.cancel", payload);
+      const params = createSdkworkIdempotencyParams();
       await unwrapSdkworkOrderResponse<void>(
-        await getOrderAppService().orders.cancel(input.orderId, writeHeaders, body),
+        await getOrderAppService().orders.cancellations.create(input.orderId, params, body),
         copy.cancelFailed,
       );
 
@@ -508,8 +506,6 @@ export function createSdkworkOrderService(
         getOrderAppService().orders.list({
             page,
             pageSize,
-            sortDirection: "desc",
-            sortField: "createdAt",
             ...(status ? { status } : {}),
         }),
         getOrderAppService().orders.statistics.retrieve(),
@@ -559,9 +555,9 @@ export function createSdkworkOrderService(
         paymentMethod: toSdkworkOrderOptionalString(input.paymentMethod),
         paymentPassword: toSdkworkOrderOptionalString(input.paymentPassword),
       };
-      const writeHeaders = createSdkworkWriteCommandHeaders("orders.payments.create", body);
+      const params = createSdkworkIdempotencyParams();
       const result = unwrapSdkworkOrderResponse<RemotePaymentParams>(
-        await getOrderAppService().orders.payments.create(input.orderId, body, writeHeaders),
+        await getOrderAppService().orders.payments.create(input.orderId, body, params),
         copy.payFailed,
       );
 

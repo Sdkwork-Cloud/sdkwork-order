@@ -2,7 +2,7 @@ import type { MembershipOrderCreateResult } from './membership-order-create-resu
 
 export interface MembershipOrderCreateResponse {
   code: 0;
-  data: unknown & Record<string, unknown>;
+  data: unknown & { item: MembershipOrderCreateResult; };
   /** Server-owned request correlation id. */
   traceId: string;
 }

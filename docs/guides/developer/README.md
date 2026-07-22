@@ -23,7 +23,7 @@ pnpm test:postgres  # optional Postgres parity when ORDER_TEST_POSTGRES_URL is s
 
 ## Write Command Headers
 
-Integrators and PC packages must send `Idempotency-Key` and `Sdkwork-Request-Hash` on every idempotent write. See [integrator guide](../integrator/README.md) and [TECH_ARCHITECTURE.md](../../architecture/tech/TECH_ARCHITECTURE.md).
+Integrators and PC packages send `Idempotency-Key` on every operation marked `x-sdkwork-idempotent`. The Order service owns canonical request fingerprinting and replay-conflict detection; consumers must not construct request-hash headers. See [integrator guide](../integrator/README.md) and [TECH_ARCHITECTURE.md](../../architecture/tech/TECH_ARCHITECTURE.md).
 
 ## Key Paths
 

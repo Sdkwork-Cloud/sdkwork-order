@@ -12,8 +12,6 @@ export interface OrdersRefundRequestsListParams {
 
 export interface OrdersRefundRequestsCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class OrdersRefundRequestsApi {
@@ -39,8 +37,6 @@ export class OrdersRefundRequestsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -97,8 +93,6 @@ export class OrdersPaymentSuccessApi {
 
 export interface OrdersCancellationsCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class OrdersCancellationsApi {
@@ -114,8 +108,6 @@ export class OrdersCancellationsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -162,8 +154,6 @@ export class OrdersPaymentsWebhooksApi {
 
 export interface OrdersPaymentsCreateParams {
   idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class OrdersPaymentsApi {
@@ -181,8 +171,6 @@ export class OrdersPaymentsApi {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
       },
       {}
     );
@@ -194,18 +182,6 @@ export interface OrdersListParams {
   status?: string;
   page?: number;
   pageSize?: number;
-}
-
-export interface OrdersCreateParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
-}
-
-export interface OrdersCancelParams {
-  idempotencyKey: string;
-  sdkworkRequestHash: string;
-  xIdempotencyFingerprint: string;
 }
 
 export class OrdersApi {
@@ -240,35 +216,9 @@ export class OrdersApi {
     return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query));
   }
 
-/** Orders create. */
-  async create(body: CommerceOperationCommand, params: OrdersCreateParams): Promise<Record<string, unknown>> {
-    const requestHeaders = buildRequestHeaders(
-      {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
-      },
-      {}
-    );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/orders`), body, undefined, requestHeaders, 'application/json');
-  }
-
 /** Orders retrieve. */
   async retrieve(orderId: string): Promise<Record<string, unknown>> {
     return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
-  }
-
-/** Orders cancel. */
-  async cancel(orderId: string, params: OrdersCancelParams, body?: CommerceOperationCommand): Promise<SdkWorkCommandData> {
-    const requestHeaders = buildRequestHeaders(
-      {
-        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
-        'Sdkwork-Request-Hash': { value: params.sdkworkRequestHash, style: 'simple', explode: false },
-        'X-Idempotency-Fingerprint': { value: params.xIdempotencyFingerprint, style: 'simple', explode: false },
-      },
-      {}
-    );
-    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, requestHeaders, 'application/json');
   }
 }
 

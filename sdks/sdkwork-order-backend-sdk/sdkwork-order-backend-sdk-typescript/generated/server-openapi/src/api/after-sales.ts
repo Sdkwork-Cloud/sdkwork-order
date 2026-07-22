@@ -45,7 +45,7 @@ export class AfterSalesManagementApi {
 
 
 /** List after-sales requests for operator review */
-  async list(params?: AfterSalesManagementListParams): Promise<Record<string, unknown>> {
+  async list(params?: AfterSalesManagementListParams): Promise<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'after_sales_type', value: params?.afterSalesType, style: 'form', explode: true, allowReserved: false },
@@ -53,7 +53,7 @@ export class AfterSalesManagementApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<Record<string, unknown>>(appendQueryString(backendApiPath(`/after_sales/requests`), query));
+    return this.client.get<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/after_sales/requests`), query));
   }
 
 /** Retrieve after-sales request for operator review */
@@ -63,12 +63,12 @@ export class AfterSalesManagementApi {
 }
 
 export class AfterSalesApi {
-  private client: HttpClient;
+
   public readonly management: AfterSalesManagementApi;
   public readonly reviews: AfterSalesReviewsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.management = new AfterSalesManagementApi(client);
     this.reviews = new AfterSalesReviewsApi(client);
   }

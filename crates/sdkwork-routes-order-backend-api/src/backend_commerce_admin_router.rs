@@ -36,9 +36,7 @@ use crate::api_response::{
     success_item, success_items,
 };
 use crate::backend_acl::{require_backend_operator, BackendOperatorScope};
-use crate::backend_command_headers::{
-    validate_backend_write_payload, write_payload_with_route_param,
-};
+use crate::backend_command_headers::resolve_backend_write_command_headers;
 
 mod permissions {
     pub const ACCOUNT_VALUE_MANAGE: &str = "commerce.accountValue.manage";
@@ -181,13 +179,6 @@ struct TokenBankPlanWriteBody {
 struct AccountValueRequestReviewBody {
     reason_code: Option<String>,
     review_comment: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Default)]
-#[serde(rename_all = "camelCase")]
-struct CommerceOperationCommandBody {
-    reason_code: Option<String>,
-    comment: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -689,16 +680,13 @@ async fn create_account_value_package(
             Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "backend.accountValuePackages.create",
-        &body,
-        |idempotency_key| format!("account-value-package-create-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("account-value-package-create-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match build_account_value_package_command(
         &subject,
         None,
@@ -731,17 +719,13 @@ async fn update_account_value_package(
             Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
-    let payload = write_payload_with_route_param("packageId", &package_id, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "backend.accountValuePackages.update",
-        &payload,
-        |idempotency_key| format!("account-value-package-update-{package_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("account-value-package-update-{package_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match build_account_value_package_command(
         &subject,
         Some(&package_id),
@@ -765,7 +749,6 @@ async fn retire_account_value_package(
     request_context: Option<Extension<WebRequestContext>>,
     headers: HeaderMap,
     Path(package_id): Path<String>,
-    body: Option<Json<CommerceOperationCommandBody>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject =
@@ -773,18 +756,13 @@ async fn retire_account_value_package(
             Ok(subject) => subject,
             Err(response) => return *response,
         };
-    let body = body.map(|Json(value)| value).unwrap_or_default();
-    let payload = write_payload_with_route_param("packageId", &package_id, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "backend.accountValuePackages.retire",
-        &payload,
-        |idempotency_key| format!("account-value-package-retire-{package_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("account-value-package-retire-{package_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match RetireAccountValuePackageCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -855,16 +833,13 @@ async fn create_token_bank_plan(
             Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "backend.tokenBankPlans.create",
-        &body,
-        |idempotency_key| format!("token-bank-plan-create-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("token-bank-plan-create-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match build_token_bank_plan_command(
         &subject,
         None,
@@ -897,17 +872,13 @@ async fn update_token_bank_plan(
             Err(response) => return *response,
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
-    let payload = write_payload_with_route_param("planCode", &plan_code, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "backend.tokenBankPlans.update",
-        &payload,
-        |idempotency_key| format!("token-bank-plan-update-{plan_code}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("token-bank-plan-update-{plan_code}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match build_token_bank_plan_command(
         &subject,
         Some(&plan_code),
@@ -931,7 +902,6 @@ async fn retire_token_bank_plan(
     request_context: Option<Extension<WebRequestContext>>,
     headers: HeaderMap,
     Path(plan_code): Path<String>,
-    body: Option<Json<CommerceOperationCommandBody>>,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
     let subject =
@@ -939,18 +909,13 @@ async fn retire_token_bank_plan(
             Ok(subject) => subject,
             Err(response) => return *response,
         };
-    let body = body.map(|Json(value)| value).unwrap_or_default();
-    let payload = write_payload_with_route_param("planCode", &plan_code, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "backend.tokenBankPlans.retire",
-        &payload,
-        |idempotency_key| format!("token-bank-plan-retire-{plan_code}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("token-bank-plan-retire-{plan_code}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match RetireTokenBankPlanCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -1017,8 +982,6 @@ async fn approve_refund_request(
         body.map(|Json(value)| value).unwrap_or_default(),
         AccountValueOrderSubject::RefundRequest,
         AccountValueRequestReviewAction::Approve,
-        "refundRequestId",
-        "backend.refundRequests.approve",
         "refund-approve",
     )
     .await
@@ -1041,8 +1004,6 @@ async fn reject_refund_request(
         body.map(|Json(value)| value).unwrap_or_default(),
         AccountValueOrderSubject::RefundRequest,
         AccountValueRequestReviewAction::Reject,
-        "refundRequestId",
-        "backend.refundRequests.reject",
         "refund-reject",
     )
     .await
@@ -1065,8 +1026,6 @@ async fn retry_refund_request(
         body.map(|Json(value)| value).unwrap_or_default(),
         AccountValueOrderSubject::RefundRequest,
         AccountValueRequestReviewAction::Retry,
-        "refundRequestId",
-        "backend.refundRequests.retry",
         "refund-retry",
     )
     .await
@@ -1089,8 +1048,6 @@ async fn approve_withdrawal_request(
         body.map(|Json(value)| value).unwrap_or_default(),
         AccountValueOrderSubject::CashWithdrawal,
         AccountValueRequestReviewAction::Approve,
-        "withdrawalRequestId",
-        "backend.withdrawalRequests.approve",
         "withdrawal-approve",
     )
     .await
@@ -1113,8 +1070,6 @@ async fn reject_withdrawal_request(
         body.map(|Json(value)| value).unwrap_or_default(),
         AccountValueOrderSubject::CashWithdrawal,
         AccountValueRequestReviewAction::Reject,
-        "withdrawalRequestId",
-        "backend.withdrawalRequests.reject",
         "withdrawal-reject",
     )
     .await
@@ -1137,8 +1092,6 @@ async fn retry_withdrawal_request(
         body.map(|Json(value)| value).unwrap_or_default(),
         AccountValueOrderSubject::CashWithdrawal,
         AccountValueRequestReviewAction::Retry,
-        "withdrawalRequestId",
-        "backend.withdrawalRequests.retry",
         "withdrawal-retry",
     )
     .await
@@ -1202,8 +1155,6 @@ async fn review_account_value_request_by_action(
     body: AccountValueRequestReviewBody,
     request_subject: AccountValueOrderSubject,
     action: AccountValueRequestReviewAction,
-    route_param_name: &'static str,
-    operation_id: &'static str,
     fallback_scope: &'static str,
 ) -> Response {
     let ctx = request_context.as_ref().map(|value| &value.0);
@@ -1212,17 +1163,13 @@ async fn review_account_value_request_by_action(
             Ok(subject) => subject,
             Err(response) => return *response,
         };
-    let payload = write_payload_with_route_param(route_param_name, &request_id, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        operation_id,
-        &payload,
-        |idempotency_key| format!("{fallback_scope}-{request_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("{fallback_scope}-{request_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match ReviewAccountValueRequestCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -1461,18 +1408,13 @@ async fn review_after_sales_request(
         Ok(subject) => subject,
         Err(response) => return *response,
     };
-    let payload =
-        write_payload_with_route_param("afterSalesRequestId", &after_sales_request_id, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "afterSales.reviews.create",
-        &payload,
-        |idempotency_key| format!("review-{after_sales_request_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("review-{after_sales_request_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match ReviewAfterSalesRequestCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -1615,17 +1557,13 @@ async fn create_management_shipment_package(
         Ok(subject) => subject,
         Err(response) => return *response,
     };
-    let payload = write_payload_with_route_param("shipmentId", &shipment_id, &body);
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "shipments.packages.create",
-        &payload,
-        |idempotency_key| format!("pkg-{shipment_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("pkg-{shipment_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let mut command = match CreateShipmentPackageCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -1660,24 +1598,13 @@ async fn update_management_shipment_package(
         Ok(subject) => subject,
         Err(response) => return *response,
     };
-    let payload = write_payload_with_route_param("packageId", &package_id, &body);
-    let mut payload = payload;
-    if let serde_json::Value::Object(ref mut fields) = payload {
-        fields.insert(
-            "shipmentId".to_string(),
-            serde_json::Value::String(shipment_id.clone()),
-        );
-    }
-    let write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "shipments.packages.update",
-        &payload,
-        |idempotency_key| format!("pkg-update-{package_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("pkg-update-{package_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let mut command = match UpdateShipmentPackageCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),

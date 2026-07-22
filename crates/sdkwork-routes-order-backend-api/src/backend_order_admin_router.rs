@@ -26,9 +26,7 @@ use crate::api_response::{
     offset_list_page_params_from_query, success_command, success_item, success_items, validation,
 };
 use crate::backend_acl::require_backend_operator;
-use crate::backend_command_headers::{
-    validate_backend_write_payload, write_payload_with_route_param,
-};
+use crate::backend_command_headers::resolve_backend_write_command_headers;
 use crate::backend_management_lifecycle::{
     cancel_management_order_with_payments, close_management_order_with_payments,
     BackendManagementOrderStore, BackendManagementPaymentStore,
@@ -331,17 +329,13 @@ async fn cancel_order(
         reason: None,
         cancel_type: None,
     });
-    let payload = write_payload_with_route_param("orderId", &order_id, &body);
-    let _write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "orders.admin.cancel",
-        &payload,
-        |idempotency_key| format!("admin-cancel-{order_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let _write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("admin-cancel-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match CancelManagementOrderCommand::with_cancel_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -377,17 +371,13 @@ async fn close_order(
         reason: None,
         close_type: None,
     });
-    let payload = write_payload_with_route_param("orderId", &order_id, &body);
-    let _write_headers = match validate_backend_write_payload(
-        ctx,
-        &headers,
-        "orders.admin.close",
-        &payload,
-        |idempotency_key| format!("admin-close-{order_id}-{idempotency_key}"),
-    ) {
-        Ok(value) => value,
-        Err(response) => return *response,
-    };
+    let _write_headers =
+        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+            format!("admin-close-{order_id}-{idempotency_key}")
+        }) {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
     let command = match CloseManagementOrderCommand::with_close_type(
         &subject.tenant_id,
         subject.organization_id.as_deref(),

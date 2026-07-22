@@ -65,7 +65,7 @@ Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the
 4. Enable Redis-backed rate limiting at the platform gateway layer when `sdkwork-web-framework` production assembly requires it.
 5. Points-recharge fulfillment is idempotent; payment callbacks may retry safely. Commit failure after wallet credit triggers automatic compensation debit and releases the `processing` reservation; operators may still replay via `payment_confirmations` if compensation fails.
 6. Order cancellation and close (buyer or admin) close payment intents **before** mutating order status to avoid payable terminal orders.
-7. Write commands require `Idempotency-Key` and `Sdkwork-Request-Hash`; a late successful payment does not reopen a terminal order and repeated settlement does not duplicate the `payment_succeeded_after_terminal` audit row.
+7. Write commands use `Idempotency-Key`; the server persists canonical request fingerprints and rejects same-key/different-command replays. A late successful payment does not reopen a terminal order, and repeated settlement does not duplicate the `payment_succeeded_after_terminal` audit row.
 
 ## Verification Before Release
 

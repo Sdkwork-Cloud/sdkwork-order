@@ -3,15 +3,12 @@
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use sdkwork_order_service::stable_json_request_hash;
 use sdkwork_utils_rust::{SdkWorkProblemDetail, SdkWorkResultCode};
 use sdkwork_web_core::WebRequestContext;
-use serde::Serialize;
 
 use crate::api_response::resolve_trace_id;
 
 pub const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
-pub const REQUEST_HASH_HEADER: &str = "Sdkwork-Request-Hash";
 pub const REQUEST_NO_HEADER: &str = "Sdkwork-Request-No";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,45 +22,11 @@ pub(crate) enum WriteCommandHeaderError {
     InvalidHeader(String),
 }
 
-pub fn write_payload_with_route_param(
-    route_param_key: &str,
-    route_param_value: &str,
-    body: &impl Serialize,
-) -> serde_json::Value {
-    let mut payload = serde_json::to_value(body).expect("write payload must serialize");
-    if let serde_json::Value::Object(ref mut fields) = payload {
-        fields.insert(
-            route_param_key.to_string(),
-            serde_json::Value::String(route_param_value.to_string()),
-        );
-    }
-    payload
-}
-
-pub fn validate_backend_write_payload(
+pub fn resolve_backend_write_command_headers(
     context: Option<&WebRequestContext>,
     headers: &HeaderMap,
-    scope: &str,
-    payload: &impl Serialize,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<BackendWriteCommandHeaders, Box<Response>> {
-    let expected_hash = stable_json_request_hash(scope, payload).map_err(|_| {
-        Box::new(write_command_header_error_to_response(
-            context,
-            WriteCommandHeaderError::InvalidHeader("command payload must serialize".to_string()),
-        ))
-    })?;
-    if optional_text_header(headers, REQUEST_HASH_HEADER)
-        .is_some_and(|request_hash| expected_hash.trim() != request_hash.trim())
-    {
-        let trace_id = resolve_trace_id(context);
-        return Err(Box::new(problem_response(
-            StatusCode::BAD_REQUEST,
-            SdkWorkResultCode::ValidationError,
-            "Sdkwork-Request-Hash does not match the command payload",
-            &trace_id,
-        )));
-    }
     let idempotency_key = match optional_text_header(headers, IDEMPOTENCY_KEY_HEADER) {
         Some(value) => validate_idempotency_key(value)
             .map_err(|error| Box::new(write_command_header_error_to_response(context, error)))?,
@@ -134,13 +97,9 @@ mod tests {
 
     #[test]
     fn omitted_client_idempotency_headers_are_generated_server_side() {
-        let parsed = validate_backend_write_payload(
-            None,
-            &HeaderMap::new(),
-            "orders.cancel",
-            &serde_json::json!({"orderId": "order-1"}),
-            |key| format!("cancel-{key}"),
-        )
+        let parsed = resolve_backend_write_command_headers(None, &HeaderMap::new(), |key| {
+            format!("cancel-{key}")
+        })
         .expect("optional headers");
 
         assert!(!parsed.idempotency_key.is_empty());
@@ -152,13 +111,9 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(IDEMPOTENCY_KEY_HEADER, HeaderValue::from_static("short"));
 
-        assert!(validate_backend_write_payload(
-            None,
-            &headers,
-            "orders.cancel",
-            &serde_json::json!({"orderId": "order-1"}),
-            |key| format!("cancel-{key}"),
-        )
-        .is_err());
+        assert!(
+            resolve_backend_write_command_headers(None, &headers, |key| format!("cancel-{key}"),)
+                .is_err()
+        );
     }
 }

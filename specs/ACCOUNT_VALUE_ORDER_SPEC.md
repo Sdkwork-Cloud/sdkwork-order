@@ -192,7 +192,7 @@ Continuous plans create a distinct `token_bank_plan_purchase` order for the firs
 
 ## 8. Idempotency
 
-All write commands must require `Idempotency-Key`, `Sdkwork-Request-Hash`, and `X-Idempotency-Fingerprint` where the OpenAPI operation declares `x-sdkwork-idempotent`.
+All write commands marked `x-sdkwork-idempotent` must accept `Idempotency-Key`. The owning service computes and stores the canonical request fingerprint; app and backend clients must not send request-hash or fingerprint headers.
 
 Canonical idempotency scopes:
 

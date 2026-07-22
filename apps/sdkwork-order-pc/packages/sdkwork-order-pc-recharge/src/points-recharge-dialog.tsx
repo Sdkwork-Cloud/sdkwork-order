@@ -1,7 +1,7 @@
 /// <reference path="../styles.d.ts" />
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, QrCode, Sparkles, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Check, CheckCircle2, QrCode, Sparkles, X } from "lucide-react";
 import { toDataURL } from "qrcode";
 import {
   Button,
@@ -43,14 +43,21 @@ export interface SdkworkPointsRechargeDialogCopy {
   title: string;
 }
 
-export interface SdkworkPointsRechargeDialogProps {
+export interface SdkworkPointsRechargeProps {
   copy?: Partial<SdkworkPointsRechargeDialogCopy>;
   currentPoints?: number | null;
-  isOpen: boolean;
-  onClose: () => void;
   onCompleted?: (payment: SdkworkPointsRechargePayment) => Promise<void> | void;
   paymentMethod?: string;
   service?: SdkworkPointsRechargeService;
+}
+
+export interface SdkworkPointsRechargeDialogProps extends SdkworkPointsRechargeProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export interface SdkworkPointsRechargeInlineProps extends SdkworkPointsRechargeProps {
+  className?: string;
 }
 
 interface SdkworkPointsRechargeCheckout {
@@ -80,15 +87,25 @@ const DEFAULT_COPY: SdkworkPointsRechargeDialogCopy = {
   title: "积分购买",
 };
 
-export function SdkworkPointsRechargeDialog({
+interface SdkworkPointsRechargeExperienceProps extends SdkworkPointsRechargeProps {
+  active: boolean;
+  className?: string;
+  display: "dialog" | "inline";
+  onClose?: () => void;
+}
+
+function SdkworkPointsRechargeExperience({
+  active,
+  className,
   copy: copyOverrides,
   currentPoints,
-  isOpen,
+  display,
   onClose,
   onCompleted,
   paymentMethod = "wechat_pay",
   service: serviceProp,
-}: SdkworkPointsRechargeDialogProps) {
+}: SdkworkPointsRechargeExperienceProps) {
+  const titleId = useId();
   const copy = useMemo(() => ({ ...DEFAULT_COPY, ...copyOverrides }), [copyOverrides]);
   const service = useMemo(
     () => serviceProp ?? createSdkworkPointsRechargeService(),
@@ -100,9 +117,11 @@ export function SdkworkPointsRechargeDialog({
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
+  const [hasAcceptedAgreement, setHasAcceptedAgreement] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const completedOrderRef = useRef<string | null>(null);
+  const hasAcceptedAgreementRef = useRef(false);
   const isPayingRef = useRef(false);
   const paymentRequestSequenceRef = useRef(0);
   const selectedPackageIdRef = useRef<string | null>(null);
@@ -112,12 +131,14 @@ export function SdkworkPointsRechargeDialog({
   const hasActivePayment = payment !== null && payment.status !== "failed";
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!active) {
       paymentRequestSequenceRef.current += 1;
+      hasAcceptedAgreementRef.current = false;
       isPayingRef.current = false;
+      setHasAcceptedAgreement(false);
       return undefined;
     }
-    let active = true;
+    let mounted = true;
     paymentRequestSequenceRef.current += 1;
     isPayingRef.current = false;
     setIsLoading(true);
@@ -128,7 +149,7 @@ export function SdkworkPointsRechargeDialog({
     completedOrderRef.current = null;
     void service.listPackages()
       .then((items) => {
-        if (!active) return;
+        if (!mounted) return;
         setPackages(items);
         setSelectedPackageId((current) => {
           const next = current && items.some((item) => item.id === current)
@@ -139,17 +160,17 @@ export function SdkworkPointsRechargeDialog({
         });
       })
       .catch((cause) => {
-        if (active) setError(cause instanceof Error ? cause.message : copy.loadFailed);
+        if (mounted) setError(cause instanceof Error ? cause.message : copy.loadFailed);
       })
       .finally(() => {
-        if (active) setIsLoading(false);
+        if (mounted) setIsLoading(false);
       });
     return () => {
-      active = false;
+      mounted = false;
       paymentRequestSequenceRef.current += 1;
       isPayingRef.current = false;
     };
-  }, [copy.loadFailed, isOpen, loadAttempt, service]);
+  }, [active, copy.loadFailed, loadAttempt, service]);
 
   useEffect(() => {
     if (!payment?.qrCode) {
@@ -160,31 +181,31 @@ export function SdkworkPointsRechargeDialog({
       setQrImageUrl(payment.qrCode);
       return undefined;
     }
-    let active = true;
+    let qrActive = true;
     void toDataURL(payment.qrCode, { errorCorrectionLevel: "M", margin: 1, width: 252 })
       .then((value) => {
-        if (active) setQrImageUrl(value);
+        if (qrActive) setQrImageUrl(value);
       })
       .catch(() => {
-        if (active) setError(copy.paymentUnavailableDescription);
+        if (qrActive) setError(copy.paymentUnavailableDescription);
       });
     return () => {
-      active = false;
+      qrActive = false;
     };
   }, [copy.paymentUnavailableDescription, payment?.qrCode]);
 
   useEffect(() => {
-    if (!isOpen || !checkout || payment?.status !== "pending" || !payment.orderId) {
+    if (!active || !checkout || payment?.status !== "pending" || !payment.orderId) {
       return undefined;
     }
     const orderId = payment.orderId;
     const packageId = checkout.packageId;
     const paymentSessionSequence = paymentRequestSequenceRef.current;
-    let active = true;
+    let pollingActive = true;
     const poll = async () => {
       try {
         const next = await service.getOrderStatus(orderId);
-        if (!active
+        if (!pollingActive
           || paymentRequestSequenceRef.current !== paymentSessionSequence
           || selectedPackageIdRef.current !== packageId) return;
         setCheckout((current) => current?.packageId === packageId
@@ -203,10 +224,10 @@ export function SdkworkPointsRechargeDialog({
     void poll();
     const interval = window.setInterval(() => void poll(), 2_500);
     return () => {
-      active = false;
+      pollingActive = false;
       window.clearInterval(interval);
     };
-  }, [checkout?.packageId, copy.paymentUnavailableDescription, isOpen, onCompleted, payment?.orderId, payment?.status, service]);
+  }, [active, checkout?.packageId, copy.paymentUnavailableDescription, onCompleted, payment?.orderId, payment?.status, service]);
 
   function selectPackage(packageId: string) {
     if (packageId === selectedPackageIdRef.current || isPayingRef.current) return;
@@ -217,17 +238,19 @@ export function SdkworkPointsRechargeDialog({
     setCheckout(null);
     setQrImageUrl(null);
     setError(null);
+    if (hasAcceptedAgreementRef.current) {
+      void createPayment(packageId);
+    }
   }
 
   function closeDialog() {
     paymentRequestSequenceRef.current += 1;
     isPayingRef.current = false;
-    onClose();
+    onClose?.();
   }
 
-  async function createPayment() {
-    if (!selectedPackage || isPayingRef.current) return;
-    const packageId = selectedPackage.id;
+  async function createPayment(packageId: string) {
+    if (isPayingRef.current) return;
     const requestSequence = paymentRequestSequenceRef.current + 1;
     paymentRequestSequenceRef.current = requestSequence;
     isPayingRef.current = true;
@@ -258,19 +281,31 @@ export function SdkworkPointsRechargeDialog({
     }
   }
 
-  return (
-    <Modal onOpenChange={(open) => !open && closeDialog()} open={isOpen}>
-      <ModalContent aria-describedby={undefined} aria-labelledby="sdkwork-points-recharge-title" className="sdkwork-points-recharge-dialog" showCloseButton={false} size="lg">
+  function acceptAgreementAndCreatePayment() {
+    if (!selectedPackage || isPayingRef.current) return;
+    hasAcceptedAgreementRef.current = true;
+    setHasAcceptedAgreement(true);
+    void createPayment(selectedPackage.id);
+  }
+
+  const content = (
+    <>
         <ModalHeader className="sdkwork-points-recharge-dialog__header">
           <div className="sdkwork-points-recharge-dialog__identity">
             <Sparkles aria-hidden="true" />
-            <ModalTitle id="sdkwork-points-recharge-title">{copy.account}</ModalTitle>
+            {display === "dialog" ? (
+              <ModalTitle id={titleId}>{copy.account}</ModalTitle>
+            ) : (
+              <h2 id={titleId}>{copy.account}</h2>
+            )}
           </div>
           <div className="sdkwork-points-recharge-dialog__header-actions">
             <div className="sdkwork-points-recharge-dialog__balance">
               {copy.myPoints} <strong>{currentPoints ?? "--"}</strong>
             </div>
-            <ModalClose aria-label={copy.close} className="sdkwork-points-recharge-dialog__close"><X aria-hidden="true" /></ModalClose>
+            {display === "dialog" ? (
+              <ModalClose aria-label={copy.close} className="sdkwork-points-recharge-dialog__close"><X aria-hidden="true" /></ModalClose>
+            ) : null}
           </div>
         </ModalHeader>
         <ModalBody className="sdkwork-points-recharge-dialog__body">
@@ -311,11 +346,18 @@ export function SdkworkPointsRechargeDialog({
             {!payment || isPaying || payment.status === "failed" ? (
               <div className="sdkwork-points-recharge-dialog__payment-empty">
                 <QrCode aria-hidden="true" />
-                <p>{copy.agreement}</p>
+                {hasAcceptedAgreement ? (
+                  <p className="sdkwork-points-recharge-dialog__agreement-accepted">
+                    <span className="sdkwork-points-recharge-dialog__agreement-check">
+                      <Check aria-hidden="true" />
+                    </span>
+                    {copy.agreementAccepted}
+                  </p>
+                ) : <p>{copy.agreement}</p>}
                 <Button
                   disabled={!selectedPackage || isPaying || isLoading || hasActivePayment}
                   loading={isPaying}
-                  onClick={() => void createPayment()}
+                  onClick={acceptAgreementAndCreatePayment}
                   type="button"
                 >
                   {isPaying ? copy.creatingPayment : copy.confirmPayment}
@@ -326,14 +368,66 @@ export function SdkworkPointsRechargeDialog({
               <div className="sdkwork-points-recharge-dialog__qr">
                 <img alt={copy.scanPrompt} src={qrImageUrl} />
                 <p>{copy.scanPrompt}</p>
-                <span>{copy.agreementAccepted}</span>
+                <div className="sdkwork-points-recharge-dialog__agreement-accepted">
+                  <span className="sdkwork-points-recharge-dialog__agreement-check">
+                    <Check aria-hidden="true" />
+                  </span>
+                  {copy.agreementAccepted}
+                </div>
               </div>
             ) : null}
-            {payment?.status === "completed" ? <div className="sdkwork-points-recharge-dialog__completed"><CheckCircle2 aria-hidden="true" /><strong>{copy.completed}</strong><Button onClick={closeDialog} type="button">{copy.close}</Button></div> : null}
+            {payment?.status === "completed" ? <div className="sdkwork-points-recharge-dialog__completed"><CheckCircle2 aria-hidden="true" /><strong>{copy.completed}</strong>{display === "dialog" ? <Button onClick={closeDialog} type="button">{copy.close}</Button> : null}</div> : null}
             {payment?.status === "failed" && !error ? <StatusNotice tone="danger" title={copy.paymentUnavailable}>{copy.paymentUnavailableDescription}</StatusNotice> : null}
           </aside>
         </ModalBody>
+    </>
+  );
+
+  if (display === "inline") {
+    return (
+      <section
+        aria-labelledby={titleId}
+        className={["sdkwork-points-recharge-dialog", "sdkwork-points-recharge-inline", className].filter(Boolean).join(" ")}
+      >
+        {content}
+      </section>
+    );
+  }
+
+  return (
+    <Modal onOpenChange={(open: boolean) => !open && closeDialog()} open={active}>
+      <ModalContent aria-describedby={undefined} aria-labelledby={titleId} className="sdkwork-points-recharge-dialog" showCloseButton={false} size="lg">
+        {content}
       </ModalContent>
     </Modal>
+  );
+}
+
+export function SdkworkPointsRechargeDialog({
+  isOpen,
+  onClose,
+  ...props
+}: SdkworkPointsRechargeDialogProps) {
+  return (
+    <SdkworkPointsRechargeExperience
+      {...props}
+      active={isOpen}
+      display="dialog"
+      onClose={onClose}
+    />
+  );
+}
+
+export function SdkworkPointsRechargeInline({
+  className,
+  ...props
+}: SdkworkPointsRechargeInlineProps) {
+  return (
+    <SdkworkPointsRechargeExperience
+      {...props}
+      active
+      className={className}
+      display="inline"
+    />
   );
 }

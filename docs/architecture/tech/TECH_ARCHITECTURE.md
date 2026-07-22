@@ -38,14 +38,13 @@ OpenAPI discovery is served at `/app/v3/api/openapi.json` and `/backend/v3/api/o
 
 All success responses use `SdkWorkApiResponse` (`code: 0`, `data`, `traceId`). List endpoints return `data.items` plus `data.pageInfo` with SQL-level `LIMIT`/`OFFSET` and `COUNT(*) OVER()` totals. Errors use `ProblemDetail` with numeric SDKWork error codes and `traceId`.
 
-Write commands require `Idempotency-Key`, `Sdkwork-Request-Hash`, and `X-Idempotency-Fingerprint` when the OpenAPI operation declares `x-sdkwork-idempotent`. Request hashes are generated from stable operationId-aligned scopes and canonical request bodies.
+Write commands marked `x-sdkwork-idempotent` accept the standard `Idempotency-Key`. Request fingerprints are computed and persisted by the owning service from the authenticated scope, method/path, and canonical command input; clients never calculate or send fingerprint headers. Reusing a key with a different command returns HTTP 409.
 
 ### Order Creation Entry Points
 
 | Route | Operation | Use case |
 | --- | --- | --- |
 | `POST /app/v3/api/checkout/sessions/{checkoutSessionId}/orders` | `checkout.sessions.orders.create` | Canonical checkout-bound product order creation after quote |
-| `POST /app/v3/api/orders` | `orders.create` | Deprecated transitional order creation |
 | `POST /app/v3/api/recharges/orders` | `recharges.orders.create` | Account value order creation, starting with points recharge and extending to Token Bank/package/coupon subjects |
 | `POST /app/v3/api/memberships/orders` | `memberships.orders.create` | Membership purchase checkout (`subject=membership`) |
 
@@ -166,7 +165,6 @@ Settlement orchestration is owned by order, not payment:
 | PSP webhook | Order app-api | `POST /app/v3/api/orders/payments/webhooks/{providerCode}` |
 | In-process settlement | Order service | `settle_owner_order_after_payment_success` |
 | Manual replay | Order backend-api | `POST /backend/v3/api/orders/{orderId}/payment_confirmations` |
-| Legacy payment webhook | Payment app-api | `410 Gone` migration shim |
 
 Configure PSP notify URL as `{ORDER_PAYMENT_WEBHOOK_BASE_URL}/app/v3/api/orders/payments/webhooks/{providerCode}`.
 

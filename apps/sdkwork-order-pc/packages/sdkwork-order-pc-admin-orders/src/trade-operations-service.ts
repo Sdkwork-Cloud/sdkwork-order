@@ -6,7 +6,7 @@ import type {
   SdkworkOrderBackendClient,
   TokenBankPlanResponse,
 } from "@sdkwork/order-pc-admin-core";
-import { createSdkworkWriteCommandHeaders } from "@sdkwork/order-service";
+import { createSdkworkIdempotencyParams } from "@sdkwork/order-service";
 
 export interface TradeOperationsQuery {
   page?: number;
@@ -60,14 +60,12 @@ export function createTradeOperationsService(client: SdkworkOrderBackendClient):
   const page = async <T>(query: TradeOperationsQuery, loader: () => Promise<unknown>) =>
     unwrapPage<T>(await loader(), query.page ?? 1, query.pageSize ?? 20);
   const review = async (
-    scope: string,
     id: string,
     action: TradeRequestAction,
     api: { approve: Function; reject: Function; retry: Function },
   ) => {
     const body = { reviewComment: "manager trade operation" };
-    const { idempotencyKey } = createSdkworkWriteCommandHeaders(`${scope}.${action}`, { id, ...body });
-    await api[action](id, body, { idempotencyKey });
+    await api[action](id, body, createSdkworkIdempotencyParams());
   };
 
   return {
@@ -76,8 +74,8 @@ export function createTradeOperationsService(client: SdkworkOrderBackendClient):
     listAccountValuePackages: (query = {}) => page<AccountValuePackageResponse>(query, () => client.backend.accountValuePackages.list(listParams(query))),
     listTokenBankPlans: (query = {}) => page<TokenBankPlanResponse>(query, () => client.backend.tokenBankPlans.list(listParams(query))),
     listRefundRequests: (query = {}) => page<AccountValueRequestResponse>(query, () => client.backend.refundRequests.list(listParams(query))),
-    reviewRefundRequest: (id, action) => review("backend.refundRequests", id, action, client.backend.refundRequests),
+    reviewRefundRequest: (id, action) => review(id, action, client.backend.refundRequests),
     listWithdrawalRequests: (query = {}) => page<AccountValueRequestResponse>(query, () => client.backend.withdrawalRequests.list(listParams(query))),
-    reviewWithdrawalRequest: (id, action) => review("backend.withdrawalRequests", id, action, client.backend.withdrawalRequests),
+    reviewWithdrawalRequest: (id, action) => review(id, action, client.backend.withdrawalRequests),
   };
 }

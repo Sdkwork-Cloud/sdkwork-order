@@ -49,8 +49,7 @@ describe("createSdkworkMembershipCheckoutService", () => {
         paymentProduct: "mobile_cashier_h5",
       },
       expect.objectContaining({
-        idempotencyKey: "membership-checkout:58:purchase",
-        sdkworkRequestHash: expect.stringContaining("memberships.orders.create"),
+        idempotencyKey: expect.any(String),
       }),
     );
   });
@@ -78,8 +77,7 @@ describe("createSdkworkMembershipCheckoutService", () => {
         paymentProduct: "wechat_native",
       },
       expect.objectContaining({
-        idempotencyKey: "membership-checkout:58:purchase",
-        sdkworkRequestHash: expect.stringContaining("memberships.orders.create"),
+        idempotencyKey: expect.any(String),
       }),
     );
   });

@@ -28,11 +28,11 @@ export class PaymentsOrderPaymentsApi {
 }
 
 export class PaymentsApi {
-  private client: HttpClient;
+
   public readonly orderPayments: PaymentsOrderPaymentsApi;
 
   constructor(client: HttpClient) {
-    this.client = client;
+
     this.orderPayments = new PaymentsOrderPaymentsApi(client);
   }
 

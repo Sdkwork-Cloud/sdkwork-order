@@ -11,7 +11,6 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
-    checkout_owner_order_request_hash, checkout_quote_request_hash, checkout_session_request_hash,
     CheckoutLineInput, CheckoutQuoteView, CheckoutSessionDetailQuery, CheckoutSessionView,
     CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand,
     CreateOwnerOrderOutcome,
@@ -23,7 +22,7 @@ use sqlx::{PgPool, SqlitePool};
 use crate::api_response::{
     map_service_error, not_found, success_created_item, success_item, unauthorized, validation,
 };
-use crate::command_headers::{ensure_request_hash_matches, required_app_write_command_headers};
+use crate::command_headers::required_app_write_command_headers;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 pub type CommerceCheckoutFuture<'a, T> =
@@ -66,8 +65,7 @@ struct CheckoutLineRequest {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateCheckoutSessionRequest {
-    items: Option<Vec<CheckoutLineRequest>>,
-    lines: Option<Vec<CheckoutLineRequest>>,
+    items: Vec<CheckoutLineRequest>,
     currency_code: Option<String>,
 }
 
@@ -235,14 +233,6 @@ async fn create_checkout_session(
         Ok(command) => command,
         Err(error) => return validation(ctx, error.message()),
     };
-    if let Err(response) = ensure_request_hash_matches(
-        ctx,
-        &checkout_session_request_hash(&command),
-        &write_headers.request_hash,
-    ) {
-        return *response;
-    }
-
     match state.store.create_checkout_session(command).await {
         Ok(session) => success_created_item(ctx, map_checkout_session(session)),
         Err(error) => map_service_error(ctx, error),
@@ -306,14 +296,6 @@ async fn create_checkout_quote(
         Ok(command) => command,
         Err(error) => return validation(ctx, error.message()),
     };
-    if let Err(response) = ensure_request_hash_matches(
-        ctx,
-        &checkout_quote_request_hash(&command),
-        &write_headers.request_hash,
-    ) {
-        return *response;
-    }
-
     match state.store.create_checkout_quote(command).await {
         Ok(quote) => success_created_item(ctx, map_checkout_quote(quote)),
         Err(error) => map_service_error(ctx, error),
@@ -349,14 +331,6 @@ async fn create_checkout_order(
         Ok(command) => command,
         Err(error) => return validation(ctx, error.message()),
     };
-    if let Err(response) = ensure_request_hash_matches(
-        ctx,
-        &checkout_owner_order_request_hash(&command),
-        &write_headers.request_hash,
-    ) {
-        return *response;
-    }
-
     match state.store.create_owner_order(command).await {
         Ok(outcome) => success_created_item(ctx, map_checkout_order(outcome)),
         Err(error) => map_service_error(ctx, error),
@@ -366,14 +340,11 @@ async fn create_checkout_order(
 fn parse_checkout_lines(
     request: &CreateCheckoutSessionRequest,
 ) -> Result<Vec<CheckoutLineInput>, String> {
-    let source = request.items.as_ref().or(request.lines.as_ref());
-    let Some(source) = source else {
-        return Err("checkout session requires at least one line".to_owned());
-    };
-    if source.is_empty() {
+    if request.items.is_empty() {
         return Err("checkout session requires at least one line".to_owned());
     }
-    source
+    request
+        .items
         .iter()
         .map(|line| {
             CheckoutLineInput::new(&line.sku_id, line.quantity.unwrap_or(1).max(1))
