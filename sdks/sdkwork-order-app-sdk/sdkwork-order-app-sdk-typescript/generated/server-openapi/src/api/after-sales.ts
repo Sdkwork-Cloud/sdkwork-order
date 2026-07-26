@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { AfterSalesRequestResponse, AfterSalesReturnShipmentResponse, CreateAfterSalesRequest, CreateAfterSalesReturnShipmentRequest, SdkWorkPageData, UpdateAfterSalesRequest } from '../types';
 
@@ -18,12 +18,12 @@ export class AfterSalesEventsApi {
 
 
 /** After Sales events list. */
-  async list(afterSalesRequestId: string, params?: AfterSalesEventsListParams): Promise<SdkWorkPageData> {
+  async list(afterSalesRequestId: string, params?: AfterSalesEventsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/events`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/events`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -46,24 +46,24 @@ export class AfterSalesReturnShipmentsApi {
 
 
 /** After Sales return Shipments list. */
-  async list(afterSalesRequestId: string, params?: AfterSalesReturnShipmentsListParams): Promise<SdkWorkPageData> {
+  async list(afterSalesRequestId: string, params?: AfterSalesReturnShipmentsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** After Sales return Shipments create. */
-  async create(afterSalesRequestId: string, body: CreateAfterSalesReturnShipmentRequest, params: AfterSalesReturnShipmentsCreateParams): Promise<AfterSalesReturnShipmentResponse> {
+  async create(afterSalesRequestId: string, body: CreateAfterSalesReturnShipmentRequest, params: AfterSalesReturnShipmentsCreateParams, requestOptions?: ApiRequestOptions): Promise<AfterSalesReturnShipmentResponse> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<AfterSalesReturnShipmentResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<AfterSalesReturnShipmentResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/return_shipments`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
@@ -91,52 +91,52 @@ export class AfterSalesRequestsApi {
 
 
 /** After Sales requests list. */
-  async list(params?: AfterSalesRequestsListParams): Promise<SdkWorkPageData> {
+  async list(params?: AfterSalesRequestsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'order_id', value: params?.orderId, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/after_sales/requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** After Sales requests create. */
-  async create(body: CreateAfterSalesRequest, params: AfterSalesRequestsCreateParams): Promise<AfterSalesRequestResponse> {
+  async create(body: CreateAfterSalesRequest, params: AfterSalesRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestResponse> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 
 /** After Sales requests retrieve. */
-  async retrieve(afterSalesRequestId: string): Promise<AfterSalesRequestResponse> {
-    return this.client.get<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`));
+  async retrieve(afterSalesRequestId: string, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestResponse> {
+    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** After Sales requests update. */
-  async update(afterSalesRequestId: string, body: UpdateAfterSalesRequest, params: AfterSalesRequestsUpdateParams): Promise<AfterSalesRequestResponse> {
+  async update(afterSalesRequestId: string, body: UpdateAfterSalesRequest, params: AfterSalesRequestsUpdateParams, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestResponse> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.patch<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<AfterSalesRequestResponse>(appApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
 export class AfterSalesApi {
-
+  private client: HttpClient;
   public readonly requests: AfterSalesRequestsApi;
   public readonly returnShipments: AfterSalesReturnShipmentsApi;
   public readonly events: AfterSalesEventsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.requests = new AfterSalesRequestsApi(client);
     this.returnShipments = new AfterSalesReturnShipmentsApi(client);
     this.events = new AfterSalesEventsApi(client);

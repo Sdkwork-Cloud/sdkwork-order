@@ -78,6 +78,7 @@ export interface SdkworkPointsRechargePayment {
 export interface SdkworkPointsRechargeOrderInput {
   packageId: number | string;
   paymentMethod?: string;
+  paymentProduct?: "alipay_native" | "mobile_cashier_h5" | "wechat_native";
   source?: string;
 }
 
@@ -226,11 +227,14 @@ export function createSdkworkPointsRechargeService(
         throw new Error("The selected recharge package is unavailable.");
       }
 
+      const paymentProduct = input.paymentProduct ?? "mobile_cashier_h5";
       const body = {
         amount: selectedPackage.priceAmount,
         currencyCode: selectedPackage.currencyCode,
         packageId: selectedPackage.id,
-        paymentMethod: input.paymentMethod ?? "wechat_pay",
+        paymentMethod: input.paymentMethod
+          ?? (paymentProduct === "alipay_native" ? "alipay" : "wechat_pay"),
+        paymentProduct,
         source: input.source ?? "membership-token-plan",
         subject: "points_recharge" as const,
         targetAsset: "points" as const,
@@ -493,13 +497,18 @@ function normalizePointsRechargePayment(value: unknown): SdkworkPointsRechargePa
   const status = normalizePointsRechargeStatus(
     record.status ?? record.rechargeStatus ?? record.paymentStatus ?? record.orderStatus,
   );
+  const cashierUrl = toSdkworkOrderOptionalString(record.cashierUrl);
+  const paymentProduct = toSdkworkOrderOptionalString(record.paymentProduct);
+  const providerQrCode = toSdkworkOrderOptionalString(
+    record.qrCode ?? record.qrCodePayload ?? record.providerQrCode,
+  );
   return {
     amountCny: toNullableSdkworkOrderNumber(record.amountCny ?? record.amount),
-    cashierUrl: toSdkworkOrderOptionalString(record.cashierUrl),
+    cashierUrl,
     orderId: toSdkworkOrderOptionalString(record.orderId ?? record.id),
     orderNo: toSdkworkOrderOptionalString(record.orderNo ?? record.outTradeNo),
     points: toSdkworkOrderNumber(record.points ?? record.grantAmount),
-    qrCode: toSdkworkOrderOptionalString(record.qrCode ?? record.qrCodePayload ?? record.providerQrCode ?? record.cashierUrl),
+    qrCode: paymentProduct === "mobile_cashier_h5" ? cashierUrl : providerQrCode ?? cashierUrl,
     status,
   };
 }

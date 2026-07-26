@@ -53,6 +53,7 @@ const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
 const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
+const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
 
 /// 允许的支付方式白名单。新增支付方式时只需扩展此处。
 const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
@@ -254,6 +255,7 @@ struct SubmitRechargeRequest {
     plan_period: Option<String>,
     coupon_code: Option<String>,
     payment_method: Option<String>,
+    payment_product: Option<String>,
     payment_password: Option<String>,
     source: Option<String>,
 }
@@ -342,6 +344,10 @@ impl SubmitRechargeRequest {
 
     fn payment_method(&self) -> Option<&str> {
         self.payment_method.as_deref()
+    }
+
+    fn payment_product(&self) -> Option<&str> {
+        self.payment_product.as_deref()
     }
 
     fn payment_password(&self) -> Option<&str> {
@@ -1229,6 +1235,13 @@ async fn submit_recharge(
         let Some(method) = method.as_deref() else {
             return validation(ctx, "payment method must be provided");
         };
+        let payment_product = match validate_payment_product(request.payment_product()) {
+            Ok(value) => value,
+            Err(message) => return validation(ctx, message),
+        };
+        if let Err(message) = validate_payment_method_for_product(method, &payment_product) {
+            return validation(ctx, message);
+        }
         return submit_points_recharge_order(
             state,
             ctx,
@@ -1237,6 +1250,7 @@ async fn submit_recharge(
             amount,
             &currency_code,
             method,
+            &payment_product,
             &write_headers.request_no,
             &write_headers.idempotency_key,
         )
@@ -1480,6 +1494,7 @@ async fn submit_points_recharge_order(
     amount: CommerceMoney,
     currency_code: &str,
     method: &str,
+    payment_product: &str,
     request_no: &str,
     idempotency_key: &str,
 ) -> Response {
@@ -1504,6 +1519,14 @@ async fn submit_points_recharge_order(
         .await
     {
         Ok(mut outcome) => {
+            if !payment_product_requires_provider_route(payment_product) {
+                outcome.payment_product = payment_product.to_owned();
+                outcome.next_action = "cashier".to_owned();
+                outcome.qr_code_payload = outcome.cashier_url.clone();
+                return success_created_item(ctx, map_recharge_outcome(outcome));
+            }
+
+            outcome.payment_product = payment_product.to_owned();
             let persisted_order_id = outcome.order_id.clone();
             let persisted_organization_id =
                 points_recharge_organization_scope(subject.organization_id.as_deref());
@@ -1521,9 +1544,11 @@ async fn submit_points_recharge_order(
                 owner_user_id: subject.user_id.clone(),
                 order_id: persisted_order_id.clone(),
                 payment_method: method.to_owned(),
-                payment_scene: None,
+                payment_scene: Some(payment_scene(payment_product).to_owned()),
                 payment_attempt_callback_payload: Some(callback_payload),
-                payment_metadata: serde_json::json!({}),
+                payment_metadata: serde_json::json!({
+                    "paymentProduct": payment_product,
+                }),
                 request_no: format!("{request_no}:pay"),
                 idempotency_key: format!("{idempotency_key}:pay"),
             }) {
@@ -1532,7 +1557,7 @@ async fn submit_points_recharge_order(
             };
             match state.payments.pay_owner_order(pay_command).await {
                 Ok(pay_outcome) => {
-                    outcome = merge_recharge_pay_outcome(outcome, pay_outcome);
+                    outcome = merge_recharge_pay_outcome(outcome, pay_outcome, payment_product);
                     success_created_item(ctx, map_recharge_outcome(outcome))
                 }
                 Err(error) => {
@@ -1721,6 +1746,53 @@ fn validate_payment_method(value: Option<&str>) -> Result<String, String> {
         ));
     }
     Ok(method)
+}
+
+fn validate_payment_product(value: Option<&str>) -> Result<String, String> {
+    let product = value
+        .unwrap_or(DEFAULT_PAYMENT_PRODUCT)
+        .trim()
+        .to_ascii_lowercase();
+    if matches!(
+        product.as_str(),
+        "mobile_cashier_h5" | "wechat_native" | "alipay_native"
+    ) {
+        return Ok(product);
+    }
+    Err(
+        "payment product must be one of: mobile_cashier_h5, wechat_native, alipay_native"
+            .to_string(),
+    )
+}
+
+fn validate_payment_method_for_product(
+    payment_method: &str,
+    payment_product: &str,
+) -> Result<(), String> {
+    let expected = match payment_product {
+        "wechat_native" => Some("wechat_pay"),
+        "alipay_native" => Some("alipay"),
+        _ => None,
+    };
+    if expected.is_some_and(|expected| expected != payment_method) {
+        return Err(format!(
+            "payment product {payment_product} requires payment method {}",
+            expected.unwrap_or_default()
+        ));
+    }
+    Ok(())
+}
+
+fn payment_scene(payment_product: &str) -> &str {
+    match payment_product {
+        "wechat_native" => "wechat_native",
+        "alipay_native" => "alipay_qr",
+        _ => DEFAULT_PAYMENT_PRODUCT,
+    }
+}
+
+fn payment_product_requires_provider_route(payment_product: &str) -> bool {
+    payment_product != DEFAULT_PAYMENT_PRODUCT
 }
 
 fn validate_recharge_order_lookup_key(order_lookup: String) -> Result<String, String> {
@@ -2073,12 +2145,16 @@ fn map_recharge_preview(value: RechargeGrantPreview) -> RechargeGrantPreviewResp
 fn merge_recharge_pay_outcome(
     mut order: CreatePointsRechargeOrderOutcome,
     pay: PayOwnerOrderOutcome,
+    payment_product: &str,
 ) -> CreatePointsRechargeOrderOutcome {
     order.out_trade_no = pay.out_trade_no;
     order.payment_method = pay.payment_method;
+    order.payment_product = payment_product.to_owned();
     if let Some(cashier_url) = pay.payment_params.get("cashierUrl") {
         order.cashier_url = cashier_url.clone();
-        order.qr_code_payload = cashier_url.clone();
+    }
+    if let Some(qr_code_payload) = provider_qr_code(&pay.payment_params) {
+        order.qr_code_payload = qr_code_payload.clone();
     }
     order.next_action = pay
         .payment_params
@@ -2086,6 +2162,14 @@ fn merge_recharge_pay_outcome(
         .cloned()
         .unwrap_or_else(|| "scan_qr".to_string());
     order
+}
+
+fn provider_qr_code(payment_params: &BTreeMap<String, String>) -> Option<&String> {
+    payment_params
+        .get("qrCodeUrl")
+        .or_else(|| payment_params.get("qrCode"))
+        .or_else(|| payment_params.get("codeUrl"))
+        .filter(|value| !value.trim().is_empty())
 }
 
 fn merge_account_recharge_pay_outcome(
@@ -2418,6 +2502,24 @@ mod tests {
             "an unscoped points recharge order is persisted in the platform organization scope"
         );
         assert_eq!("org-1", points_recharge_organization_scope(Some(" org-1 ")));
+    }
+
+    #[test]
+    fn points_recharge_defaults_to_the_mobile_h5_cashier() {
+        assert_eq!(
+            DEFAULT_PAYMENT_PRODUCT,
+            validate_payment_product(None).expect("default payment product")
+        );
+        assert!(validate_payment_method_for_product("wechat_pay", DEFAULT_PAYMENT_PRODUCT).is_ok());
+        assert!(!payment_product_requires_provider_route(
+            DEFAULT_PAYMENT_PRODUCT
+        ));
+        assert!(payment_product_requires_provider_route("wechat_native"));
+        assert_eq!(
+            "wechat_native",
+            payment_scene("wechat_native"),
+            "native products retain provider channel routing"
+        );
     }
 
     fn test_subject() -> AppRuntimeSubject {

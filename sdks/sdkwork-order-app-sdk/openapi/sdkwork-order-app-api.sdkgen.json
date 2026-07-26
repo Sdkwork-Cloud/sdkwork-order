@@ -1542,6 +1542,7 @@
           }
         },
         "security": [],
+        "x-sdkwork-auth-mode": "anonymous",
         "x-sdkwork-wire-protocol": "external",
         "x-sdkwork-external-protocol-id": "psp-payment-webhook",
         "x-sdkwork-api-surface": "app-api"
@@ -5524,6 +5525,16 @@
           },
           "paymentMethod": {
             "type": "string"
+          },
+          "paymentProduct": {
+            "type": "string",
+            "enum": [
+              "mobile_cashier_h5",
+              "wechat_native",
+              "alipay_native"
+            ],
+            "default": "mobile_cashier_h5",
+            "description": "QR payment product. H5 returns the order-bound cashierUrl; native products create a provider payment intent."
           },
           "paymentPassword": {
             "type": "string"

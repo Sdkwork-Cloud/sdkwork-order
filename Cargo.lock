@@ -1643,7 +1643,9 @@ dependencies = [
  "sdkwork-routes-order-app-api",
  "sdkwork-routes-order-backend-api",
  "sdkwork-web-bootstrap",
+ "sdkwork-web-contract",
  "sdkwork-web-core",
+ "serde_json",
  "tokio",
 ]
 

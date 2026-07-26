@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { WithdrawalRequestCreateCommand } from '../types';
 
@@ -17,28 +17,28 @@ export class WithdrawalsRequestsApi {
 
 
 /** Withdrawal requests create. */
-  async create(body: WithdrawalRequestCreateCommand, params: WithdrawalsRequestsCreateParams): Promise<Record<string, unknown>> {
+  async create(body: WithdrawalRequestCreateCommand, params: WithdrawalsRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/withdrawals/requests`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(appApiPath(`/withdrawals/requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 
 /** Withdrawal requests retrieve. */
-  async retrieve(withdrawalRequestId: string): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/withdrawals/requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}`));
+  async retrieve(withdrawalRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/withdrawals/requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
 export class WithdrawalsApi {
-
+  private client: HttpClient;
   public readonly requests: WithdrawalsRequestsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.requests = new WithdrawalsRequestsApi(client);
   }
 
@@ -48,7 +48,13 @@ export function createWithdrawalsApi(client: HttpClient): WithdrawalsApi {
   return new WithdrawalsApi(client);
 }
 
-
+function appendQueryString(path: string, rawQueryString: string): string {
+  const query = rawQueryString.replace(/^\?+/, '');
+  if (!query) {
+    return path;
+  }
+  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
+}
 
 interface PathParameterSpec {
   name: string;

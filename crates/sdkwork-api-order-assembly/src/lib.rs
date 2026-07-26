@@ -5,7 +5,10 @@
 mod bootstrap;
 mod generated;
 
-pub use bootstrap::{assemble_api_router, assemble_backend_business_router, ApiAssembly};
+pub use bootstrap::{
+    assemble_api_router, assemble_app_api_contribution, assemble_backend_business_router,
+    ApiAssembly, ApiAssemblyContribution,
+};
 
 pub async fn assemble_api_router_from_env() -> Result<ApiAssembly, String> {
     let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);

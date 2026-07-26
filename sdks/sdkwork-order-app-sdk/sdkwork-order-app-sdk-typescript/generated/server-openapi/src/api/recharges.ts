@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { CommerceOperationCommand, RechargeOrderCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
@@ -19,13 +19,13 @@ export class RechargesPlansApi {
 
 
 /** Token Bank plans list. */
-  async list(params?: RechargesPlansListParams): Promise<SdkWorkPageData> {
+  async list(params?: RechargesPlansListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/plans`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/plans`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -53,41 +53,41 @@ export class RechargesOrdersApi {
 
 
 /** Recharges orders list. */
-  async list(params?: RechargesOrdersListParams): Promise<SdkWorkPageData> {
+  async list(params?: RechargesOrdersListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'subject', value: params?.subject, style: 'form', explode: true, allowReserved: false },
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/orders`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/orders`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** Recharges orders create. */
-  async create(body: RechargeOrderCreateCommand, params: RechargesOrdersCreateParams): Promise<Record<string, unknown>> {
+  async create(body: RechargeOrderCreateCommand, params: RechargesOrdersCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/recharges/orders`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 
 /** Recharges orders retrieve. */
-  async retrieve(orderId: string): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
+  async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** Recharges orders cancel. */
-  async cancel(orderId: string, params: RechargesOrdersCancelParams, body?: CommerceOperationCommand): Promise<SdkWorkCommandData> {
+  async cancel(orderId: string, params: RechargesOrdersCancelParams, body?: CommerceOperationCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/recharges/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
@@ -100,8 +100,8 @@ export class RechargesSettingsApi {
 
 
 /** Recharges settings retrieve. */
-  async retrieve(): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/recharges/settings`));
+  async retrieve(requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/recharges/settings`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -119,24 +119,24 @@ export class RechargesPackagesApi {
 
 
 /** Recharges packages list. */
-  async list(params?: RechargesPackagesListParams): Promise<SdkWorkPageData> {
+  async list(params?: RechargesPackagesListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/packages`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/recharges/packages`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
 export class RechargesApi {
-
+  private client: HttpClient;
   public readonly packages: RechargesPackagesApi;
   public readonly settings: RechargesSettingsApi;
   public readonly orders: RechargesOrdersApi;
   public readonly plans: RechargesPlansApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.packages = new RechargesPackagesApi(client);
     this.settings = new RechargesSettingsApi(client);
     this.orders = new RechargesOrdersApi(client);

@@ -20,3 +20,5 @@ sdkwork-web-bootstrap.workspace = true
 sdkwork-web-core.workspace = true
 sdkwork-routes-order-app-api.workspace = true
 sdkwork-routes-order-backend-api.workspace = true
+sdkwork-web-contract.workspace = true
+serde_json.workspace = true

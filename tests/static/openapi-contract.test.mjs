@@ -27,6 +27,11 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
     appSpec.paths["/app/v3/api/orders/payments/webhooks/{providerCode}"]?.post,
     "PSP webhook route must be on order app-api",
   );
+  assert.equal(
+    appSpec.paths["/app/v3/api/orders/payments/webhooks/{providerCode}"]?.post?.["x-sdkwork-auth-mode"],
+    "anonymous",
+    "public PSP webhooks must suppress generated SDK credentials",
+  );
 
   assert.ok(backendSpec.components?.schemas?.SdkWorkCommandResponse);
   assert.ok(backendSpec.paths["/backend/v3/api/orders"]?.get);
@@ -471,12 +476,18 @@ test("account value app and backend APIs expose complete order-owned workflows",
     "planCode",
     "planPeriod",
     "couponCode",
+    "paymentProduct",
   ]) {
     assert.ok(
       createRechargeSchema[field],
       `RechargeOrderCreateCommand must include ${field}`,
     );
   }
+  assert.equal(
+    createRechargeSchema.paymentProduct?.default,
+    "mobile_cashier_h5",
+    "RechargeOrderCreateCommand must default QR checkout to the mobile H5 cashier",
+  );
 
   for (const [label, spec] of [
     ["app", appSpec],

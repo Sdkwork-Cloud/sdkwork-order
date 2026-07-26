@@ -39,7 +39,7 @@ OperationIds per `RPC_SPEC.md` — routes owned by **order** repository:
 | --- | --- | --- |
 | List packages | `recharges.packages.list` | `GET .../recharges/packages` |
 | Settings | `recharges.settings.retrieve` | Exchange preview |
-| Create recharge order | `recharges.orders.create` | Writes `commerce_order`, `subject=points_recharge` |
+| Create recharge order | `recharges.orders.create` | Writes `commerce_order`; defaults to the order-bound mobile H5 cashier |
 | Retrieve recharge order | `recharges.orders.retrieve` | Same as order detail |
 | List recharge orders | `recharges.orders.list` | Filter on unified `orders.list` |
 | Cancel | `recharges.orders.cancel` | Recharge-specific cancellation command |
@@ -50,12 +50,13 @@ Backend admin: `RechargeAdminService` (package publish) on order-backend-api.
 ## 4. Pay & fulfill flow
 
 ```text
-1. recharges.orders.create  → commerce_order (pending_payment)
-2. orders.payments.create(orderId)      → Payment creates intent + attempt (cashierUrl in paymentParams)
-3. PSP webhook              → Order app-api POST .../orders/payments/webhooks/{provider}
-4. Order → Payment port     → ingest webhook, mark attempt succeeded (in-process)
-5. Order settlement         → settle_owner_order_after_payment_success (in-process saga)
-6. Order                    → fulfillment_status = fulfilled; account ledger credit
+1. recharges.orders.create (`mobile_cashier_h5`) → commerce_order (pending_payment) + order-bound cashierUrl
+2. Desktop QR encodes cashierUrl; the mobile H5 cashier selects and starts the provider payment
+3. Explicit `wechat_native` / `alipay_native` → recharge channel creates the provider intent directly
+4. PSP webhook              → Order app-api POST .../orders/payments/webhooks/{provider}
+5. Order → Payment port     → ingest webhook, mark attempt succeeded (in-process)
+6. Order settlement         → settle_owner_order_after_payment_success (in-process saga)
+7. Order                    → fulfillment_status = fulfilled; account ledger credit
 ```
 
 Production path: **webhook ingestion** on the **order gateway** (`POST /app/v3/api/orders/payments/webhooks/{providerCode}`) verifies the PSP signature, calls the payment repository port, then runs settlement in-process when status maps to `succeeded`. **Manual replay** uses `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
@@ -93,7 +94,7 @@ Order **must not** call payment provider SDK directly; use Payment service/repos
 
 ## 7. Create & pay boundary (O5 complete)
 
-`recharges.orders.create` writes **order domain only** (`commerce_order`, items, amount breakdown). Payment intent/attempt is created by **`orders.payments.create`** via `PayOwnerOrderCommand` (payment repository). Account `commerce_billing_history` is **not** written at create; ledger credit runs in the fulfillment saga (`AccountPointsCreditPort`).
+`recharges.orders.create` always writes the **order domain first** (`commerce_order`, items, amount breakdown). Its default `paymentProduct` is `mobile_cashier_h5`: this path returns the order-bound `cashierUrl`, sets `qrCodePayload` to that same URL, and does not create a provider payment intent/attempt. The mobile cashier creates the provider payment after the user selects a channel. Explicit `wechat_native` and `alipay_native` products remain channel-routed and create the provider intent through `PayOwnerOrderCommand`. Account `commerce_billing_history` is **not** written at create; ledger credit runs in the fulfillment saga (`AccountPointsCreditPort`).
 
 Points grant metadata is stored on `commerce_order_item.sku_snapshot_json` and copied into payment attempt `callback_payload` when pay orchestrates.
 

@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { SdkWorkPageData } from '../types';
 
@@ -18,21 +18,21 @@ export class PaymentsOrderPaymentsApi {
 
 
 /** Payments order Payments list. */
-  async list(orderId: string, params?: PaymentsOrderPaymentsListParams): Promise<SdkWorkPageData> {
+  async list(orderId: string, params?: PaymentsOrderPaymentsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
 export class PaymentsApi {
-
+  private client: HttpClient;
   public readonly orderPayments: PaymentsOrderPaymentsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.orderPayments = new PaymentsOrderPaymentsApi(client);
   }
 

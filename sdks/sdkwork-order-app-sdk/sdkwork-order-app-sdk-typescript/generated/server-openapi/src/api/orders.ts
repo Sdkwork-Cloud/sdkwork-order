@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { CommerceOperationCommand, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
@@ -23,29 +23,29 @@ export class OrdersRefundRequestsApi {
 
 
 /** Order refund requests list. */
-  async list(params?: OrdersRefundRequestsListParams): Promise<SdkWorkPageData> {
+  async list(params?: OrdersRefundRequestsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/refund_requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** Order refund requests create. */
-  async create(body: RefundRequestCreateCommand, params: OrdersRefundRequestsCreateParams): Promise<Record<string, unknown>> {
+  async create(body: RefundRequestCreateCommand, params: OrdersRefundRequestsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 
 /** Order refund requests retrieve. */
-  async retrieve(refundRequestId: string): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`));
+  async retrieve(refundRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -58,8 +58,8 @@ export class OrdersStatusApi {
 
 
 /** Orders status retrieve. */
-  async retrieve(orderId: string): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/status`));
+  async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/status`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -72,8 +72,8 @@ export class OrdersStatisticsApi {
 
 
 /** Orders statistics retrieve. */
-  async retrieve(): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/statistics`));
+  async retrieve(requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/statistics`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -86,8 +86,8 @@ export class OrdersPaymentSuccessApi {
 
 
 /** Orders payment Success retrieve. */
-  async retrieve(orderId: string): Promise<OrderPaymentSuccess> {
-    return this.client.get<OrderPaymentSuccess>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`));
+  async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<OrderPaymentSuccess> {
+    return this.client.request<OrderPaymentSuccess>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_success`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -104,14 +104,14 @@ export class OrdersCancellationsApi {
 
 
 /** Orders cancellations create. */
-  async create(orderId: string, params: OrdersCancellationsCreateParams, body?: CommerceOperationCommand): Promise<SdkWorkCommandData> {
+  async create(orderId: string, params: OrdersCancellationsCreateParams, body?: CommerceOperationCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancellations`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancellations`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
@@ -129,12 +129,12 @@ export class OrdersEventsApi {
 
 
 /** Orders events list. */
-  async list(orderId: string, params?: OrdersEventsListParams): Promise<SdkWorkPageData> {
+  async list(orderId: string, params?: OrdersEventsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
@@ -147,8 +147,8 @@ export class OrdersPaymentsWebhooksApi {
 
 
 /** Receive PSP payment webhook */
-  async receive(providerCode: string, body: OrdersPaymentsWebhooksReceiveRequest): Promise<SdkWorkCommandData> {
-    return this.client.post<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), body, undefined, undefined, 'application/json');
+  async receive(providerCode: string, body: OrdersPaymentsWebhooksReceiveRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
+    return this.client.request<SdkWorkCommandData>(appApiPath(`/orders/payments/webhooks/${serializePathParameter(providerCode, { name: 'providerCode', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, contentType: 'application/json', skipAuth: true });
   }
 }
 
@@ -167,14 +167,14 @@ export class OrdersPaymentsApi {
 
 
 /** Orders payments create. */
-  async create(orderId: string, body: CommerceOperationCommand, params: OrdersPaymentsCreateParams): Promise<Record<string, unknown>> {
+  async create(orderId: string, body: CommerceOperationCommand, params: OrdersPaymentsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payments`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
@@ -207,18 +207,18 @@ export class OrdersApi {
 
 
 /** Orders list. */
-  async list(params?: OrdersListParams): Promise<SdkWorkPageData> {
+  async list(params?: OrdersListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(appApiPath(`/orders`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 
 /** Orders retrieve. */
-  async retrieve(orderId: string): Promise<Record<string, unknown>> {
-    return this.client.get<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
+  async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
+    return this.client.request<Record<string, unknown>>(appApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 

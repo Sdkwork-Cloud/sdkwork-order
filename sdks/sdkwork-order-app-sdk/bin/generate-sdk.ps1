@@ -12,7 +12,7 @@ $OrderRoot = (Get-Item (Join-Path $FamilyRoot "..\..")).FullName
 $WorkspaceRoot = (Get-Item (Join-Path $OrderRoot "..")).FullName
 $GeneratorPath = Join-Path $WorkspaceRoot "sdkwork-sdk-generator\bin\sdkgen.js"
 $SdkName = Split-Path -Leaf $FamilyRoot
-$InputPath = Join-Path $FamilyRoot "openapi\sdkwork-order-app-api.openapi.json"
+$InputPath = Join-Path $FamilyRoot "openapi\sdkwork-order-app-api.sdkgen.json"
 $ApiPrefix = "/app/v3/api"
 $ClientName = "SdkworkAppClient"
 

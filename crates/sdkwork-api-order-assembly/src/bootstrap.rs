@@ -4,16 +4,45 @@
 //! Multi-surface merges mount shared infrastructure routes once at the assembly layer
 //! so `/healthz`, `/livez`, `/readyz`, and `/metrics` are not duplicated per surface.
 
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
 use axum::Router;
 use sdkwork_database_spi::{DefaultDatabaseModule, SpiError};
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service_host::OrderServiceHost;
-use sdkwork_web_bootstrap::ContractFallbackConfig;
-use sdkwork_web_core::HttpRouteManifest;
-use std::sync::Arc;
+use sdkwork_web_bootstrap::{ContractFallbackConfig, ReadinessCheck, ReadinessFuture};
+use sdkwork_web_core::{DomainContextInjector, HttpRoute, HttpRouteManifest};
 
 pub struct ApiAssembly {
     pub router: Router,
+}
+
+pub struct ApiAssemblyContribution {
+    pub router: Router,
+    pub route_manifest: HttpRouteManifest,
+    pub openapi: serde_json::Value,
+    pub permission_catalog: Vec<&'static str>,
+    pub domain_context_injectors: Vec<Arc<dyn DomainContextInjector>>,
+    pub readiness_check: Arc<dyn ReadinessCheck>,
+}
+
+#[derive(Clone)]
+struct OrderReadiness {
+    pool: DatabasePool,
+}
+
+impl ReadinessCheck for OrderReadiness {
+    fn check(&self) -> ReadinessFuture<'_> {
+        let pool = self.pool.clone();
+        Box::pin(async move {
+            match pool.test_connection().await {
+                Ok(true) => Ok(()),
+                Ok(false) => Err("order database readiness query returned no row".to_owned()),
+                Err(error) => Err(format!("order database readiness check failed: {error}")),
+            }
+        })
+    }
 }
 
 impl ApiAssembly {
@@ -53,4 +82,37 @@ pub async fn assemble_backend_business_router(host: Arc<OrderServiceHost>) -> Ap
     ApiAssembly {
         router: sdkwork_routes_order_backend_api::gateway_mount(host).await,
     }
+}
+
+/// Builds the raw Order App API for a gateway-owned Web Framework layer.
+pub async fn assemble_app_api_contribution() -> Result<ApiAssemblyContribution, String> {
+    let host = Arc::new(OrderServiceHost::from_env().await?);
+    let route_manifest = ApiAssembly::app_route_manifest();
+    let router = sdkwork_routes_order_app_api::build_order_app_business_router(host.clone());
+    Ok(ApiAssemblyContribution {
+        router,
+        openapi: sdkwork_web_contract::build_openapi_document(
+            "SDKWork Order App API",
+            route_manifest.routes(),
+        ),
+        permission_catalog: permission_catalog(route_manifest.routes()),
+        route_manifest,
+        domain_context_injectors: Vec::new(),
+        readiness_check: Arc::new(OrderReadiness {
+            pool: host.database_pool().clone(),
+        }),
+    })
+}
+
+fn permission_catalog(routes: &[HttpRoute]) -> Vec<&'static str> {
+    let mut permissions = BTreeSet::new();
+    for route in routes {
+        if let Some(permission) = route.required_permission {
+            permissions.insert(permission);
+        }
+        if let Some(alternate_permissions) = route.alternate_permissions {
+            permissions.extend(alternate_permissions.iter().copied());
+        }
+    }
+    permissions.into_iter().collect()
 }

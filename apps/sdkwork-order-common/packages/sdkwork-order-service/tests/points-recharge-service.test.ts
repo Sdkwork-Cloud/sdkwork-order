@@ -14,7 +14,9 @@ function createAppService(overrides: {
   const create = vi.fn().mockResolvedValue(overrides.create ?? {
     item: {
       amount: "90",
+      cashierUrl: "http://127.0.0.1:3901/cashier/recharge-order-900",
       orderId: "order-900",
+      paymentProduct: "mobile_cashier_h5",
       points: 900,
       qrCodePayload: "weixin://pay/order-900",
       status: "pending",
@@ -57,11 +59,11 @@ describe("createSdkworkPointsRechargeService", () => {
 
     await expect(service.createOrder({ packageId: "recharge-900" })).resolves.toEqual({
       amountCny: 90,
-      cashierUrl: undefined,
+      cashierUrl: "http://127.0.0.1:3901/cashier/recharge-order-900",
       orderId: "order-900",
       orderNo: undefined,
       points: 900,
-      qrCode: "weixin://pay/order-900",
+      qrCode: "http://127.0.0.1:3901/cashier/recharge-order-900",
       status: "pending",
     });
     expect(create).toHaveBeenCalledWith(
@@ -70,6 +72,7 @@ describe("createSdkworkPointsRechargeService", () => {
         currencyCode: "CNY",
         packageId: "recharge-900",
         paymentMethod: "wechat_pay",
+        paymentProduct: "mobile_cashier_h5",
         source: "membership-token-plan",
         subject: "points_recharge",
         targetAsset: "points",

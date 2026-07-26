@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { CheckoutOrder, CheckoutQuote, CheckoutSession, CreateCheckoutSessionRequest } from '../types';
 
@@ -17,14 +17,14 @@ export class CheckoutSessionsOrdersApi {
 
 
 /** Checkout sessions orders create. */
-  async create(checkoutSessionId: string, params: CheckoutSessionsOrdersCreateParams): Promise<CheckoutOrder> {
+  async create(checkoutSessionId: string, params: CheckoutSessionsOrdersCreateParams, requestOptions?: ApiRequestOptions): Promise<CheckoutOrder> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<CheckoutOrder>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/orders`), undefined, undefined, requestHeaders);
+    return this.client.request<CheckoutOrder>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders });
   }
 }
 
@@ -41,14 +41,14 @@ export class CheckoutSessionsQuotesApi {
 
 
 /** Checkout sessions quotes create. */
-  async create(checkoutSessionId: string, params: CheckoutSessionsQuotesCreateParams): Promise<CheckoutQuote> {
+  async create(checkoutSessionId: string, params: CheckoutSessionsQuotesCreateParams, requestOptions?: ApiRequestOptions): Promise<CheckoutQuote> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<CheckoutQuote>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/quotes`), undefined, undefined, requestHeaders);
+    return this.client.request<CheckoutQuote>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}/quotes`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders });
   }
 }
 
@@ -69,28 +69,28 @@ export class CheckoutSessionsApi {
 
 
 /** Checkout sessions create. */
-  async create(body: CreateCheckoutSessionRequest, params: CheckoutSessionsCreateParams): Promise<CheckoutSession> {
+  async create(body: CreateCheckoutSessionRequest, params: CheckoutSessionsCreateParams, requestOptions?: ApiRequestOptions): Promise<CheckoutSession> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<CheckoutSession>(appApiPath(`/checkout/sessions`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<CheckoutSession>(appApiPath(`/checkout/sessions`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 
 /** Checkout sessions retrieve. */
-  async retrieve(checkoutSessionId: string): Promise<CheckoutSession> {
-    return this.client.get<CheckoutSession>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}`));
+  async retrieve(checkoutSessionId: string, requestOptions?: ApiRequestOptions): Promise<CheckoutSession> {
+    return this.client.request<CheckoutSession>(appApiPath(`/checkout/sessions/${serializePathParameter(checkoutSessionId, { name: 'checkoutSessionId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
   }
 }
 
 export class CheckoutApi {
-
+  private client: HttpClient;
   public readonly sessions: CheckoutSessionsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.sessions = new CheckoutSessionsApi(client);
   }
 
@@ -100,7 +100,13 @@ export function createCheckoutApi(client: HttpClient): CheckoutApi {
   return new CheckoutApi(client);
 }
 
-
+function appendQueryString(path: string, rawQueryString: string): string {
+  const query = rawQueryString.replace(/^\?+/, '');
+  if (!query) {
+    return path;
+  }
+  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
+}
 
 interface PathParameterSpec {
   name: string;

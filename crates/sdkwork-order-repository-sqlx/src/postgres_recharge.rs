@@ -1870,6 +1870,12 @@ fn map_checkout_status(
     let out_trade_no = string_cell(row, "out_trade_no");
 
     let payment_method = normalize_method_key(&string_cell(row, "payment_method"));
+    let payment_attempt_id = string_cell(row, "payment_attempt_id");
+    let payment_product = if payment_attempt_id.trim().is_empty() {
+        "mobile_cashier_h5".to_string()
+    } else {
+        recharge_payment_product(&payment_method)?.to_string()
+    };
 
     Ok(CheckoutStatusSnapshot {
         order_id: string_cell(row, "order_id"),
@@ -1882,7 +1888,7 @@ fn map_checkout_status(
         points: checkout_points(&string_cell(row, "points_value"))?,
         provider_code: string_cell(row, "provider_code"),
         payment_method: payment_method.clone(),
-        payment_product: recharge_payment_product(&payment_method)?.to_string(),
+        payment_product,
         order_status,
         payment_status: checkout_effective_payment_status(&payment_status, &payment_attempt_status),
         recharge_status,
@@ -2307,7 +2313,7 @@ fn normalize_method_key(method: &str) -> String {
 fn recharge_payment_product(method: &str) -> Result<&'static str, CommerceServiceError> {
     match method.trim().to_ascii_lowercase().as_str() {
         "wechat_pay" => Ok("wechat_native"),
-        "alipay" => Ok("alipay_page"),
+        "alipay" => Ok("alipay_native"),
         "paypal" => Ok("paypal_checkout"),
         "card" => Ok("card"),
         "apple_pay" => Ok("apple_pay"),

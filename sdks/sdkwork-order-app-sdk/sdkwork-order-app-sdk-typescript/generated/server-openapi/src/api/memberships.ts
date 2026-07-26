@@ -1,5 +1,5 @@
 import { appApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { MembershipOrderCreateCommand, MembershipOrderCreateResult } from '../types';
 
@@ -17,23 +17,23 @@ export class MembershipsOrdersApi {
 
 
 /** Memberships orders create. */
-  async create(body: MembershipOrderCreateCommand, params: MembershipsOrdersCreateParams): Promise<MembershipOrderCreateResult> {
+  async create(body: MembershipOrderCreateCommand, params: MembershipsOrdersCreateParams, requestOptions?: ApiRequestOptions): Promise<MembershipOrderCreateResult> {
     const requestHeaders = buildRequestHeaders(
       {
         'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
 export class MembershipsApi {
-
+  private client: HttpClient;
   public readonly orders: MembershipsOrdersApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.orders = new MembershipsOrdersApi(client);
   }
 
@@ -43,7 +43,13 @@ export function createMembershipsApi(client: HttpClient): MembershipsApi {
   return new MembershipsApi(client);
 }
 
-
+function appendQueryString(path: string, rawQueryString: string): string {
+  const query = rawQueryString.replace(/^\?+/, '');
+  if (!query) {
+    return path;
+  }
+  return path.includes('?') ? `${path}&${query}` : `${path}?${query}`;
+}
 
 
 
