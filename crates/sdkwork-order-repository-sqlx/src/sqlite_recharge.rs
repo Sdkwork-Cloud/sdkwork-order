@@ -27,6 +27,7 @@ const DEFAULT_BASE_CURRENCY_CODE: &str = "CNY";
 const DEFAULT_BASE_POINTS_PER_CNY: &str = "10";
 const DEFAULT_USD_TO_CNY_RATE: &str = "7";
 const RECHARGE_RULE_NO: &str = "CASH_TO_POINTS";
+const RECHARGE_SETTINGS_PROJECTION: &str = "commerce_exchange_rule";
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
 fn normalize_organization_scope(organization_id: Option<&str>) -> String {
@@ -1370,6 +1371,10 @@ async fn load_recharge_settings_from_pool(
     tenant_id: &str,
     organization_id: Option<&str>,
 ) -> Result<RechargeSettingsModel, CommerceServiceError> {
+    if !recharge_settings_projection_exists(pool).await? {
+        return map_settings_row(None);
+    }
+
     let row = if tenant_id.trim().is_empty() {
         sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
             .bind(RECHARGE_RULE_NO)
@@ -1403,6 +1408,10 @@ async fn load_recharge_settings_for_transaction(
     tenant_id: &str,
     organization_id: Option<&str>,
 ) -> Result<RechargeSettingsModel, CommerceServiceError> {
+    if !recharge_settings_projection_exists_for_transaction(tx).await? {
+        return map_settings_row(None);
+    }
+
     let row = if tenant_id.trim().is_empty() {
         sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
             .bind(RECHARGE_RULE_NO)
@@ -1428,6 +1437,30 @@ async fn load_recharge_settings_for_transaction(
     }
     .map_err(|error| store_error("failed to load recharge settings", error))?;
     map_settings_row(row.as_ref())
+}
+
+async fn recharge_settings_projection_exists(
+    pool: &SqlitePool,
+) -> Result<bool, CommerceServiceError> {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?)",
+    )
+    .bind(RECHARGE_SETTINGS_PROJECTION)
+    .fetch_one(pool)
+    .await
+    .map_err(|error| store_error("failed to inspect recharge settings projection", error))
+}
+
+async fn recharge_settings_projection_exists_for_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
+) -> Result<bool, CommerceServiceError> {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ?)",
+    )
+    .bind(RECHARGE_SETTINGS_PROJECTION)
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(|error| store_error("failed to inspect recharge settings projection", error))
 }
 
 fn map_settings_row(

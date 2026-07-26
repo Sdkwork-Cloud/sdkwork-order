@@ -27,17 +27,6 @@ async fn bootstrap_seed_is_idempotent_and_lists_platform_recharge_packages() {
             spu_id TEXT NOT NULL,
             sales_status TEXT NOT NULL
         );
-        CREATE TABLE commerce_exchange_rule (
-            id TEXT NOT NULL PRIMARY KEY,
-            tenant_id TEXT NOT NULL,
-            organization_id TEXT,
-            rule_no TEXT NOT NULL,
-            source_asset_type TEXT NOT NULL,
-            target_asset_type TEXT NOT NULL,
-            rate TEXT NOT NULL,
-            status TEXT NOT NULL,
-            remark TEXT
-        );
         "#,
     )
     .await;
@@ -124,6 +113,91 @@ async fn bootstrap_seed_is_idempotent_and_lists_platform_recharge_packages() {
             ("recharge-4500", "45000", 4500),
             ("recharge-9000", "89900", 9000),
         ]
+    );
+}
+
+#[tokio::test]
+async fn recharge_settings_use_order_defaults_without_the_legacy_exchange_projection() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("sqlite memory pool");
+    apply_sql(&pool, SQLITE_BASELINE).await;
+
+    let store = SqliteCommerceRechargeStore::new(pool);
+    let settings = store
+        .load_recharge_settings(
+            sdkwork_order_service::RechargeSettingsQuery::new("100001", Some("0"))
+                .expect("recharge settings query"),
+        )
+        .await
+        .expect("default recharge settings");
+
+    assert_eq!("CNY", settings.base_currency_code);
+    assert_eq!("10", settings.base_points_per_cny);
+    assert_eq!(
+        Some("1"),
+        settings
+            .currency_to_cny_rates
+            .get("CNY")
+            .map(String::as_str)
+    );
+    assert_eq!(
+        Some("7"),
+        settings
+            .currency_to_cny_rates
+            .get("USD")
+            .map(String::as_str)
+    );
+}
+
+#[tokio::test]
+async fn recharge_settings_use_the_exchange_projection_when_it_is_available() {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("sqlite memory pool");
+    apply_sql(&pool, SQLITE_BASELINE).await;
+    apply_sql(
+        &pool,
+        r#"
+        CREATE TABLE commerce_exchange_rule (
+            id TEXT NOT NULL PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            organization_id TEXT,
+            rule_no TEXT NOT NULL,
+            source_asset_type TEXT NOT NULL,
+            target_asset_type TEXT NOT NULL,
+            rate TEXT NOT NULL,
+            status TEXT NOT NULL,
+            remark TEXT
+        );
+        INSERT INTO commerce_exchange_rule (
+            id, tenant_id, organization_id, rule_no, source_asset_type,
+            target_asset_type, rate, status, remark
+        ) VALUES (
+            'exchange-rule-test', '100001', '0', 'CASH_TO_POINTS', 'cash',
+            'points', '12', 'active',
+            '{"baseCurrencyCode":"CNY","currencyToCnyRates":{"CNY":"1","USD":"8"}}'
+        );
+        "#,
+    )
+    .await;
+
+    let store = SqliteCommerceRechargeStore::new(pool);
+    let settings = store
+        .load_recharge_settings(
+            sdkwork_order_service::RechargeSettingsQuery::new("100001", Some("0"))
+                .expect("recharge settings query"),
+        )
+        .await
+        .expect("projected recharge settings");
+
+    assert_eq!("12", settings.base_points_per_cny);
+    assert_eq!(
+        Some("8"),
+        settings
+            .currency_to_cny_rates
+            .get("USD")
+            .map(String::as_str)
     );
 }
 
