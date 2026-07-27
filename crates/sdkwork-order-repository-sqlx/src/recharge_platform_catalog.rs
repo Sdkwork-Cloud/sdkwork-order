@@ -1,7 +1,7 @@
-//! Platform recharge catalog tenant resolution.
+//! Platform commerce catalog tenant resolution.
 //!
-//! Public recharge packages and exchange rules fall back to a platform-owned tenant
-//! when the caller tenant has no scoped catalog. The tenant id is configurable via
+//! Public recharge and membership packages fall back to a platform-owned tenant when
+//! the caller tenant has no scoped catalog. The tenant id is configurable via
 //! `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` (default `100001`).
 
 pub const ENV_PLATFORM_CATALOG_TENANT_ID: &str = "SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID";

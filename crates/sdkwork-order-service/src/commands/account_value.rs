@@ -1,6 +1,8 @@
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 
-use crate::{AccountValueAssetCode, AccountValueOrderSubject, TokenBankPlanPeriod};
+use crate::{
+    AccountValueAssetCode, AccountValueOrderSubject, CouponRedemptionBenefit, TokenBankPlanPeriod,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateAccountRechargeOrderCommand {
@@ -29,6 +31,7 @@ pub struct CreateAccountRechargeOrderCommand {
 pub struct CreateCouponRechargeOrderCommand {
     pub amount: CommerceMoney,
     pub coupon_code: String,
+    pub benefit: CouponRedemptionBenefit,
     pub currency_code: String,
     pub grant_amount: CommerceMoney,
     pub idempotency_key: String,
@@ -314,6 +317,9 @@ impl CreateCouponRechargeOrderCommand {
         crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
 
         Ok(Self {
+            benefit: CouponRedemptionBenefit::TokenBankCredit {
+                grant_amount: amount.clone(),
+            },
             grant_amount: amount.clone(),
             amount,
             coupon_code: coupon_code.trim().to_string(),

@@ -31,6 +31,9 @@ export interface SdkworkPointsRechargeDialogCopy {
   confirmPayment: string;
   creatingPayment: string;
   emptyPackages: string;
+  expired: string;
+  expiredDescription: string;
+  expiresIn: string;
   loadFailed: string;
   loadingPackages: string;
   myPoints: string;
@@ -39,6 +42,7 @@ export interface SdkworkPointsRechargeDialogCopy {
   paymentUnavailableDescription: string;
   pointsUnit: string;
   retry: string;
+  retryPayment: string;
   scanPrompt: string;
   title: string;
 }
@@ -75,6 +79,9 @@ const DEFAULT_COPY: SdkworkPointsRechargeDialogCopy = {
   confirmPayment: "同意并支付",
   creatingPayment: "正在生成支付二维码...",
   emptyPackages: "暂无可用充值套餐",
+  expired: "订单已过期",
+  expiredDescription: "当前充值订单已过期，请重新创建订单后继续支付。",
+  expiresIn: "订单剩余支付时间",
   loadFailed: "充值套餐加载失败",
   loadingPackages: "正在加载充值套餐...",
   myPoints: "我的积分",
@@ -83,6 +90,7 @@ const DEFAULT_COPY: SdkworkPointsRechargeDialogCopy = {
   paymentUnavailableDescription: "暂时无法生成支付二维码，请稍后重试。",
   pointsUnit: "积分",
   retry: "重新加载",
+  retryPayment: "重新创建订单",
   scanPrompt: "请扫码完成支付",
   title: "积分购买",
 };
@@ -92,6 +100,20 @@ interface SdkworkPointsRechargeExperienceProps extends SdkworkPointsRechargeProp
   className?: string;
   display: "dialog" | "inline";
   onClose?: () => void;
+}
+
+function parseExpirationTime(value: string | undefined): number | null {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function formatRemainingTime(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  const segments = hours > 0 ? [hours, minutes, seconds] : [minutes, seconds];
+  return segments.map((segment) => String(segment).padStart(2, "0")).join(":");
 }
 
 function SdkworkPointsRechargeExperience({
@@ -120,6 +142,7 @@ function SdkworkPointsRechargeExperience({
   const [hasAcceptedAgreement, setHasAcceptedAgreement] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
   const completedOrderRef = useRef<string | null>(null);
   const hasAcceptedAgreementRef = useRef(false);
   const isPayingRef = useRef(false);
@@ -128,7 +151,12 @@ function SdkworkPointsRechargeExperience({
 
   const selectedPackage = packages.find((item) => item.id === selectedPackageId) ?? null;
   const payment = checkout?.packageId === selectedPackageId ? checkout.payment : null;
-  const hasActivePayment = payment !== null && payment.status !== "failed";
+  const expirationTimeMs = parseExpirationTime(payment?.expiresAt);
+  const remainingSeconds = expirationTimeMs === null
+    ? null
+    : Math.max(0, Math.ceil((expirationTimeMs - currentTimeMs) / 1_000));
+  const isExpired = payment?.status === "pending" && remainingSeconds === 0;
+  const hasActivePayment = payment !== null && payment.status !== "failed" && !isExpired;
 
   useEffect(() => {
     if (!active) {
@@ -195,7 +223,19 @@ function SdkworkPointsRechargeExperience({
   }, [copy.paymentUnavailableDescription, payment?.qrCode]);
 
   useEffect(() => {
-    if (!active || !checkout || payment?.status !== "pending" || !payment.orderId) {
+    if (!active || payment?.status !== "pending" || expirationTimeMs === null) {
+      return undefined;
+    }
+
+    const updateCurrentTime = () => setCurrentTimeMs(Date.now());
+    updateCurrentTime();
+    if (expirationTimeMs <= Date.now()) return undefined;
+    const interval = window.setInterval(updateCurrentTime, 1_000);
+    return () => window.clearInterval(interval);
+  }, [active, expirationTimeMs, payment?.status]);
+
+  useEffect(() => {
+    if (!active || !checkout || payment?.status !== "pending" || isExpired || !payment.orderId) {
       return undefined;
     }
     const orderId = payment.orderId;
@@ -208,6 +248,7 @@ function SdkworkPointsRechargeExperience({
         if (!pollingActive
           || paymentRequestSequenceRef.current !== paymentSessionSequence
           || selectedPackageIdRef.current !== packageId) return;
+        setCurrentTimeMs(Date.now());
         setCheckout((current) => current?.packageId === packageId
           && current.payment.orderId === orderId
           ? { packageId, payment: { ...current.payment, ...next } }
@@ -227,10 +268,16 @@ function SdkworkPointsRechargeExperience({
       pollingActive = false;
       window.clearInterval(interval);
     };
-  }, [active, checkout?.packageId, copy.paymentUnavailableDescription, onCompleted, payment?.orderId, payment?.status, service]);
+  }, [active, checkout?.packageId, copy.paymentUnavailableDescription, isExpired, onCompleted, payment?.expiresAt, payment?.orderId, payment?.status, service]);
 
   function selectPackage(packageId: string) {
-    if (packageId === selectedPackageIdRef.current || isPayingRef.current) return;
+    if (isPayingRef.current) return;
+    if (packageId === selectedPackageIdRef.current) {
+      if (isExpired && hasAcceptedAgreementRef.current) {
+        void createPayment(packageId);
+      }
+      return;
+    }
     paymentRequestSequenceRef.current += 1;
     selectedPackageIdRef.current = packageId;
     completedOrderRef.current = null;
@@ -260,6 +307,7 @@ function SdkworkPointsRechargeExperience({
       const result = await service.createOrder({ packageId, paymentMethod });
       if (paymentRequestSequenceRef.current !== requestSequence
         || selectedPackageIdRef.current !== packageId) return;
+      setCurrentTimeMs(Date.now());
       setCheckout({ packageId, payment: result });
       if (result.status === "completed") {
         const key = result.orderId ?? packageId;
@@ -294,7 +342,7 @@ function SdkworkPointsRechargeExperience({
           <div className="sdkwork-points-recharge-dialog__identity">
             <Sparkles aria-hidden="true" />
             {display === "dialog" ? (
-              <ModalTitle id={titleId}>{copy.account}</ModalTitle>
+              <ModalTitle id={titleId}>{copy.title}</ModalTitle>
             ) : (
               <h2 id={titleId}>{copy.account}</h2>
             )}
@@ -310,7 +358,9 @@ function SdkworkPointsRechargeExperience({
         </ModalHeader>
         <ModalBody className="sdkwork-points-recharge-dialog__body">
           <section className="sdkwork-points-recharge-dialog__packages" aria-label={copy.title}>
-            <div className="sdkwork-points-recharge-dialog__section-title"><span />{copy.title}<span /></div>
+            {display === "inline" ? (
+              <h3 className="sdkwork-points-recharge-dialog__section-title">{copy.title}</h3>
+            ) : null}
             {isLoading ? <p className="sdkwork-points-recharge-dialog__muted">{copy.loadingPackages}</p> : null}
             {!isLoading && packages.length === 0 && !error ? <p className="sdkwork-points-recharge-dialog__muted">{copy.emptyPackages}</p> : null}
             {!isLoading && packages.length === 0 && error ? (
@@ -343,7 +393,7 @@ function SdkworkPointsRechargeExperience({
           </section>
           <aside aria-live="polite" className="sdkwork-points-recharge-dialog__payment">
             {error && packages.length > 0 ? <StatusNotice tone="danger" title={copy.paymentUnavailable}>{error}</StatusNotice> : null}
-            {!payment || isPaying || payment.status === "failed" ? (
+            {isPaying || (!isExpired && (!payment || payment.status === "failed")) ? (
               <div className="sdkwork-points-recharge-dialog__payment-empty">
                 <QrCode aria-hidden="true" />
                 {hasAcceptedAgreement ? (
@@ -364,16 +414,35 @@ function SdkworkPointsRechargeExperience({
                 </Button>
               </div>
             ) : null}
-            {payment?.status === "pending" && qrImageUrl ? (
+            {!isPaying && payment?.status === "pending" && !isExpired && qrImageUrl ? (
               <div className="sdkwork-points-recharge-dialog__qr">
+                <h3>{copy.scanPrompt}</h3>
+                {remainingSeconds !== null ? (
+                  <p className="sdkwork-points-recharge-dialog__countdown" role="timer">
+                    <span>{copy.expiresIn}</span>
+                    <strong>{formatRemainingTime(remainingSeconds)}</strong>
+                  </p>
+                ) : null}
                 <img alt={copy.scanPrompt} src={qrImageUrl} />
-                <p>{copy.scanPrompt}</p>
                 <div className="sdkwork-points-recharge-dialog__agreement-accepted">
                   <span className="sdkwork-points-recharge-dialog__agreement-check">
                     <Check aria-hidden="true" />
                   </span>
                   {copy.agreementAccepted}
                 </div>
+              </div>
+            ) : null}
+            {!isPaying && isExpired ? (
+              <div className="sdkwork-points-recharge-dialog__expired">
+                <StatusNotice tone="danger" title={copy.expired}>{copy.expiredDescription}</StatusNotice>
+                <Button
+                  disabled={!selectedPackage}
+                  onClick={() => selectedPackage && void createPayment(selectedPackage.id)}
+                  type="button"
+                  variant="secondary"
+                >
+                  {copy.retryPayment}
+                </Button>
               </div>
             ) : null}
             {payment?.status === "completed" ? <div className="sdkwork-points-recharge-dialog__completed"><CheckCircle2 aria-hidden="true" /><strong>{copy.completed}</strong>{display === "dialog" ? <Button onClick={closeDialog} type="button">{copy.close}</Button> : null}</div> : null}

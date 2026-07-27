@@ -1,7 +1,7 @@
 import { appApiPath } from './paths';
 import type { ApiRequestOptions, HttpClient } from '../http/client';
 
-import type { CommerceOperationCommand, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
+import type { CommerceOperationCommand, CouponRedemptionCreateCommand, CouponRedemptionResult, OrderPaymentSuccess, OrdersPaymentsWebhooksReceiveRequest, RefundRequestCreateCommand, SdkWorkCommandData, SdkWorkPageData } from '../types';
 
 
 export interface OrdersRefundRequestsListParams {
@@ -46,6 +46,30 @@ export class OrdersRefundRequestsApi {
 /** Order refund requests retrieve. */
   async retrieve(refundRequestId: string, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     return this.client.request<Record<string, unknown>>(appApiPath(`/orders/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any });
+  }
+}
+
+export interface OrdersCouponRedemptionsCreateParams {
+  idempotencyKey: string;
+}
+
+export class OrdersCouponRedemptionsApi {
+  private client: HttpClient;
+
+  constructor(client: HttpClient) {
+    this.client = client;
+  }
+
+
+/** Redeem a coupon into Token Bank credit or a quota-limited subscription. */
+  async create(body: CouponRedemptionCreateCommand, params: OrdersCouponRedemptionsCreateParams, requestOptions?: ApiRequestOptions): Promise<CouponRedemptionResult> {
+    const requestHeaders = buildRequestHeaders(
+      {
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
+      },
+      {}
+    );
+    return this.client.request<CouponRedemptionResult>(appApiPath(`/orders/coupon_redemptions`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
   }
 }
 
@@ -192,6 +216,7 @@ export class OrdersApi {
   public readonly paymentSuccess: OrdersPaymentSuccessApi;
   public readonly statistics: OrdersStatisticsApi;
   public readonly status: OrdersStatusApi;
+  public readonly couponRedemptions: OrdersCouponRedemptionsApi;
   public readonly refundRequests: OrdersRefundRequestsApi;
 
   constructor(client: HttpClient) {
@@ -202,6 +227,7 @@ export class OrdersApi {
     this.paymentSuccess = new OrdersPaymentSuccessApi(client);
     this.statistics = new OrdersStatisticsApi(client);
     this.status = new OrdersStatusApi(client);
+    this.couponRedemptions = new OrdersCouponRedemptionsApi(client);
     this.refundRequests = new OrdersRefundRequestsApi(client);
   }
 

@@ -117,7 +117,7 @@
     },
     {
       "subject": "membership",
-      "handler": "MembershipPurchaseFulfillmentPort (sdkwork-order-integration-membership)",
+      "handler": "MembershipPurchaseFulfillmentPort with immutable paid-order snapshot (sdkwork-order-integration-membership)",
       "status": "complete"
     },
     {
@@ -210,8 +210,9 @@
       "orders.refundRequests.create references original order",
       "order -> account reversal hold",
       "order -> payment provider refund execution",
-      "provider refund success -> account reversal commit",
-      "provider refund failure -> account hold release"
+      "provider-confirmed refund success -> account reversal commit",
+      "ambiguous or processing provider refund -> retain account hold and original refund identity",
+      "deterministic provider refund failure -> account hold release"
     ],
     "cashWithdrawal": [
       "withdrawals.requests.create",
@@ -226,7 +227,10 @@
       "paymentParams.qrCodePayload -> @sdkwork/order-pc-checkout through a membership-supplied checkout driver",
       "@sdkwork/order-pc-checkout polls its injected orders.paymentSuccess status driver",
       "PSP webhook -> order payments webhooks",
-      "order in-process settlement -> MembershipPurchaseFulfillmentPort"
+      "order loads immutable action/orderNo/packageId snapshot from commerce_order and commerce_order_item",
+      "order in-process settlement -> MembershipPurchaseFulfillmentPort(action, orderNo, packageId, subject, paidAt)",
+      "membership atomically reserves and activates subscription, period, grants, ledger entries, and entitlement accounts",
+      "source-order replay returns the existing active fulfillment without duplicate effects"
     ]
   },
   "forbidden": [

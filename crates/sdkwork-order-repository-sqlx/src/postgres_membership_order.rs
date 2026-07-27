@@ -3,7 +3,17 @@ use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderO
 use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
+use crate::membership_order_identity::{
+    ensure_membership_request_fingerprint_matches, membership_order_request_fingerprint,
+    membership_purchase_intent_key,
+};
+use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
+
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
+
+fn catalog_sql(template: &'static str) -> String {
+    materialize_platform_catalog_sql(template)
+}
 
 const LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID: &str = r#"
 SELECT
@@ -115,13 +125,6 @@ impl PostgresCommerceMembershipOrderStore {
         &self,
         command: CreateMembershipOrderCommand,
     ) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
-        if let Some(outcome) = self
-            .load_membership_order_by_idempotency_key(&command)
-            .await?
-        {
-            return Ok(outcome);
-        }
-
         let mut tx =
             self.pool.begin().await.map_err(|error| {
                 store_error("failed to begin membership order transaction", error)
@@ -131,8 +134,74 @@ impl PostgresCommerceMembershipOrderStore {
         // The H5 cashier can resolve its provider after the order is created.
         // Persist the requested method without requiring a pre-seeded method row.
         let method_key = normalize_method_key(&command.method);
+        let request_fingerprint = membership_order_request_fingerprint(&command);
+        let purchase_intent_key = membership_purchase_intent_key(
+            &command,
+            &package.sku_id,
+            package.price_amount.as_str(),
+            &package.currency_code,
+            package.duration_days,
+        );
 
-        insert_membership_order(&mut tx, &command, &package).await?;
+        if let Some(outcome) =
+            load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None)
+                .await?
+        {
+            ensure_membership_request_fingerprint_matches(
+                outcome.request_fingerprint.as_deref().unwrap_or_default(),
+                &request_fingerprint,
+            )?;
+            tx.commit().await.map_err(|error| {
+                store_error("failed to commit membership idempotency replay", error)
+            })?;
+            return Ok(outcome.value);
+        }
+
+        expire_stale_membership_orders(&mut tx, &command, &purchase_intent_key).await?;
+        if let Some(outcome) =
+            load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key)).await?
+        {
+            tx.commit().await.map_err(|error| {
+                store_error("failed to commit reusable membership order", error)
+            })?;
+            return Ok(outcome.value);
+        }
+
+        let inserted = insert_membership_order(
+            &mut tx,
+            &command,
+            &package,
+            &request_fingerprint,
+            &purchase_intent_key,
+        )
+        .await?;
+        if !inserted {
+            if let Some(outcome) =
+                load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None)
+                    .await?
+            {
+                ensure_membership_request_fingerprint_matches(
+                    outcome.request_fingerprint.as_deref().unwrap_or_default(),
+                    &request_fingerprint,
+                )?;
+                tx.commit().await.map_err(|error| {
+                    store_error("failed to commit concurrent membership replay", error)
+                })?;
+                return Ok(outcome.value);
+            }
+            if let Some(outcome) =
+                load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key))
+                    .await?
+            {
+                tx.commit().await.map_err(|error| {
+                    store_error("failed to commit concurrent membership reuse", error)
+                })?;
+                return Ok(outcome.value);
+            }
+            return Err(CommerceServiceError::conflict(
+                "membership order creation conflicted with another request",
+            ));
+        }
         insert_membership_order_item(&mut tx, &command, &package, &method_key).await?;
         insert_membership_order_amount_breakdown(&mut tx, &command, &package).await?;
 
@@ -146,24 +215,35 @@ impl PostgresCommerceMembershipOrderStore {
             &method_key,
         ))
     }
+}
 
-    async fn load_membership_order_by_idempotency_key(
-        &self,
-        command: &CreateMembershipOrderCommand,
-    ) -> Result<Option<CreateMembershipOrderOutcome>, CommerceServiceError> {
-        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
-        let row = sqlx::query(
+struct StoredMembershipOrderOutcome {
+    request_fingerprint: Option<String>,
+    value: CreateMembershipOrderOutcome,
+}
+
+async fn load_membership_order_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    command: &CreateMembershipOrderCommand,
+    idempotency_key: Option<&str>,
+    purchase_intent_key: Option<&str>,
+) -> Result<Option<StoredMembershipOrderOutcome>, CommerceServiceError> {
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+    let row = sqlx::query(
             r#"
             SELECT
                 o.id AS order_id,
                 o.order_no,
                 COALESCE(NULLIF(o.request_no, ''), o.order_no) AS out_trade_no,
+                o.request_fingerprint,
+                COALESCE(NULLIF(o.membership_action, ''), $1) AS membership_action,
+                CAST(o.expired_at AS TEXT) AS expires_at,
                 CAST(COALESCE(ab.payable_amount, oi.total_amount, '0') AS TEXT) AS amount,
                 COALESCE(NULLIF(ab.currency_code, ''), 'CNY') AS currency_code,
                 COALESCE(
                     NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'packageId', ''),
                     CAST(mp.external_id AS TEXT),
-                    $1
+                    $2
                 ) AS package_id,
                 COALESCE(
                     NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'productName', ''),
@@ -177,10 +257,7 @@ impl PostgresCommerceMembershipOrderStore {
                     CAST(mp.duration_days AS TEXT),
                     '0'
                 ) AS BIGINT) AS duration_days,
-                COALESCE(
-                    NULLIF(COALESCE(to_jsonb(oi) ->> 'sku_snapshot_json', '{}')::jsonb ->> 'paymentMethod', ''),
-                    $6
-                ) AS payment_method,
+                $3 AS payment_method,
                 o.status AS order_status
             FROM commerce_order o
             LEFT JOIN commerce_order_item oi
@@ -191,51 +268,100 @@ impl PostgresCommerceMembershipOrderStore {
                AND ab.order_id = o.id
             LEFT JOIN membership_package mp
                 ON mp.sku_id = oi.sku_id
-               AND CAST(mp.external_id AS TEXT) = $1
+               AND CAST(mp.external_id AS TEXT) = $2
                AND mp.status = 'active'
-            WHERE o.tenant_id = CAST($2 AS TEXT)
-              AND ((o.organization_id = CAST($3 AS TEXT)) OR (o.organization_id IS NULL AND $3 IS NULL))
-              AND o.owner_user_id = CAST($4 AS TEXT)
-              AND o.idempotency_key = CAST($5 AS TEXT)
+            WHERE o.tenant_id = CAST($4 AS TEXT)
+              AND ((o.organization_id = CAST($5 AS TEXT)) OR (o.organization_id IS NULL AND $5::text IS NULL))
+              AND o.owner_user_id = CAST($6 AS TEXT)
               AND o.subject = 'membership'
+              AND (
+                    ($7::text IS NOT NULL AND o.idempotency_key = CAST($7 AS TEXT))
+                    OR
+                    ($8::text IS NOT NULL
+                     AND o.purchase_intent_key = CAST($8 AS TEXT)
+                     AND o.status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created')
+                     AND o.expired_at IS NOT NULL
+                     AND NULLIF(o.expired_at, '')::timestamptz > $9::timestamptz)
+                  )
             ORDER BY oi.created_at ASC NULLS LAST, oi.id ASC
             LIMIT 1
             "#,
         )
+        .bind(&command.action)
         .bind(&command.package_id)
+        .bind(normalize_method_key(&command.method))
         .bind(&command.tenant_id)
         .bind(&organization_id)
         .bind(&command.owner_user_id)
-        .bind(&command.idempotency_key)
-        .bind(normalize_method_key(&command.method))
-        .fetch_optional(&self.pool)
+        .bind(idempotency_key)
+        .bind(purchase_intent_key)
+        .bind(&command.requested_at)
+        .fetch_optional(&mut **tx)
         .await
-        .map_err(|error| store_error("failed to load membership order idempotency replay", error))?;
+        .map_err(|error| store_error("failed to load reusable membership order", error))?;
 
-        let Some(row) = row else {
-            return Ok(None);
-        };
+    let Some(row) = row else {
+        return Ok(None);
+    };
 
-        let order_no = string_cell(&row, "order_no");
-        let out_trade_no = string_cell(&row, "out_trade_no");
-        let amount = commerce_money_cell(&row, "amount", "membership order amount")?;
-        let duration_days = required_positive_integer_cell(&row, "duration_days")?;
+    let order_no = string_cell(&row, "order_no");
+    let out_trade_no = string_cell(&row, "out_trade_no");
+    let amount = commerce_money_cell(&row, "amount", "membership order amount")?;
+    let duration_days = required_positive_integer_cell(&row, "duration_days")?;
 
-        CreateMembershipOrderOutcome::new(
-            &string_cell(&row, "order_id"),
-            &order_no,
-            &out_trade_no,
-            amount,
-            &string_cell(&row, "currency_code"),
-            &string_cell(&row, "package_id"),
-            &string_cell(&row, "package_name"),
-            duration_days,
-            &string_cell(&row, "payment_method"),
-            membership_order_status_label(&string_cell(&row, "order_status")),
-            &membership_cashier_url(&order_no, &out_trade_no),
-        )
-        .map(Some)
-    }
+    let value = CreateMembershipOrderOutcome::new(
+        &string_cell(&row, "order_id"),
+        &string_cell(&row, "membership_action"),
+        &order_no,
+        &out_trade_no,
+        amount,
+        &string_cell(&row, "currency_code"),
+        &string_cell(&row, "package_id"),
+        &string_cell(&row, "package_name"),
+        duration_days,
+        &string_cell(&row, "expires_at"),
+        &string_cell(&row, "payment_method"),
+        membership_order_status_label(&string_cell(&row, "order_status")),
+        true,
+        &membership_cashier_url(&order_no, &out_trade_no),
+    )?;
+    Ok(Some(StoredMembershipOrderOutcome {
+        request_fingerprint: optional_string_cell(&row, "request_fingerprint"),
+        value,
+    }))
+}
+
+async fn expire_stale_membership_orders(
+    tx: &mut Transaction<'_, Postgres>,
+    command: &CreateMembershipOrderCommand,
+    purchase_intent_key: &str,
+) -> Result<(), CommerceServiceError> {
+    sqlx::query(
+        r#"
+        UPDATE commerce_order
+        SET status = 'expired', payment_status = 'expired', updated_at = CAST($1 AS TEXT)
+        WHERE tenant_id = CAST($2 AS TEXT)
+          AND organization_id = CAST($3 AS TEXT)
+          AND owner_user_id = CAST($4 AS TEXT)
+          AND subject = 'membership'
+          AND purchase_intent_key = CAST($5 AS TEXT)
+          AND status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created')
+          AND expired_at IS NOT NULL
+          AND NULLIF(expired_at, '')::timestamptz <= $6::timestamptz
+        "#,
+    )
+    .bind(&command.requested_at)
+    .bind(&command.tenant_id)
+    .bind(normalize_organization_scope(
+        command.organization_id.as_deref(),
+    ))
+    .bind(&command.owner_user_id)
+    .bind(purchase_intent_key)
+    .bind(&command.requested_at)
+    .execute(&mut **tx)
+    .await
+    .map_err(|error| store_error("failed to expire stale membership orders", error))?;
+    Ok(())
 }
 
 async fn load_membership_package(
@@ -244,7 +370,7 @@ async fn load_membership_package(
 ) -> Result<MembershipPackageCatalog, CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)
+        sqlx::query(&catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC))
             .bind(&command.package_id)
             .fetch_optional(&mut **tx)
             .await
@@ -259,7 +385,7 @@ async fn load_membership_package(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC))
                 .bind(&command.package_id)
                 .fetch_optional(&mut **tx)
                 .await
@@ -298,7 +424,9 @@ async fn insert_membership_order(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
-) -> Result<(), CommerceServiceError> {
+    request_fingerprint: &str,
+    purchase_intent_key: &str,
+) -> Result<bool, CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let payload = serde_json::json!({
         "id": command.order_id,
@@ -315,25 +443,29 @@ async fn insert_membership_order(
         "refund_status": "none",
         "total_amount": package.price_amount.as_str(),
         "currency_code": package.currency_code,
-        "request_no": command.order_no,
+        "request_no": command.out_trade_no,
         "idempotency_key": command.idempotency_key,
+        "request_fingerprint": request_fingerprint,
+        "purchase_intent_key": purchase_intent_key,
+        "membership_action": command.action,
         "created_at": command.requested_at,
         "paid_at": null,
         "cancelled_at": null,
         "expired_at": command.expire_at,
         "updated_at": command.requested_at,
     });
-    sqlx::query(
+    let result = sqlx::query(
         r#"
         INSERT INTO commerce_order
         SELECT * FROM jsonb_populate_record(NULL::commerce_order, $1::jsonb)
+        ON CONFLICT DO NOTHING
         "#,
     )
     .bind(payload.to_string())
     .execute(&mut **tx)
     .await
     .map_err(|error| store_error("failed to insert membership order", error))?;
-    Ok(())
+    Ok(result.rows_affected() == 1)
 }
 
 async fn insert_membership_order_item(
@@ -418,7 +550,9 @@ fn membership_order_item_snapshot_json(
         "durationDays": package.duration_days,
         "clientRequestNo": command.client_request_no,
         "source": command.source,
+        "action": command.action,
         "paymentMethod": payment_method,
+        "paymentProduct": command.payment_product,
     })
     .to_string()
 }
@@ -430,6 +564,7 @@ fn build_membership_order_outcome(
 ) -> CreateMembershipOrderOutcome {
     CreateMembershipOrderOutcome::new(
         &command.order_id,
+        &command.action,
         &command.order_no,
         &command.out_trade_no,
         package.price_amount.clone(),
@@ -437,8 +572,10 @@ fn build_membership_order_outcome(
         &package.package_external_id,
         &package.package_name,
         package.duration_days,
+        &command.expire_at,
         payment_method,
         "pending_payment",
+        false,
         &membership_cashier_url(&command.order_no, &command.out_trade_no),
     )
     .expect("membership order outcome should be valid")
@@ -582,5 +719,13 @@ mod tests {
         assert!(source.contains("jsonb_populate_record(NULL::commerce_order_amount_breakdown,"));
         assert!(source.contains("to_jsonb(oi) ->> 'sku_snapshot_json'"));
         assert!(source.contains("to_jsonb(oi) ->> 'item_title'"));
+        assert!(source.contains("NULLIF(o.expired_at, '')::timestamptz > $9::timestamptz"));
+        assert!(source.contains("NULLIF(expired_at, '')::timestamptz <= $6::timestamptz"));
+    }
+
+    #[test]
+    fn postgres_membership_catalog_queries_resolve_the_platform_tenant_placeholder() {
+        let sql = catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC);
+        assert!(!sql.contains("__PLATFORM_TENANT__"));
     }
 }

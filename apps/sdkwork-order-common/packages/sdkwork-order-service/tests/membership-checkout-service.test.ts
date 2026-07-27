@@ -44,6 +44,7 @@ describe("createSdkworkMembershipCheckoutService", () => {
     });
     expect(create).toHaveBeenCalledWith(
       {
+        action: "purchase",
         packageId: "58",
         paymentMethod: "wechat_pay",
         paymentProduct: "mobile_cashier_h5",
@@ -72,6 +73,7 @@ describe("createSdkworkMembershipCheckoutService", () => {
     });
     expect(create).toHaveBeenCalledWith(
       {
+        action: "purchase",
         packageId: "58",
         paymentMethod: "wechat_pay",
         paymentProduct: "wechat_native",
@@ -95,5 +97,41 @@ describe("createSdkworkMembershipCheckoutService", () => {
       status: "completed",
     });
     expect(retrieve).toHaveBeenCalledWith("membership-order-58");
+  });
+
+  it("coalesces concurrent checkout creation for the same purchase intent", async () => {
+    configureSdkworkOrderSessionTokenProvider(() => ({ accessToken: "access-token" }));
+    let resolveCreate: ((value: unknown) => void) | undefined;
+    const create = vi.fn(() => new Promise((resolve) => {
+      resolveCreate = resolve;
+    }));
+    const appService = {
+      memberships: { orders: { create } },
+      orders: { paymentSuccess: { retrieve: vi.fn() } },
+      recharges: {},
+    } as unknown as SdkworkOrderAppService;
+    const service = createSdkworkMembershipCheckoutService({ appService });
+    const input = { action: "purchase", packageId: 58 } as const;
+
+    const first = service.createCheckout(input);
+    const second = service.createCheckout(input);
+    expect(create).toHaveBeenCalledTimes(1);
+
+    resolveCreate?.({
+      item: {
+        action: "purchase",
+        amount: "58",
+        cashierUrl: "https://cashier.test/order-58",
+        expiresAt: "2026-07-26T12:30:00Z",
+        orderId: "order-58",
+        packageId: "58",
+        reused: true,
+        status: "pending",
+      },
+    });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ orderId: "order-58", reused: true }),
+      expect.objectContaining({ orderId: "order-58", reused: true }),
+    ]);
   });
 });

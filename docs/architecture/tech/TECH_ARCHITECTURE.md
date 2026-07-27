@@ -2,7 +2,7 @@
 
 Status: active  
 Owner: SDKWork maintainers  
-Updated: 2026-07-08
+Updated: 2026-07-27
 Specs: ARCHITECTURE_DECISION_SPEC.md, DOCUMENTATION_SPEC.md
 
 ## 1. Architecture Overview
@@ -47,6 +47,14 @@ Write commands marked `x-sdkwork-idempotent` accept the standard `Idempotency-Ke
 | `POST /app/v3/api/checkout/sessions/{checkoutSessionId}/orders` | `checkout.sessions.orders.create` | Canonical checkout-bound product order creation after quote |
 | `POST /app/v3/api/recharges/orders` | `recharges.orders.create` | Account value order creation, starting with points recharge and extending to Token Bank/package/coupon subjects |
 | `POST /app/v3/api/memberships/orders` | `memberships.orders.create` | Membership purchase checkout (`subject=membership`) |
+
+Membership checkout uses two independent idempotency layers. `Idempotency-Key` identifies one command and is bound to a server-computed request fingerprint; replaying that key with a different action, package, source, payment method, or payment product returns HTTP 409. `purchase_intent_key` identifies the commercial intent from tenant, organization, owner, membership action, and the selected package/price snapshot. A partial unique index permits only one active order for that intent. Payment method and product are intentionally excluded, so switching between H5, WeChat, and Alipay reuses the Order. Before creating the new PSP checkout, Payment closes prior active attempts through their historical provider account and commits their local terminal state only after the PSP close succeeds.
+
+Membership Order creation normalizes and snapshots the requested payment method but does not require an active `commerce_payment_method` row. This keeps Order creation behavior identical on SQLite and PostgreSQL and allows the H5 cashier to resolve its provider after the Order exists. Native or provider-executed checkout still validates the effective Payment method, channel, provider account, scene, currency, and expiry inside `sdkwork-payment`; Order creation never treats an unconfigured provider as executable.
+
+The command boundary accepts only `purchase`, `renew`, or `upgrade`, requires RFC3339 `requested_at` and `expire_at` values, and requires expiration to be later than request creation after timezone normalization. The create transaction marks expired matching orders as `expired`, returns a winner with `reused=true` only when `expired_at` is present and later than the request time, or inserts a new row. A missing, empty, malformed, or non-increasing Membership expiration boundary fails closed and is never replaced with the incoming request's value during replay. SQLite compares parsed datetimes rather than timestamp text and serializes the decision with `BEGIN IMMEDIATE`; PostgreSQL combines typed `TIMESTAMPTZ` comparisons, the partial unique index, and conflict-safe winner reread. The API returns `action`, `expiresAt`, and `reused`. Shared TypeScript consumers coalesce concurrent identical calls and refresh an existing `orderId` before retrying creation, but database uniqueness remains authoritative across refreshes, devices, replicas, and applications.
+
+Points recharge creation uses ISO 8601 UTC `requestedAt` and `expiresAt` boundaries and returns `expiresAt` in the initial create response, so browser countdowns never interpret a server UTC instant as local wall-clock time. A new command may reuse the same active commercial checkout across a different transport idempotency key only while the stored expiration boundary is non-empty, parseable, and later than the command time. In the same transaction, stale matching Orders advance from `pending_payment` to `expired`; the repository then creates a new Order instead of returning an expired QR. SQLite compares `datetime(...)` values under `BEGIN IMMEDIATE`, while PostgreSQL uses explicit `timestamptz` casts. The PC recharge component keeps a valid QR visible, stops polling at expiration, and creates a replacement only after an explicit customer retry, avoiding both stale checkout reuse and unattended order churn.
 
 New PC and integrator surfaces must use checkout sessions for product checkout and order app-api resources for account value orders. They must not call payment or account mutation APIs directly for recharge, refund, or withdrawal workflows.
 
@@ -120,7 +128,9 @@ Refund request:
 refund request
   -> account reversal hold
   -> provider refund through payment
-  -> account reversal commit or hold release
+  -> processing/ambiguous: retain hold and retry the same refund identity
+  -> confirmed success: account reversal commit
+  -> deterministic failure: hold release
 ```
 
 Cash withdrawal:
@@ -156,7 +166,7 @@ Immutable package and plan facts are copied into `commerce_order_item.sku_snapsh
 
 ## 6. Payment Integration
 
-`sdkwork-order` depends on `sdkwork-payment` for owner-order payment execution (`OwnerOrderPaymentStore`), payment webhook persistence, provider abstractions, and provider refund execution. The order host wires a concrete refund executor through `sdkwork-order-integration-payment`; payout remains behind `PaymentPayoutExecutorPort` and fails closed until payment provides a concrete payout executor. The standalone gateway may wire repositories in-process; split deployments use HTTP backend APIs.
+`sdkwork-order` depends on `sdkwork-payment` for owner-order payment execution (`OwnerOrderPaymentStore`), payment webhook persistence, provider abstractions, and provider refund execution. The order host wires a concrete refund executor through `sdkwork-order-integration-payment`; it resolves the original Payment Attempt's provider-account and native transaction snapshots, claims the refund as `processing`, and reuses the same refund/provider idempotency identity on recovery. Processing recovery queries the original PSP account by the immutable payment and merchant refund identities before any resubmission; query ambiguity retains the account hold, and confirmed absence permits only an idempotent resubmission. Order keeps the account reversal hold while Payment reports `submitted`, `pending`, or `processing`; it settles only on `succeeded`/`refunded` and releases only on deterministic failure. Payout remains behind `PaymentPayoutExecutorPort` and fails closed until payment provides a concrete payout executor. The standalone gateway may wire repositories in-process; split deployments use HTTP backend APIs.
 
 Settlement orchestration is owned by order, not payment:
 
@@ -182,7 +192,7 @@ fulfillment_status = processing
   -> local fulfilled commit
 ```
 
-Commit failure triggers compensation debit and reservation release. Membership-subject orders call `MembershipPurchaseFulfillmentPort` after payment confirmation.
+Commit failure triggers compensation debit and reservation release. Membership-subject orders load the immutable action/order-number/package snapshot from Order storage and call `MembershipPurchaseFulfillmentPort` after payment confirmation. Membership performs reserve-and-activate atomically; Payment remains unaware of Membership fields, and replay does not duplicate periods or entitlements.
 
 Order detail projections cap line items at 500 rows per request (`MAX_ORDER_LINE_ITEMS`) to avoid unbounded memory use. Missing `commerce_*` read-model tables surface as storage errors in production. Local scaffolding may set `ORDER_READ_MODEL_LENIENT=1` to return empty pages when tables are absent; this is not allowed for production.
 

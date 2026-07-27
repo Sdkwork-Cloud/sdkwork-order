@@ -5,15 +5,26 @@ use std::sync::Arc;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{CancelManagementOrderCommand, CloseManagementOrderCommand};
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+    cancel_owner_order_payments_with_provider_postgres,
+    cancel_owner_order_payments_with_provider_sqlite,
 };
 use sdkwork_payment_service::CancelOrderPaymentsCommand;
+use sqlx::{PgPool, SqlitePool};
 
 #[derive(Clone)]
 pub enum BackendManagementPaymentStore {
-    Postgres(Arc<PostgresCommerceOwnerOrderPaymentStore>),
-    Sqlite(Arc<SqliteCommerceOwnerOrderPaymentStore>),
+    Postgres {
+        pool: PgPool,
+        registry: Arc<PaymentProviderRegistry>,
+        credentials: ProviderCredentialBundle,
+    },
+    Sqlite {
+        pool: SqlitePool,
+        registry: Arc<PaymentProviderRegistry>,
+        credentials: ProviderCredentialBundle,
+    },
 }
 
 #[derive(Clone)]
@@ -75,11 +86,31 @@ async fn close_management_order_payments(
     let payment_command =
         CancelOrderPaymentsCommand::new(tenant_id, organization_id, &owner_user_id, order_id)?;
     match payments {
-        BackendManagementPaymentStore::Postgres(store) => {
-            store.cancel_order_payments(payment_command).await
+        BackendManagementPaymentStore::Postgres {
+            pool,
+            registry,
+            credentials,
+        } => {
+            cancel_owner_order_payments_with_provider_postgres(
+                pool,
+                registry,
+                credentials,
+                payment_command,
+            )
+            .await
         }
-        BackendManagementPaymentStore::Sqlite(store) => {
-            store.cancel_order_payments(payment_command).await
+        BackendManagementPaymentStore::Sqlite {
+            pool,
+            registry,
+            credentials,
+        } => {
+            cancel_owner_order_payments_with_provider_sqlite(
+                pool,
+                registry,
+                credentials,
+                payment_command,
+            )
+            .await
         }
     }
 }

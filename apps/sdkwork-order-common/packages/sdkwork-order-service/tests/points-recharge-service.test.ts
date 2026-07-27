@@ -15,6 +15,7 @@ function createAppService(overrides: {
     item: {
       amount: "90",
       cashierUrl: "http://127.0.0.1:3901/cashier/recharge-order-900",
+      expiresAt: "2026-07-27T04:30:00Z",
       orderId: "order-900",
       paymentProduct: "mobile_cashier_h5",
       points: 900,
@@ -25,7 +26,9 @@ function createAppService(overrides: {
   return {
     appService: {
       memberships: {} as SdkworkOrderAppService["memberships"],
-      orders: {} as SdkworkOrderAppService["orders"],
+      orders: {
+        couponRedemptions: { create },
+      } as unknown as SdkworkOrderAppService["orders"],
       recharges: {
         plans: { list: vi.fn() },
         packages: {
@@ -60,6 +63,7 @@ describe("createSdkworkPointsRechargeService", () => {
     await expect(service.createOrder({ packageId: "recharge-900" })).resolves.toEqual({
       amountCny: 90,
       cashierUrl: "http://127.0.0.1:3901/cashier/recharge-order-900",
+      expiresAt: "2026-07-27T04:30:00Z",
       orderId: "order-900",
       orderNo: undefined,
       points: 900,
@@ -104,11 +108,15 @@ describe("createSdkworkPointsRechargeService", () => {
 });
 
 describe("createSdkworkCouponRechargeService", () => {
-  it("sends only the coupon code and server-controlled Token Bank target", async () => {
+  it("sends only the coupon code to the dedicated redemption API", async () => {
     const { appService, create } = createAppService({
       create: {
         item: {
-          grantAmount: "50",
+          benefit: {
+            kind: "token_bank_credit",
+            targetAsset: "token_bank",
+            grantAmount: "50",
+          },
           orderId: "order-coupon-1",
           orderNo: "CP1001",
           status: "fulfilled",
@@ -120,6 +128,7 @@ describe("createSdkworkCouponRechargeService", () => {
     const service = createSdkworkCouponRechargeService({ appService });
 
     await expect(service.redeem("  WELCOME  ")).resolves.toEqual({
+      benefitKind: "token_bank_credit",
       grantAmount: 50,
       orderId: "order-coupon-1",
       orderNo: "CP1001",
@@ -129,17 +138,60 @@ describe("createSdkworkCouponRechargeService", () => {
     });
     expect(create).toHaveBeenCalledWith(
       {
-        amount: 0,
         couponCode: "WELCOME",
-        currencyCode: "CNY",
-        subject: "coupon_recharge",
-        targetAsset: "token_bank",
       },
       expect.objectContaining({
         idempotencyKey: expect.any(String),
       }),
     );
-    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("grantAmount");
+    expect(Object.keys(create.mock.calls[0]?.[0] as object)).toEqual(["couponCode"]);
+    configureSdkworkOrderSessionTokenProvider(null);
+  });
+
+  it("maps a quota-limited subscription redemption", async () => {
+    const { appService } = createAppService({
+      create: {
+        item: {
+          benefit: {
+            kind: "subscription",
+            productId: "seed-product-membership",
+            skuId: "sku-standard-monthly",
+            packageId: "1002",
+            period: "month",
+            durationDays: "30",
+            dailyQuota: "1000",
+            totalQuota: "30000",
+            subscriptionId: "subscription-coupon-1",
+            startsAt: "2026-07-26 00:00:00",
+            expiresAt: "2026-08-25 00:00:00",
+          },
+          orderId: "order-coupon-2",
+          orderNo: "CP1002",
+          status: "active",
+          replayed: false,
+        },
+      },
+    });
+    configureSdkworkOrderSessionTokenProvider(() => ({ accessToken: "session-token" }));
+    const service = createSdkworkCouponRechargeService({ appService });
+
+    await expect(service.redeem("SUB-MONTH")).resolves.toEqual({
+      benefitKind: "subscription",
+      dailyQuota: 1000,
+      durationDays: 30,
+      expiresAt: "2026-08-25 00:00:00",
+      orderId: "order-coupon-2",
+      orderNo: "CP1002",
+      packageId: "1002",
+      period: "month",
+      productId: "seed-product-membership",
+      replayed: false,
+      skuId: "sku-standard-monthly",
+      startsAt: "2026-07-26 00:00:00",
+      status: "pending",
+      subscriptionId: "subscription-coupon-1",
+      totalQuota: 30000,
+    });
     configureSdkworkOrderSessionTokenProvider(null);
   });
 });

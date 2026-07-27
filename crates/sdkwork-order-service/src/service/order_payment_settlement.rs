@@ -8,8 +8,8 @@ use crate::{
     AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
     AccountValueOrderSubject, CouponRedemptionPort, MarkPointsRechargePaymentSucceededCommand,
     MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort,
-    PointsRechargeFulfillmentStore,
+    MembershipPurchaseSettlementSnapshot, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, PointsRechargeFulfillmentStore,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -174,6 +174,7 @@ pub async fn settle_owner_order_after_payment_success(
     ports: OwnerOrderSettlementPorts<'_>,
     attempt: &OrderPaymentSettlementAttempt,
     order_subject: Option<&str>,
+    membership_purchase: Option<&MembershipPurchaseSettlementSnapshot>,
     request_no: &str,
 ) -> Result<OwnerOrderSettlementOutcome, CommerceServiceError> {
     let payment_outcome = ports
@@ -192,6 +193,7 @@ pub async fn settle_owner_order_after_payment_success(
         subject_kind,
         attempt,
         &payment_outcome.paid_at,
+        membership_purchase,
         request_no,
     )
     .await?;
@@ -220,6 +222,7 @@ async fn dispatch_subject_fulfillment(
     subject: OrderSubjectKind,
     attempt: &OrderPaymentSettlementAttempt,
     paid_at: &str,
+    membership_purchase: Option<&MembershipPurchaseSettlementSnapshot>,
     request_no: &str,
 ) -> Result<SubjectFulfillmentOutcome, CommerceServiceError> {
     match subject {
@@ -257,7 +260,19 @@ async fn dispatch_subject_fulfillment(
             .await
         }
         OrderSubjectKind::Membership => {
-            settle_membership_subject(ports.membership_port, attempt, request_no).await
+            let snapshot = membership_purchase.ok_or_else(|| {
+                CommerceServiceError::invalid_state(
+                    "membership order settlement snapshot is unavailable",
+                )
+            })?;
+            settle_membership_subject(
+                ports.membership_port,
+                attempt,
+                paid_at,
+                snapshot,
+                request_no,
+            )
+            .await
         }
         OrderSubjectKind::Product
         | OrderSubjectKind::VirtualGoods
@@ -405,6 +420,8 @@ where
 async fn settle_membership_subject<M>(
     membership_port: &M,
     attempt: &OrderPaymentSettlementAttempt,
+    paid_at: &str,
+    snapshot: &MembershipPurchaseSettlementSnapshot,
     request_no: &str,
 ) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
 where
@@ -413,10 +430,14 @@ where
     let idempotency_key = membership_purchase_fulfillment_idempotency_key(&attempt.order_id);
     let outcome = membership_port
         .fulfill_membership_purchase(MembershipPurchaseFulfillmentRequest {
+            action: snapshot.action.clone(),
             tenant_id: attempt.tenant_id.clone(),
             organization_id: attempt.organization_id.clone(),
             owner_user_id: attempt.owner_user_id.clone(),
             order_id: attempt.order_id.clone(),
+            order_no: snapshot.order_no.clone(),
+            package_id: snapshot.package_id,
+            paid_at: paid_at.to_owned(),
             request_no: request_no.to_owned(),
             idempotency_key,
         })

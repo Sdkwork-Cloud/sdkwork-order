@@ -270,6 +270,7 @@ async fn confirm_order_payment_inner(
         settlement_ports,
         &attempt,
         Some(order_context.subject.as_str()),
+        order_context.membership_purchase.as_ref(),
         request_no,
     )
     .await

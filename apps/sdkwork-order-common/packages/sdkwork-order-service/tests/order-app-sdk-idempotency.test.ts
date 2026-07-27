@@ -30,8 +30,13 @@ describe('@sdkwork/order-app-sdk idempotent request fingerprints', () => {
       return membershipOrderResponse();
     });
 
-    const client = new SdkworkAppClient({ baseUrl: 'https://orders.example.test' });
+    const client = new SdkworkAppClient({
+      accessToken: 'access-token',
+      authToken: 'auth-token',
+      baseUrl: 'https://orders.example.test',
+    });
     const body = {
+      action: 'purchase',
       packageId: '58',
       paymentMethod: 'wechat_pay',
       paymentProduct: 'mobile_cashier_h5',
@@ -57,7 +62,11 @@ describe('@sdkwork/order-app-sdk idempotent request fingerprints', () => {
       return membershipOrderResponse();
     });
 
-    const client = createClient({ baseUrl: 'https://orders.example.test' });
+    const client = createClient({
+      accessToken: 'access-token',
+      authToken: 'auth-token',
+      baseUrl: 'https://orders.example.test',
+    });
     await client.http.post(
       '/app/v3/api/memberships/orders',
       { packageId: '58' },

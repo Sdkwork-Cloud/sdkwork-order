@@ -20,26 +20,40 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     refund_status TEXT,
     request_no TEXT,
     idempotency_key TEXT,
-    created_at TEXT NOT NULL,
-    paid_at TEXT,
-    cancelled_at TEXT,
-    expired_at TEXT,
-    updated_at TEXT NOT NULL
+    request_fingerprint TEXT,
+    purchase_intent_key TEXT,
+    membership_action TEXT,
+    created_at TIMESTAMPTZ NOT NULL,
+    paid_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    expired_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_membership_order_active_purchase_intent
+    ON commerce_order(
+        tenant_id,
+        COALESCE(organization_id, '0'),
+        owner_user_id,
+        subject,
+        purchase_intent_key
+    )
+    WHERE purchase_intent_key IS NOT NULL
+      AND status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created');
 
 CREATE TABLE IF NOT EXISTS commerce_order_item (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
     order_id TEXT NOT NULL,
     sku_id TEXT,
-    sku_snapshot_json TEXT,
+    sku_snapshot_json JSONB,
     title TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     unit_price_amount TEXT,
     total_amount TEXT,
     fulfillment_status TEXT,
     refund_status TEXT,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS commerce_payment_intent (

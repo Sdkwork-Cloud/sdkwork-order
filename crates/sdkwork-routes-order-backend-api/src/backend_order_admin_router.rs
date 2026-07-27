@@ -14,9 +14,7 @@ use sdkwork_order_service::{
     OrderManagementEventListQuery, OrderManagementEventPage, OrderManagementEventView,
     OrderManagementListPage, OrderManagementListQuery, OrderOwnerDetail, OrderOwnerSummary,
 };
-use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
-};
+use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
@@ -163,22 +161,34 @@ struct OrderCancellationResponse {
 }
 
 pub fn backend_order_admin_router_with_sqlite_pool(pool: SqlitePool) -> Router {
+    let credentials = ProviderCredentialBundle::from_env();
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+        credentials.clone(),
+    ));
     build_backend_order_admin_router(
         BackendManagementOrderStore::Sqlite(Arc::new(SqliteCommerceOrderStore::new(pool.clone()))),
-        BackendManagementPaymentStore::Sqlite(Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(
+        BackendManagementPaymentStore::Sqlite {
             pool,
-        ))),
+            registry,
+            credentials,
+        },
     )
 }
 
 pub fn backend_order_admin_router_with_postgres_pool(pool: PgPool) -> Router {
+    let credentials = ProviderCredentialBundle::from_env();
+    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
+        credentials.clone(),
+    ));
     build_backend_order_admin_router(
         BackendManagementOrderStore::Postgres(Arc::new(PostgresCommerceOrderStore::new(
             pool.clone(),
         ))),
-        BackendManagementPaymentStore::Postgres(Arc::new(
-            PostgresCommerceOwnerOrderPaymentStore::new(pool),
-        )),
+        BackendManagementPaymentStore::Postgres {
+            pool,
+            registry,
+            credentials,
+        },
     )
 }
 

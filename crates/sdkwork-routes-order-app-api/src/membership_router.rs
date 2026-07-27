@@ -56,6 +56,7 @@ struct AppMembershipOrderState {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateMembershipOrderRequest {
+    action: Option<String>,
     package_id: Option<String>,
     payment_method: Option<String>,
     payment_product: Option<String>,
@@ -66,6 +67,7 @@ struct CreateMembershipOrderRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateMembershipOrderResponse {
+    action: String,
     order_id: String,
     order_no: String,
     out_trade_no: String,
@@ -74,6 +76,7 @@ struct CreateMembershipOrderResponse {
     package_id: String,
     package_name: String,
     duration_days: i64,
+    expires_at: String,
     payment_method: String,
     payment_product: String,
     qr_code: String,
@@ -81,13 +84,16 @@ struct CreateMembershipOrderResponse {
     payment_id: Option<String>,
     payment_params: BTreeMap<String, String>,
     status: String,
+    reused: bool,
     cashier_url: String,
 }
 
 struct CreateMembershipCommandInput<'a> {
     subject: &'a AppRuntimeSubject,
     package_id: &'a str,
+    action: &'a str,
     method: &'a str,
+    payment_product: &'a str,
     request_no: &'a str,
     idempotency_key: &'a str,
     client_request_no: Option<&'a str>,
@@ -95,6 +101,10 @@ struct CreateMembershipCommandInput<'a> {
 }
 
 impl CreateMembershipOrderRequest {
+    fn action(&self) -> Option<&str> {
+        self.action.as_deref()
+    }
+
     fn package_id(&self) -> Option<&str> {
         self.package_id.as_deref()
     }
@@ -213,6 +223,10 @@ async fn create_membership_order(
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
     };
+    let action = match validate_membership_action(request.action()) {
+        Ok(value) => value,
+        Err(message) => return validation(ctx, message),
+    };
     let payment_product = match validate_payment_product(request.payment_product()) {
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
@@ -230,7 +244,9 @@ async fn create_membership_order(
     let command = match build_create_membership_command(CreateMembershipCommandInput {
         subject: &subject,
         package_id: &package_id,
+        action: &action,
         method: &method,
+        payment_product: &payment_product,
         request_no: &write_headers.request_no,
         idempotency_key: &write_headers.idempotency_key,
         client_request_no: request.client_request_no(),
@@ -262,6 +278,10 @@ async fn create_membership_order(
     };
     let persisted_organization_id =
         membership_order_organization_scope(subject.organization_id.as_deref());
+    let payment_execution_token = stable_hex_token(&format!(
+        "membership-payment|{}|{}|{}|{}",
+        subject.tenant_id, outcome.order_id, method, payment_product
+    ));
     let pay_command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
         organization_id: Some(persisted_organization_id),
@@ -271,11 +291,8 @@ async fn create_membership_order(
         payment_scene: Some(payment_scene(&payment_product).to_string()),
         payment_attempt_callback_payload: None,
         payment_metadata: serde_json::json!({}),
-        request_no: format!("{}-payment", write_headers.request_no),
-        idempotency_key: format!(
-            "{}:payment:{}",
-            write_headers.idempotency_key, payment_product
-        ),
+        request_no: format!("membership-payment-{payment_execution_token}"),
+        idempotency_key: format!("membership-payment:{payment_execution_token}"),
     }) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
@@ -301,6 +318,14 @@ fn validate_package_id(value: Option<&str>) -> Result<String, String> {
         return Err("package id must be provided".to_string());
     }
     Ok(package_id.to_string())
+}
+
+fn validate_membership_action(value: Option<&str>) -> Result<String, String> {
+    let action = value.unwrap_or("purchase").trim().to_ascii_lowercase();
+    if matches!(action.as_str(), "purchase" | "renew" | "upgrade") {
+        return Ok(action);
+    }
+    Err("membership action must be one of: purchase, renew, upgrade".to_string())
 }
 
 fn validate_payment_product(value: Option<&str>) -> Result<String, String> {
@@ -397,7 +422,9 @@ fn build_create_membership_command(
         input.subject.organization_id.as_deref(),
         &input.subject.user_id,
         input.package_id,
+        input.action,
         input.method,
+        input.payment_product,
         &order_id,
         &order_item_id,
         &order_no,
@@ -435,6 +462,7 @@ fn map_membership_order_outcome(
         )
     };
     CreateMembershipOrderResponse {
+        action: value.action,
         order_id: value.order_id,
         order_no: value.order_no,
         out_trade_no: value.out_trade_no,
@@ -443,6 +471,7 @@ fn map_membership_order_outcome(
         package_id: value.package_id,
         package_name: value.package_name,
         duration_days: value.duration_days,
+        expires_at: value.expires_at,
         payment_method: value.payment_method,
         payment_product: payment_product.to_string(),
         qr_code,
@@ -450,6 +479,7 @@ fn map_membership_order_outcome(
         payment_id,
         payment_params,
         status: payment_status.unwrap_or(value.status),
+        reused: value.reused,
         cashier_url,
     }
 }
@@ -502,7 +532,7 @@ fn format_unix_timestamp(seconds: i64) -> String {
     let hour = seconds_of_day / 3_600;
     let minute = (seconds_of_day % 3_600) / 60;
     let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }
 
 fn civil_from_days(days: i64) -> (i64, i64, i64) {
@@ -524,9 +554,13 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
 mod tests {
     use std::collections::BTreeMap;
 
+    use sdkwork_contract_service::CommerceMoney;
+    use sdkwork_order_service::CreateMembershipOrderOutcome;
+
     use super::{
-        membership_order_organization_scope, payment_scene, provider_qr_code,
-        validate_payment_method, validate_payment_product, DEFAULT_PAYMENT_PRODUCT,
+        map_membership_order_outcome, membership_order_organization_scope, payment_scene,
+        provider_qr_code, validate_payment_method, validate_payment_product,
+        DEFAULT_PAYMENT_PRODUCT,
     };
 
     #[test]
@@ -585,5 +619,34 @@ mod tests {
             provider_qr_code(&params).map(String::as_str),
             Some("weixin://wxpay/bizpayurl?pr=order")
         );
+    }
+
+    #[test]
+    fn membership_response_preserves_purchase_intent_fields_in_camel_case() {
+        let outcome = CreateMembershipOrderOutcome::new(
+            "order-1",
+            "upgrade",
+            "MB-1",
+            "MEMBERSHIP-1",
+            CommerceMoney::new("9900").expect("membership amount"),
+            "CNY",
+            "package-1",
+            "Pro Token Plan",
+            30,
+            "2026-07-26T12:30:00Z",
+            "alipay",
+            "pending_payment",
+            true,
+            "https://cashier.example.test/orders/order-1",
+        )
+        .expect("membership order outcome");
+
+        let response = map_membership_order_outcome(outcome, DEFAULT_PAYMENT_PRODUCT, None);
+        let json = serde_json::to_value(response).expect("membership response JSON");
+
+        assert_eq!(json["action"], "upgrade");
+        assert_eq!(json["expiresAt"], "2026-07-26T12:30:00Z");
+        assert_eq!(json["reused"], true);
+        assert!(json.get("expires_at").is_none());
     }
 }

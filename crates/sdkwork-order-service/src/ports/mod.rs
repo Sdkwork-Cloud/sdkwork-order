@@ -20,18 +20,19 @@ pub use account_value::{
     AccountValueFulfillmentFuture, AccountValueFulfillmentStore, AccountValueFuture,
     AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
     AccountValueLedgerPort, AccountValueRequestExecutionStore, AccountValueRequestStatusCommand,
-    CouponRedemptionOutcome, CouponRedemptionPort, CouponRedemptionRequest,
-    NoopAccountValueLedgerPort, NoopCouponRedemptionPort, NoopPaymentPayoutExecutorPort,
-    NoopPaymentRefundExecutorPort, PaymentExecutorOutcome, PaymentPayoutExecutionRequest,
-    PaymentPayoutExecutorPort, PaymentRefundExecutionRequest, PaymentRefundExecutorPort,
-    ACCOUNT_VALUE_LEDGER_PORT, COUPON_REDEMPTION_PORT, PAYMENT_PAYOUT_EXECUTOR_PORT,
-    PAYMENT_REFUND_EXECUTOR_PORT,
+    CouponRedemptionBenefit, CouponRedemptionOutcome, CouponRedemptionPort,
+    CouponRedemptionRequest, CouponSubscriptionPeriod, NoopAccountValueLedgerPort,
+    NoopCouponRedemptionPort, NoopPaymentPayoutExecutorPort, NoopPaymentRefundExecutorPort,
+    PaymentExecutorOutcome, PaymentPayoutExecutionRequest, PaymentPayoutExecutorPort,
+    PaymentRefundExecutionRequest, PaymentRefundExecutorPort, ACCOUNT_VALUE_LEDGER_PORT,
+    COUPON_REDEMPTION_PORT, PAYMENT_PAYOUT_EXECUTOR_PORT, PAYMENT_REFUND_EXECUTOR_PORT,
 };
 pub use membership_fulfillment::{
-    membership_purchase_fulfillment_idempotency_key, MembershipPurchaseFulfillmentFuture,
+    membership_purchase_fulfillment_idempotency_key, CouponSubscriptionFulfillmentOutcome,
+    CouponSubscriptionFulfillmentRequest, MembershipPurchaseFulfillmentFuture,
     MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, NoopMembershipPurchaseFulfillmentPort,
-    MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
+    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
+    NoopMembershipPurchaseFulfillmentPort, MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
 };
 pub use owner_order_payment::{
     ConfirmOwnerOrderPaymentOutcome, OrderPaymentSettlementAttempt,

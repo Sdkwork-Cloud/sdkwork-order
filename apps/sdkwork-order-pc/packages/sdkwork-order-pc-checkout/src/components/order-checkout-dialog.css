@@ -86,8 +86,7 @@
 
 .sdkwork-order-checkout-dialog__label,
 .sdkwork-order-checkout-dialog__period,
-.sdkwork-order-checkout-dialog__benefit-description,
-.sdkwork-order-checkout-dialog__payment-label {
+.sdkwork-order-checkout-dialog__benefit-description {
   color: var(--sdk-color-text-secondary, #a1a1aa);
   font-size: 0.875rem;
 }
@@ -107,8 +106,7 @@
   text-align: right;
 }
 
-.sdkwork-order-checkout-dialog__price,
-.sdkwork-order-checkout-dialog__payment-price {
+.sdkwork-order-checkout-dialog__price {
   margin-top: 0.25rem;
   color: var(--sdk-color-text-primary, #fff);
   font-size: 1.875rem;
@@ -125,14 +123,21 @@
 
 .sdkwork-order-checkout-dialog__benefit-grid {
   display: grid;
-  gap: 0.75rem;
+  gap: 0;
 }
 
 .sdkwork-order-checkout-dialog__benefit-card {
-  padding: 0.75rem 1rem;
-  background: var(--sdk-color-surface-elevated, rgb(24 24 27 / 50%));
+  border: 0;
+  border-bottom: 1px solid var(--sdk-color-border-subtle, rgb(39 39 42 / 45%));
+  border-radius: 0;
+  padding: 0.875rem 0;
+  background: transparent;
   color: var(--sdk-color-text-secondary, #d4d4d8);
   font-size: 0.875rem;
+}
+
+.sdkwork-order-checkout-dialog__benefit-card:last-child {
+  border-bottom: 0;
 }
 
 .sdkwork-order-checkout-dialog__benefit-title,
@@ -176,8 +181,27 @@
   text-align: center;
 }
 
-.sdkwork-order-checkout-dialog__payment-price {
-  font-weight: 700;
+.sdkwork-order-checkout-dialog__payment-label {
+  margin: 0;
+  color: var(--sdk-color-text-primary, #fff);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.sdkwork-order-checkout-dialog__countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-height: 1.5rem;
+  margin: 0.75rem 0 0;
+  color: var(--sdk-color-text-secondary, #d4d4d8);
+  font-size: 0.875rem;
+}
+
+.sdkwork-order-checkout-dialog__countdown strong {
+  color: var(--sdk-color-state-warning, #fbbf24);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .sdkwork-order-checkout-dialog__pending,
@@ -186,7 +210,7 @@
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  margin-top: 1.75rem;
+  margin-top: 1.25rem;
 }
 
 .sdkwork-order-checkout-dialog__pending {
@@ -216,7 +240,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
 }
 
 .sdkwork-order-checkout-dialog__qr-image {
@@ -258,12 +282,6 @@
   .sdkwork-order-checkout-dialog__summary-card,
   .sdkwork-order-checkout-dialog__payment-panel {
     padding: 1.5rem;
-  }
-}
-
-@media (min-width: 64rem) {
-  .sdkwork-order-checkout-dialog__benefit-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

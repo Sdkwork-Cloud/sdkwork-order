@@ -105,7 +105,8 @@ Failure states:
 
 - `rejected`: business approval failed.
 - `account_hold_failed`: refundable ledger balance cannot be held or reversed.
-- `provider_refund_failed`: payment provider refund failed; order releases or compensates the account hold.
+- `provider_refund_processing`: payment provider submission or reconciliation is pending or ambiguous; order retains the account hold, queries through the original provider account, and reuses the original Payment refund identity.
+- `provider_refund_failed`: payment provider refund failed deterministically; only then may order release or compensate the account hold.
 
 ### Cash withdrawal requests
 
@@ -176,8 +177,9 @@ Continuous plans create a distinct `token_bank_plan_purchase` order for the firs
 1. user or operator creates a refund request referencing the original order
 2. order validates refundable amount and ledger impact
 3. order asks sdkwork-account to hold or reverse the granted account value
-4. order asks sdkwork-payment to execute provider refund
-5. success commits account reversal; failure releases the account hold
+4. order asks sdkwork-payment to execute provider refund using the original Payment Attempt provider/account/transaction snapshot
+5. submitted or ambiguous provider state keeps the account hold while the same refund identity remains retryable
+6. provider-confirmed success commits account reversal; deterministic failure releases the account hold
 ```
 
 ### Cash withdrawal

@@ -36,7 +36,12 @@ describe("SDKWork points recharge surfaces", () => {
 
     const view = render(
       <SdkworkThemeProvider defaultTheme="light">
-        <SdkworkPointsRechargeDialog isOpen onClose={vi.fn()} service={service} />
+        <SdkworkPointsRechargeDialog
+          copy={{ account: "Claw Router", title: "Buy Compute Credits" }}
+          isOpen
+          onClose={vi.fn()}
+          service={service}
+        />
       </SdkworkThemeProvider>,
     );
 
@@ -51,6 +56,9 @@ describe("SDKWork points recharge surfaces", () => {
       "src",
       "data:image/png;base64,recharge-qr",
     );
+    expect(screen.getByRole("dialog", { name: "Buy Compute Credits" })).toBeInTheDocument();
+    expect(screen.getAllByText("CNY 75.00")).toHaveLength(1);
+    expect(document.querySelector(".sdkwork-points-recharge-dialog__payment")).not.toHaveTextContent("CNY 75.00");
     const qrAgreement = screen.getByText("您已同意《积分充值服务协议》");
     expect(qrAgreement).toBeInTheDocument();
     expect(qrAgreement.querySelector(".sdkwork-points-recharge-dialog__agreement-check svg")).toBeInTheDocument();
@@ -144,6 +152,111 @@ describe("SDKWork points recharge surfaces", () => {
       paymentMethod: "wechat_pay",
     }));
     view.unmount();
+  });
+
+  it("reuses a live recharge order and replaces it when the selected package is clicked after expiry", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-27T04:00:00.000Z"));
+    const createOrder = vi
+      .fn()
+      .mockResolvedValueOnce({
+        amountCny: 50,
+        expiresAt: "2026-07-27T04:00:02.000Z",
+        orderId: "recharge-order-expiring",
+        points: 500,
+        qrCode: "data:image/png;base64,recharge-expiring",
+        status: "pending" as const,
+      })
+      .mockResolvedValueOnce({
+        amountCny: 50,
+        expiresAt: "2026-07-27T04:05:00.000Z",
+        orderId: "recharge-order-replacement",
+        points: 500,
+        qrCode: "data:image/png;base64,recharge-replacement",
+        status: "pending" as const,
+      });
+    const getOrderStatus = vi.fn().mockImplementation(async (orderId: string) => ({
+      amountCny: 50,
+      expiresAt: orderId === "recharge-order-expiring"
+        ? "2026-07-27T04:00:02.000Z"
+        : "2026-07-27T04:05:00.000Z",
+      orderId,
+      points: 500,
+      status: "pending" as const,
+    }));
+    const service: SdkworkPointsRechargeService = {
+      listPackages: vi.fn().mockResolvedValue([
+        { id: "recharge-500", bonusPoints: 0, currencyCode: "CNY", grantAmount: 500, points: 500, priceAmount: 50 },
+      ]),
+      createOrder,
+      getOrderStatus,
+    };
+
+    let view: ReturnType<typeof render> | undefined;
+    try {
+      view = render(
+        <SdkworkThemeProvider defaultTheme="light">
+          <SdkworkPointsRechargeDialog
+            copy={{
+              confirmPayment: "Accept and pay",
+              expired: "Order expired",
+              expiredDescription: "Create a new order to continue.",
+              expiresIn: "Order expires in",
+              retryPayment: "Create new order",
+              scanPrompt: "Scan to complete payment",
+            }}
+            isOpen
+            onClose={vi.fn()}
+            service={service}
+          />
+        </SdkworkThemeProvider>,
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Accept and pay" }));
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(screen.getByRole("timer")).toHaveTextContent("Order expires in00:02");
+      expect(screen.getByRole("img", { name: "Scan to complete payment" })).toBeInTheDocument();
+      expect(screen.getAllByText("CNY 50.00")).toHaveLength(1);
+      fireEvent.click(screen.getByRole("button", { name: /500/ }));
+      expect(createOrder).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2_000);
+        await Promise.resolve();
+      });
+      expect(screen.getByText("Order expired")).toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: "Scan to complete payment" })).not.toBeInTheDocument();
+      const statusReadsAtExpiration = getOrderStatus.mock.calls.length;
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+        await Promise.resolve();
+      });
+      expect(getOrderStatus).toHaveBeenCalledTimes(statusReadsAtExpiration);
+
+      fireEvent.click(screen.getByRole("button", { name: /500/ }));
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(createOrder).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("img", { name: "Scan to complete payment" })).toHaveAttribute(
+        "src",
+        "data:image/png;base64,recharge-replacement",
+      );
+    } finally {
+      view?.unmount();
+      act(() => vi.runOnlyPendingTimers());
+      vi.useRealTimers();
+    }
   });
 
   it("requires agreement again after the dialog is closed and reopened", async () => {

@@ -53,6 +53,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                     credentials.clone(),
                     coupon_redemption_port.clone(),
                     account_value_ledger_port.clone(),
+                    membership_port.clone(),
                 ))
                 .merge(app_membership_order_router_with_postgres_pool_and_payments(
                     pool.clone(),
@@ -85,6 +86,7 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                     credentials.clone(),
                     coupon_redemption_port.clone(),
                     account_value_ledger_port.clone(),
+                    membership_port.clone(),
                 ))
                 .merge(app_membership_order_router_with_sqlite_pool_and_payments(
                     pool.clone(),
@@ -112,6 +114,7 @@ fn build_recharge_router_sqlite(
     credentials: ProviderCredentialBundle,
     coupon: Arc<dyn CouponRedemptionPort>,
     ledger: Arc<dyn AccountValueLedgerPort>,
+    membership: Arc<dyn sdkwork_order_service::MembershipPurchaseFulfillmentPort>,
 ) -> axum::Router {
     let store = Arc::new(SqliteCommerceRechargeStore::new(pool.clone()));
     build_app_recharge_checkout_router_with_integrations(
@@ -119,6 +122,7 @@ fn build_recharge_router_sqlite(
         store,
         coupon,
         ledger,
+        membership,
         Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
         crate::owner_order_payment_enrich::enriched_sqlite_owner_order_payments(
             pool,
@@ -134,6 +138,7 @@ fn build_recharge_router_postgres(
     credentials: ProviderCredentialBundle,
     coupon: Arc<dyn CouponRedemptionPort>,
     ledger: Arc<dyn AccountValueLedgerPort>,
+    membership: Arc<dyn sdkwork_order_service::MembershipPurchaseFulfillmentPort>,
 ) -> axum::Router {
     let store = Arc::new(PostgresCommerceRechargeStore::new(pool.clone()));
     build_app_recharge_checkout_router_with_integrations(
@@ -141,6 +146,7 @@ fn build_recharge_router_postgres(
         store,
         coupon,
         ledger,
+        membership,
         Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
         crate::owner_order_payment_enrich::enriched_postgres_owner_order_payments(
             pool,

@@ -1,4 +1,5 @@
 export interface MembershipOrderCreateResult {
+  action: 'purchase' | 'renew' | 'upgrade';
   orderId: string;
   orderNo: string;
   outTradeNo: string;
@@ -7,6 +8,7 @@ export interface MembershipOrderCreateResult {
   packageId: string;
   packageName: string;
   durationDays: string;
+  expiresAt: string;
   paymentMethod: string;
   paymentProduct: 'mobile_cashier_h5' | 'wechat_native' | 'alipay_native';
   qrCode: string;
@@ -14,5 +16,7 @@ export interface MembershipOrderCreateResult {
   paymentId?: string | null;
   paymentParams: Record<string, string>;
   status: string;
+  /** True when an idempotency replay or an existing active purchase intent was returned. */
+  reused: boolean;
   cashierUrl: string;
 }

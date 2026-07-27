@@ -4,8 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use sdkwork_contract_service::{CommerceMoney, CommercePaymentStatus, CommerceServiceError};
 use sdkwork_order_service::{
     AccountValueAssetCode, AccountValueFulfillmentContext, AccountValueFulfillmentStore,
-    AccountValueOrderSubject, CheckoutStatusQuery, CheckoutStatusSnapshot,
-    CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome,
+    AccountValueOrderSubject, CheckoutStatusQuery, CheckoutStatusSnapshot, CouponRedemptionBenefit,
+    CouponSubscriptionPeriod, CreatePointsRechargeOrderCommand, CreatePointsRechargeOrderOutcome,
     FulfillAccountValueOrderCommand, FulfillAccountValueOrderOutcome,
     FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
     MarkPointsRechargePaymentSucceededCommand, PointsRechargeFulfillmentContext,
@@ -423,7 +423,8 @@ SELECT
         ELSE ''
       END
     ) AS asset_unit_code,
-    NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.couponCode'), '') AS coupon_code
+    NULLIF(json_extract(COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}'), '$.couponCode'), '') AS coupon_code,
+    COALESCE(NULLIF(oi.sku_snapshot_json, ''), '{}') AS coupon_snapshot_json
 FROM commerce_order o
 LEFT JOIN commerce_order_item oi
     ON oi.tenant_id = o.tenant_id
@@ -498,7 +499,9 @@ WHERE o.tenant_id = CAST(?1 AS TEXT)
   AND LOWER(COALESCE(NULLIF(o.status, ''), 'pending_payment')) IN ('draft', 'pending', 'pending_payment')
   AND LOWER(COALESCE(NULLIF(pi.status, ''), 'pending')) IN ('created', 'pending', 'processing')
   AND LOWER(COALESCE(NULLIF(pa.status, ''), 'pending')) IN ('created', 'pending', 'processing')
-  AND (o.expired_at IS NULL OR o.expired_at = '' OR o.expired_at > ?10)
+  AND o.expired_at IS NOT NULL
+  AND o.expired_at <> ''
+  AND datetime(o.expired_at) > datetime(?10)
 ORDER BY COALESCE(pa.created_at, pi.created_at, o.created_at) DESC, o.id DESC
 LIMIT 1
 "#;
@@ -632,6 +635,7 @@ impl SqliteCommerceRechargeStore {
             .begin_with("BEGIN IMMEDIATE")
             .await
             .map_err(|error| store_error("failed to begin recharge transaction", error))?;
+        expire_stale_recharge_orders(&mut tx, &command).await?;
         let settings = load_recharge_settings_for_transaction(
             &mut tx,
             &command.tenant_id,
@@ -687,6 +691,7 @@ impl SqliteCommerceRechargeStore {
             provider_code: method.provider_code.clone(),
             payment_method: method.method_key,
             payment_product: method.payment_product.clone(),
+            expires_at: command.expire_at,
             status: "pending".to_string(),
             next_action: "scan_qr".to_string(),
             cashier_url: cashier_url.clone(),
@@ -1789,6 +1794,35 @@ async fn load_reusable_recharge_checkout_status(
     row.as_ref().map(map_checkout_status).transpose()
 }
 
+async fn expire_stale_recharge_orders(
+    tx: &mut Transaction<'_, Sqlite>,
+    command: &CreatePointsRechargeOrderCommand,
+) -> Result<(), CommerceServiceError> {
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+    sqlx::query(
+        r#"
+        UPDATE commerce_order
+        SET status = 'expired', updated_at = ?4
+        WHERE tenant_id = CAST(?1 AS TEXT)
+          AND ((organization_id = CAST(?2 AS TEXT)) OR (organization_id IS NULL AND ?2 IS NULL))
+          AND owner_user_id = CAST(?3 AS TEXT)
+          AND subject = 'points_recharge'
+          AND LOWER(COALESCE(NULLIF(status, ''), 'pending_payment')) IN ('draft', 'pending', 'pending_payment')
+          AND expired_at IS NOT NULL
+          AND expired_at <> ''
+          AND datetime(expired_at) <= datetime(?4)
+        "#,
+    )
+    .bind(&command.tenant_id)
+    .bind(&organization_id)
+    .bind(&command.owner_user_id)
+    .bind(&command.requested_at)
+    .execute(&mut **tx)
+    .await
+    .map_err(|error| store_error("failed to expire stale recharge orders", error))?;
+    Ok(())
+}
+
 async fn insert_order(
     tx: &mut Transaction<'_, Sqlite>,
     command: &CreatePointsRechargeOrderCommand,
@@ -1910,6 +1944,7 @@ fn recharge_outcome_from_checkout_status(
         provider_code: status.provider_code,
         payment_method: status.payment_method,
         payment_product: status.payment_product,
+        expires_at: status.expires_at,
         status: status.status,
         next_action: status.next_action,
         cashier_url: status.cashier_url,
@@ -2482,7 +2517,72 @@ fn map_account_value_fulfillment_context(
         grant_amount: commerce_money_cell(row, "grant_amount", "account value grant amount")?,
         asset_unit_code: string_cell(row, "asset_unit_code"),
         coupon_code: optional_string_cell(row, "coupon_code"),
+        coupon_benefit: parse_coupon_benefit_snapshot(&string_cell(row, "coupon_snapshot_json"))?,
     })
+}
+
+fn parse_coupon_benefit_snapshot(
+    snapshot_json: &str,
+) -> Result<Option<CouponRedemptionBenefit>, CommerceServiceError> {
+    let snapshot: serde_json::Value = serde_json::from_str(snapshot_json).map_err(|error| {
+        CommerceServiceError::storage(format!("invalid coupon order snapshot: {error}"))
+    })?;
+    let Some(benefit) = snapshot.get("couponBenefit") else {
+        return Ok(None);
+    };
+    let kind = benefit
+        .get("kind")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    match kind {
+        "token_bank_credit" => Ok(Some(CouponRedemptionBenefit::TokenBankCredit {
+            grant_amount: CommerceMoney::new(&required_json_text(benefit, "grantAmount")?)
+                .map_err(CommerceServiceError::storage)?,
+        })),
+        "subscription" => Ok(Some(CouponRedemptionBenefit::Subscription {
+            product_id: required_json_text(benefit, "productId")?,
+            sku_id: required_json_text(benefit, "skuId")?,
+            package_id: required_json_integer(benefit, "packageId")?,
+            period: CouponSubscriptionPeriod::parse(&required_json_text(benefit, "period")?)?,
+            duration_days: required_json_integer(benefit, "durationDays")?,
+            daily_quota: required_json_integer(benefit, "dailyQuota")?,
+            total_quota: required_json_integer(benefit, "totalQuota")?,
+        })),
+        _ => Err(CommerceServiceError::storage(
+            "coupon order snapshot has an unsupported benefit kind",
+        )),
+    }
+}
+
+fn required_json_text(
+    value: &serde_json::Value,
+    field: &str,
+) -> Result<String, CommerceServiceError> {
+    value
+        .get(field)
+        .and_then(|value| {
+            value
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| value.as_i64().map(|value| value.to_string()))
+        })
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            CommerceServiceError::storage(format!("coupon order snapshot {field} is missing"))
+        })
+}
+
+fn required_json_integer(
+    value: &serde_json::Value,
+    field: &str,
+) -> Result<i64, CommerceServiceError> {
+    required_json_text(value, field)?
+        .parse::<i64>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| {
+            CommerceServiceError::storage(format!("coupon order snapshot {field} is invalid"))
+        })
 }
 
 impl PointsRechargeFulfillmentStore for SqliteCommerceRechargeStore {

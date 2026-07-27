@@ -3725,12 +3725,101 @@
         "x-sdkwork-api-surface": "app-api"
       }
     },
+    "/app/v3/api/orders/coupon_redemptions": {
+      "post": {
+        "tags": [
+          "orders"
+        ],
+        "summary": "Redeem a coupon into Token Bank credit or a quota-limited subscription.",
+        "operationId": "orders.couponRedemptions.create",
+        "responses": {
+          "201": {
+            "description": "Coupon redeemed and fulfilled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponRedemptionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Coupon unavailable, changed, or cannot be fulfilled.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AuthToken": [],
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponRedemptionCreateCommand"
+              }
+            }
+          }
+        },
+        "x-sdkwork-idempotent": true,
+        "x-sdkwork-owner": "sdkwork-order",
+        "x-sdkwork-api-authority": "sdkwork-order-app-api",
+        "x-sdkwork-domain": "commerce",
+        "x-sdkwork-resource": "orders.couponRedemptions",
+        "x-sdkwork-request-context": "WebRequestContext",
+        "x-sdkwork-api-surface": "app-api"
+      }
+    },
     "/app/v3/api/memberships/orders": {
       "post": {
         "tags": [
           "memberships"
         ],
-        "summary": "Memberships orders create.",
+        "summary": "Create or reuse a membership purchase-intent order.",
         "operationId": "memberships.orders.create",
         "responses": {
           "201": {
@@ -5451,6 +5540,175 @@
           }
         }
       },
+      "CouponRedemptionCreateCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "couponCode"
+        ],
+        "properties": {
+          "couponCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "CouponTokenBankBenefit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "targetAsset",
+          "grantAmount"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "token_bank_credit"
+          },
+          "targetAsset": {
+            "type": "string",
+            "const": "token_bank"
+          },
+          "grantAmount": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          }
+        }
+      },
+      "CouponSubscriptionBenefit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "productId",
+          "skuId",
+          "packageId",
+          "period",
+          "durationDays",
+          "dailyQuota",
+          "totalQuota",
+          "subscriptionId",
+          "startsAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "subscription"
+          },
+          "productId": {
+            "type": "string"
+          },
+          "skuId": {
+            "type": "string"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ]
+          },
+          "durationDays": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "dailyQuota": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "totalQuota": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$"
+          },
+          "subscriptionId": {
+            "type": "string"
+          },
+          "startsAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        }
+      },
+      "CouponRedemptionResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "orderId",
+          "orderNo",
+          "status",
+          "replayed",
+          "benefit"
+        ],
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "benefit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CouponTokenBankBenefit"
+              },
+              {
+                "$ref": "#/components/schemas/CouponSubscriptionBenefit"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "token_bank_credit": "#/components/schemas/CouponTokenBankBenefit",
+                "subscription": "#/components/schemas/CouponSubscriptionBenefit"
+              }
+            }
+          }
+        }
+      },
+      "CouponRedemptionResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SdkWorkApiResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "data"
+            ],
+            "properties": {
+              "data": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "item"
+                ],
+                "properties": {
+                  "item": {
+                    "$ref": "#/components/schemas/CouponRedemptionResult"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
       "RechargeOrderCreateCommand": {
         "type": "object",
         "additionalProperties": false,
@@ -5545,10 +5803,16 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "action",
           "packageId",
           "paymentMethod"
         ],
         "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["purchase", "renew", "upgrade"],
+            "description": "Membership lifecycle action. It participates in business purchase-intent identity."
+          },
           "packageId": {
             "type": "string"
           },
@@ -5603,6 +5867,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
+          "action",
           "orderId",
           "orderNo",
           "outTradeNo",
@@ -5611,15 +5876,21 @@
           "packageId",
           "packageName",
           "durationDays",
+          "expiresAt",
           "paymentMethod",
           "paymentProduct",
           "qrCode",
           "qrCodeType",
           "paymentParams",
           "status",
+          "reused",
           "cashierUrl"
         ],
         "properties": {
+          "action": {
+            "type": "string",
+            "enum": ["purchase", "renew", "upgrade"]
+          },
           "orderId": { "type": "string" },
           "orderNo": { "type": "string" },
           "outTradeNo": { "type": "string" },
@@ -5628,6 +5899,7 @@
           "packageId": { "type": "string" },
           "packageName": { "type": "string" },
           "durationDays": { "type": "integer", "format": "int64" },
+          "expiresAt": { "type": "string", "format": "date-time" },
           "paymentMethod": { "type": "string" },
           "paymentProduct": {
             "type": "string",
@@ -5644,6 +5916,10 @@
             "additionalProperties": { "type": "string" }
           },
           "status": { "type": "string" },
+          "reused": {
+            "type": "boolean",
+            "description": "True when an idempotency replay or an existing active purchase intent was returned."
+          },
           "cashierUrl": { "type": "string" }
         }
       },

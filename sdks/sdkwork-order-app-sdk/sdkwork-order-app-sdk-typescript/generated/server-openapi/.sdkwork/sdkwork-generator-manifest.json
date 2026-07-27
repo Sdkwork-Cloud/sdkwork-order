@@ -44,7 +44,7 @@
     },
     {
       "path": "README.md",
-      "sha256": "52477b3fea9c6f0eaca22008be1b96e59e58265654401331c1c078f6dc307e63"
+      "sha256": "ea18ce73f5d3332a8a13ca455629c533af835bfe2d02dbaca6f059018ec2882e"
     },
     {
       "path": "sdkwork-sdk.json",
@@ -72,11 +72,11 @@
     },
     {
       "path": "src/api/memberships.ts",
-      "sha256": "28ccdb3ef7abfc88a5e04b1cb2c5bf03c033f942f10f6530e5b184c43b9ed367"
+      "sha256": "497fb028c6be98182641a6380a5ae944dfe9f2e9659d01f2275a0f95049794d5"
     },
     {
       "path": "src/api/orders.ts",
-      "sha256": "3ab62636b888ba5240029f57df2faf0d1685d104397aae8938a2e4f0bc90ee67"
+      "sha256": "3ddb5d20403c35c657d0630e2b759373fbc456c91a5f67692fe03f449ed97e8f"
     },
     {
       "path": "src/api/paths.ts",
@@ -187,6 +187,26 @@
       "sha256": "d2506be8c4bdbe8e7059393467e6e71d75ef1d8c018dbf997bb0ab2a77b6c7b6"
     },
     {
+      "path": "src/types/coupon-redemption-create-command.ts",
+      "sha256": "d24e2d324e0ed9c1ef0e637487ed3b559cb5a3235cc32255db3110722fe6a5df"
+    },
+    {
+      "path": "src/types/coupon-redemption-response.ts",
+      "sha256": "84f7f525d9176602823d34c11453a28ced1ba4ab2e44757f6e2aa6e59866a79a"
+    },
+    {
+      "path": "src/types/coupon-redemption-result.ts",
+      "sha256": "00280a8d3580cda3355c8a407cefb3ce4c375dae5d3145d1dbe194c0705e3742"
+    },
+    {
+      "path": "src/types/coupon-subscription-benefit.ts",
+      "sha256": "7368bb806a0116b19ff193d9ff218b561a3d6954f9f4542b8d24950f0616faf5"
+    },
+    {
+      "path": "src/types/coupon-token-bank-benefit.ts",
+      "sha256": "c6113bac512b19e4331e9365f8647c1135280203673f8dec2f4035af23638416"
+    },
+    {
       "path": "src/types/create-after-sales-request-item.ts",
       "sha256": "46ed23ea8c80c794dfd7aee064fe5cd48e506024631d59faa46174b08d8f6424"
     },
@@ -220,11 +240,11 @@
     },
     {
       "path": "src/types/index.ts",
-      "sha256": "873f7a40b9f537a61a5102241316cd0db43c51f5ac95bd86832a766866cd1821"
+      "sha256": "8daf63702b6e500df567a43a460d3ec505960239f561e74b5c5ebe4ab1cdd35b"
     },
     {
       "path": "src/types/membership-order-create-command.ts",
-      "sha256": "f68384425530827efac5348776fe7f9fc54056ff652bd55330d722a1fc9d402d"
+      "sha256": "d392f107ee7f599cac045377c9a59be3d6ab2e0bead9a097e9c2179a0907f22b"
     },
     {
       "path": "src/types/membership-order-create-response.ts",
@@ -232,7 +252,7 @@
     },
     {
       "path": "src/types/membership-order-create-result.ts",
-      "sha256": "986f5672ba574f678f639abd7750eefc409330440273dc3c858525bfd9512e98"
+      "sha256": "ebfcc3baf09b4083e8aaf5c516a8cab96064fbf1358dcf4ff66564ad662a6bb2"
     },
     {
       "path": "src/types/order-payment-success-data.ts",

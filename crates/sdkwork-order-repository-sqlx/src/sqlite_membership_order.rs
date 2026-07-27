@@ -3,7 +3,17 @@ use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderO
 use sdkwork_utils_rust::{build_commerce_cashier_url, commerce_cashier_scene};
 use sqlx::{Row, Sqlite, SqlitePool, Transaction};
 
+use crate::membership_order_identity::{
+    ensure_membership_request_fingerprint_matches, membership_order_request_fingerprint,
+    membership_purchase_intent_key,
+};
+use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
+
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
+
+fn catalog_sql(template: &'static str) -> String {
+    materialize_platform_catalog_sql(template)
+}
 
 const LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID: &str = r#"
 SELECT
@@ -74,27 +84,6 @@ ORDER BY COALESCE(p.sort_weight, 0) ASC, p.id ASC
 LIMIT 1
 "#;
 
-const LOAD_MEMBERSHIP_PAYMENT_METHOD: &str = r#"
-SELECT method_key, provider_code
-FROM commerce_payment_method
-WHERE (
-        (tenant_id = CAST(?1 AS TEXT) AND organization_id = CAST(?2 AS TEXT))
-        OR (tenant_id = CAST(?1 AS TEXT) AND organization_id IS NULL)
-        OR (tenant_id = '__PLATFORM_TENANT__' AND (organization_id = '0' OR organization_id IS NULL))
-      )
-  AND status = 'active'
-  AND LOWER(method_key) = ?3
-ORDER BY
-    CASE
-        WHEN tenant_id = CAST(?1 AS TEXT) AND organization_id = CAST(?2 AS TEXT) THEN 0
-        WHEN tenant_id = CAST(?1 AS TEXT) AND organization_id IS NULL THEN 1
-        ELSE 2
-    END ASC,
-    COALESCE(sort_order, 0) ASC,
-    id ASC
-LIMIT 1
-"#;
-
 #[derive(Debug, Clone)]
 pub struct SqliteCommerceMembershipOrderStore {
     pool: SqlitePool,
@@ -120,13 +109,6 @@ impl SqliteCommerceMembershipOrderStore {
         &self,
         command: CreateMembershipOrderCommand,
     ) -> Result<CreateMembershipOrderOutcome, CommerceServiceError> {
-        if let Some(outcome) = self
-            .load_membership_order_by_idempotency_key(&command)
-            .await?
-        {
-            return Ok(outcome);
-        }
-
         let mut tx = self
             .pool
             .begin_with("BEGIN IMMEDIATE")
@@ -134,9 +116,50 @@ impl SqliteCommerceMembershipOrderStore {
             .map_err(|error| store_error("failed to begin membership order transaction", error))?;
 
         let package = load_membership_package(&mut tx, &command).await?;
-        let method_key = load_membership_payment_method(&mut tx, &command).await?;
+        // The H5 cashier can resolve its provider after the order is created.
+        // Persist the requested method without requiring a pre-seeded method row.
+        let method_key = normalize_method_key(&command.method);
+        let request_fingerprint = membership_order_request_fingerprint(&command);
+        let purchase_intent_key = membership_purchase_intent_key(
+            &command,
+            &package.sku_id,
+            package.price_amount.as_str(),
+            &package.currency_code,
+            package.duration_days,
+        );
 
-        insert_membership_order(&mut tx, &command, &package).await?;
+        if let Some(outcome) =
+            load_membership_order_in_tx(&mut tx, &command, Some(&command.idempotency_key), None)
+                .await?
+        {
+            ensure_membership_request_fingerprint_matches(
+                outcome.request_fingerprint.as_deref().unwrap_or_default(),
+                &request_fingerprint,
+            )?;
+            tx.commit().await.map_err(|error| {
+                store_error("failed to commit membership idempotency replay", error)
+            })?;
+            return Ok(outcome.value);
+        }
+
+        expire_stale_membership_orders(&mut tx, &command, &purchase_intent_key).await?;
+        if let Some(outcome) =
+            load_membership_order_in_tx(&mut tx, &command, None, Some(&purchase_intent_key)).await?
+        {
+            tx.commit().await.map_err(|error| {
+                store_error("failed to commit reusable membership order", error)
+            })?;
+            return Ok(outcome.value);
+        }
+
+        insert_membership_order(
+            &mut tx,
+            &command,
+            &package,
+            &request_fingerprint,
+            &purchase_intent_key,
+        )
+        .await?;
         insert_membership_order_item(&mut tx, &command, &package, &method_key).await?;
         insert_membership_order_amount_breakdown(&mut tx, &command, &package).await?;
 
@@ -150,18 +173,29 @@ impl SqliteCommerceMembershipOrderStore {
             &method_key,
         ))
     }
+}
 
-    async fn load_membership_order_by_idempotency_key(
-        &self,
-        command: &CreateMembershipOrderCommand,
-    ) -> Result<Option<CreateMembershipOrderOutcome>, CommerceServiceError> {
-        let organization_id = normalize_organization_scope(command.organization_id.as_deref());
-        let row = sqlx::query(
+struct StoredMembershipOrderOutcome {
+    request_fingerprint: Option<String>,
+    value: CreateMembershipOrderOutcome,
+}
+
+async fn load_membership_order_in_tx(
+    tx: &mut Transaction<'_, Sqlite>,
+    command: &CreateMembershipOrderCommand,
+    idempotency_key: Option<&str>,
+    purchase_intent_key: Option<&str>,
+) -> Result<Option<StoredMembershipOrderOutcome>, CommerceServiceError> {
+    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
+    let row = sqlx::query(
             r#"
             SELECT
                 o.id AS order_id,
                 o.order_no,
                 COALESCE(NULLIF(o.request_no, ''), o.order_no) AS out_trade_no,
+                o.request_fingerprint,
+                COALESCE(NULLIF(o.membership_action, ''), ?) AS membership_action,
+                o.expired_at AS expires_at,
                 CAST(COALESCE(ab.payable_amount, oi.total_amount, '0') AS TEXT) AS amount,
                 COALESCE(NULLIF(ab.currency_code, ''), 'CNY') AS currency_code,
                 COALESCE(
@@ -178,6 +212,7 @@ impl SqliteCommerceMembershipOrderStore {
                     '0'
                 ) AS INTEGER) AS duration_days,
                 COALESCE(
+                    ?,
                     NULLIF(json_extract(COALESCE(oi.sku_snapshot_json, '{}'), '$.paymentMethod'), ''),
                     '-'
                 ) AS payment_method,
@@ -192,46 +227,100 @@ impl SqliteCommerceMembershipOrderStore {
             WHERE o.tenant_id = CAST(? AS TEXT)
               AND ((o.organization_id = CAST(? AS TEXT)) OR (o.organization_id IS NULL AND ? IS NULL))
               AND o.owner_user_id = CAST(? AS TEXT)
-              AND o.idempotency_key = CAST(? AS TEXT)
               AND o.subject = 'membership'
+              AND (
+                    (? IS NOT NULL AND o.idempotency_key = CAST(? AS TEXT))
+                    OR
+                    (? IS NOT NULL
+                     AND o.purchase_intent_key = CAST(? AS TEXT)
+                     AND o.status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created')
+                     AND o.expired_at IS NOT NULL
+                     AND o.expired_at <> ''
+                     AND datetime(o.expired_at) > datetime(?))
+                  )
             ORDER BY oi.created_at ASC, oi.id ASC
             LIMIT 1
             "#,
         )
+        .bind(&command.action)
         .bind(&command.package_id)
+        .bind(normalize_method_key(&command.method))
         .bind(&command.tenant_id)
         .bind(&organization_id)
         .bind(&organization_id)
         .bind(&command.owner_user_id)
-        .bind(&command.idempotency_key)
-        .fetch_optional(&self.pool)
+        .bind(idempotency_key)
+        .bind(idempotency_key)
+        .bind(purchase_intent_key)
+        .bind(purchase_intent_key)
+        .bind(&command.requested_at)
+        .fetch_optional(&mut **tx)
         .await
-        .map_err(|error| store_error("failed to load membership order idempotency replay", error))?;
+        .map_err(|error| store_error("failed to load reusable membership order", error))?;
 
-        let Some(row) = row else {
-            return Ok(None);
-        };
+    let Some(row) = row else {
+        return Ok(None);
+    };
 
-        let order_no = string_cell(&row, "order_no");
-        let out_trade_no = string_cell(&row, "out_trade_no");
-        let amount = commerce_money_cell(&row, "amount", "membership order amount")?;
-        let duration_days = required_positive_integer_cell(&row, "duration_days")?;
+    let order_no = string_cell(&row, "order_no");
+    let out_trade_no = string_cell(&row, "out_trade_no");
+    let amount = commerce_money_cell(&row, "amount", "membership order amount")?;
+    let duration_days = required_positive_integer_cell(&row, "duration_days")?;
 
-        CreateMembershipOrderOutcome::new(
-            &string_cell(&row, "order_id"),
-            &order_no,
-            &out_trade_no,
-            amount,
-            &string_cell(&row, "currency_code"),
-            &string_cell(&row, "package_id"),
-            &string_cell(&row, "package_name"),
-            duration_days,
-            &string_cell(&row, "payment_method"),
-            membership_order_status_label(&string_cell(&row, "order_status")),
-            &membership_cashier_url(&order_no, &out_trade_no),
-        )
-        .map(Some)
-    }
+    let value = CreateMembershipOrderOutcome::new(
+        &string_cell(&row, "order_id"),
+        &string_cell(&row, "membership_action"),
+        &order_no,
+        &out_trade_no,
+        amount,
+        &string_cell(&row, "currency_code"),
+        &string_cell(&row, "package_id"),
+        &string_cell(&row, "package_name"),
+        duration_days,
+        &string_cell(&row, "expires_at"),
+        &string_cell(&row, "payment_method"),
+        membership_order_status_label(&string_cell(&row, "order_status")),
+        true,
+        &membership_cashier_url(&order_no, &out_trade_no),
+    )?;
+    Ok(Some(StoredMembershipOrderOutcome {
+        request_fingerprint: optional_string_cell(&row, "request_fingerprint"),
+        value,
+    }))
+}
+
+async fn expire_stale_membership_orders(
+    tx: &mut Transaction<'_, Sqlite>,
+    command: &CreateMembershipOrderCommand,
+    purchase_intent_key: &str,
+) -> Result<(), CommerceServiceError> {
+    sqlx::query(
+        r#"
+        UPDATE commerce_order
+        SET status = 'expired', payment_status = 'expired', updated_at = ?
+        WHERE tenant_id = CAST(? AS TEXT)
+          AND organization_id = CAST(? AS TEXT)
+          AND owner_user_id = CAST(? AS TEXT)
+          AND subject = 'membership'
+          AND purchase_intent_key = CAST(? AS TEXT)
+          AND status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created')
+          AND expired_at IS NOT NULL
+          AND expired_at <> ''
+          AND datetime(expired_at) <= datetime(?)
+        "#,
+    )
+    .bind(&command.requested_at)
+    .bind(&command.tenant_id)
+    .bind(normalize_organization_scope(
+        command.organization_id.as_deref(),
+    ))
+    .bind(&command.owner_user_id)
+    .bind(purchase_intent_key)
+    .bind(&command.requested_at)
+    .execute(&mut **tx)
+    .await
+    .map_err(|error| store_error("failed to expire stale membership orders", error))?;
+    Ok(())
 }
 
 async fn load_membership_package(
@@ -240,7 +329,7 @@ async fn load_membership_package(
 ) -> Result<MembershipPackageCatalog, CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)
+        sqlx::query(&catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC))
             .bind(&command.package_id)
             .fetch_optional(&mut **tx)
             .await
@@ -255,7 +344,7 @@ async fn load_membership_package(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)
+            sqlx::query(&catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC))
                 .bind(&command.package_id)
                 .fetch_optional(&mut **tx)
                 .await
@@ -290,38 +379,20 @@ fn map_membership_package_row(
     })
 }
 
-async fn load_membership_payment_method(
-    tx: &mut Transaction<'_, Sqlite>,
-    command: &CreateMembershipOrderCommand,
-) -> Result<String, CommerceServiceError> {
-    let requested_method = normalize_method_key(&command.method);
-    let organization_id = normalize_organization_scope(command.organization_id.as_deref());
-    let row = sqlx::query(LOAD_MEMBERSHIP_PAYMENT_METHOD)
-        .bind(&command.tenant_id)
-        .bind(&organization_id)
-        .bind(&requested_method)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|error| store_error("failed to load membership payment method", error))?
-        .ok_or_else(|| {
-            CommerceServiceError::conflict("membership payment method is unavailable")
-        })?;
-
-    Ok(normalize_method_key(&string_cell(&row, "method_key")))
-}
-
 async fn insert_membership_order(
     tx: &mut Transaction<'_, Sqlite>,
     command: &CreateMembershipOrderCommand,
     package: &MembershipPackageCatalog,
+    request_fingerprint: &str,
+    purchase_intent_key: &str,
 ) -> Result<(), CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     sqlx::query(
         r#"
         INSERT INTO commerce_order
-            (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status, fulfillment_status, refund_status, subject, currency_code, request_no, idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
+            (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status, fulfillment_status, refund_status, subject, currency_code, request_no, idempotency_key, request_fingerprint, purchase_intent_key, membership_action, created_at, paid_at, cancelled_at, expired_at, updated_at)
         VALUES
-            (?, CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), ?, 'pending_payment', 'pending', 'unfulfilled', 'none', 'membership', ?, ?, ?, ?, NULL, NULL, ?, ?)
+            (?, CAST(? AS TEXT), CAST(? AS TEXT), CAST(? AS TEXT), ?, 'pending_payment', 'pending', 'unfulfilled', 'none', 'membership', ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
         "#,
     )
     .bind(&command.order_id)
@@ -330,8 +401,11 @@ async fn insert_membership_order(
     .bind(&command.owner_user_id)
     .bind(&command.order_no)
     .bind(&package.currency_code)
-    .bind(&command.order_no)
+    .bind(&command.out_trade_no)
     .bind(&command.idempotency_key)
+    .bind(request_fingerprint)
+    .bind(purchase_intent_key)
+    .bind(&command.action)
     .bind(&command.requested_at)
     .bind(&command.expire_at)
     .bind(&command.requested_at)
@@ -412,7 +486,9 @@ fn membership_order_item_snapshot_json(
         "durationDays": package.duration_days,
         "clientRequestNo": command.client_request_no,
         "source": command.source,
+        "action": command.action,
         "paymentMethod": payment_method,
+        "paymentProduct": command.payment_product,
     })
     .to_string()
 }
@@ -424,6 +500,7 @@ fn build_membership_order_outcome(
 ) -> CreateMembershipOrderOutcome {
     CreateMembershipOrderOutcome::new(
         &command.order_id,
+        &command.action,
         &command.order_no,
         &command.out_trade_no,
         package.price_amount.clone(),
@@ -431,8 +508,10 @@ fn build_membership_order_outcome(
         &package.package_external_id,
         &package.package_name,
         package.duration_days,
+        &command.expire_at,
         payment_method,
         "pending_payment",
+        false,
         &membership_cashier_url(&command.order_no, &command.out_trade_no),
     )
     .expect("membership order outcome should be valid")
@@ -562,5 +641,11 @@ mod tests {
     fn membership_cashier_url_uses_virtual_scene() {
         let url = membership_cashier_url("MB123", "MEMBERSHIP123");
         assert!(url.contains("scene=virtual"));
+    }
+
+    #[test]
+    fn membership_catalog_queries_resolve_the_platform_tenant_placeholder() {
+        let sql = catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC);
+        assert!(!sql.contains("__PLATFORM_TENANT__"));
     }
 }

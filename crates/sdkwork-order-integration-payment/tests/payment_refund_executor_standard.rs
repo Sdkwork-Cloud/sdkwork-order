@@ -25,7 +25,7 @@ async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_refe
         .expect("refund execution");
 
     assert!(outcome.accepted);
-    assert_eq!(outcome.status, "submitted");
+    assert_eq!(outcome.status, "succeeded");
     let provider_reference_id = outcome
         .provider_reference_id
         .as_deref()
@@ -49,7 +49,7 @@ async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_refe
     );
     assert_eq!(row.get::<String, _>("amount"), "500");
     assert_eq!(row.get::<String, _>("currency_code"), "USD");
-    assert_eq!(row.get::<String, _>("status"), "submitted");
+    assert_eq!(row.get::<String, _>("status"), "succeeded");
     assert_eq!(
         row.get::<String, _>("idempotency_key"),
         "refund-exec-idem-1"
@@ -83,6 +83,8 @@ async fn sandbox_refund_executor_reuses_payment_refund_for_same_idempotency_key(
         .expect("replayed refund");
 
     assert_eq!(first.provider_reference_id, second.provider_reference_id);
+    assert_eq!(first.status, "succeeded");
+    assert_eq!(second.status, "succeeded");
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM commerce_refund")
         .fetch_one(&pool)
         .await
@@ -109,10 +111,10 @@ async fn seed_paid_sandbox_order(pool: &SqlitePool) {
         r#"
         INSERT INTO commerce_order
             (id, tenant_id, organization_id, owner_user_id, order_no, status, subject,
-             currency_code, payment_status, paid_at, created_at, updated_at)
+             currency_code, payment_status, paid_at, expired_at, created_at, updated_at)
         VALUES
             ('order-1', 'tenant-1', 'org-1', 'user-1', 'ORDER-1', 'paid',
-             'token_bank_recharge', 'USD', 'paid', ?, ?, ?)
+             'token_bank_recharge', 'USD', 'paid', ?, '2099-01-01T00:00:00Z', ?, ?)
         "#,
     )
     .bind(now)
@@ -177,6 +179,7 @@ CREATE TABLE commerce_order (
     currency_code TEXT NOT NULL,
     payment_status TEXT,
     paid_at TEXT,
+    expired_at TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

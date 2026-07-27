@@ -115,8 +115,75 @@ where
         }
     };
 
-    settle_account_hold(ledger_port, &command, &request, &hold_id).await?;
-    mark_final_provider_status(store, &command, &provider_outcome, "refunded", &hold_id).await
+    match provider_refund_outcome_class(&provider_outcome.status) {
+        ProviderRefundOutcomeClass::Succeeded => {
+            settle_account_hold(ledger_port, &command, &request, &hold_id).await?;
+            mark_final_provider_status(store, &command, &provider_outcome, "refunded", &hold_id)
+                .await
+        }
+        ProviderRefundOutcomeClass::Processing => {
+            mark_final_provider_status(
+                store,
+                &command,
+                &provider_outcome,
+                "provider_refund_processing",
+                &hold_id,
+            )
+            .await
+        }
+        ProviderRefundOutcomeClass::Failed => {
+            release_account_hold(ledger_port, &command, &request, &hold_id).await?;
+            mark_final_provider_status(
+                store,
+                &command,
+                &provider_outcome,
+                "provider_refund_failed",
+                &hold_id,
+            )
+            .await
+        }
+        ProviderRefundOutcomeClass::Unknown => Err(CommerceServiceError::conflict(
+            "payment refund executor returned an unsupported status",
+        )),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProviderRefundOutcomeClass {
+    Processing,
+    Succeeded,
+    Failed,
+    Unknown,
+}
+
+fn provider_refund_outcome_class(status: &str) -> ProviderRefundOutcomeClass {
+    match status.trim().to_ascii_lowercase().as_str() {
+        "submitted" | "pending" | "processing" => ProviderRefundOutcomeClass::Processing,
+        "succeeded" | "success" | "refunded" => ProviderRefundOutcomeClass::Succeeded,
+        "failed" | "canceled" | "cancelled" => ProviderRefundOutcomeClass::Failed,
+        _ => ProviderRefundOutcomeClass::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod refund_outcome_tests {
+    use super::{provider_refund_outcome_class, ProviderRefundOutcomeClass};
+
+    #[test]
+    fn provider_refund_processing_does_not_mean_funds_were_refunded() {
+        assert_eq!(
+            provider_refund_outcome_class("processing"),
+            ProviderRefundOutcomeClass::Processing
+        );
+        assert_eq!(
+            provider_refund_outcome_class("succeeded"),
+            ProviderRefundOutcomeClass::Succeeded
+        );
+        assert_eq!(
+            provider_refund_outcome_class("unexpected"),
+            ProviderRefundOutcomeClass::Unknown
+        );
+    }
 }
 
 async fn execute_withdrawal_request<S, L, P>(
@@ -347,6 +414,7 @@ fn hold_business_type(
         }
         (_, AccountValueAssetCode::TokenBank) => CommerceLedgerBusinessType::TOKEN_BANK_HOLD,
         (_, AccountValueAssetCode::Points) => CommerceLedgerBusinessType::POINTS_CLAWBACK,
+        (_, AccountValueAssetCode::Subscription) => CommerceLedgerBusinessType::MANUAL_ADJUSTMENT,
         (_, AccountValueAssetCode::Cash) => CommerceLedgerBusinessType::CASH_ADJUSTMENT,
     }
 }
@@ -366,6 +434,7 @@ fn release_business_type(asset: AccountValueAssetCode) -> &'static str {
     match asset {
         AccountValueAssetCode::TokenBank => CommerceLedgerBusinessType::TOKEN_BANK_HOLD_RELEASE,
         AccountValueAssetCode::Points => CommerceLedgerBusinessType::POINTS_CLAWBACK,
+        AccountValueAssetCode::Subscription => CommerceLedgerBusinessType::MANUAL_ADJUSTMENT,
         AccountValueAssetCode::Cash => CommerceLedgerBusinessType::CASH_ADJUSTMENT,
     }
 }

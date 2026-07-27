@@ -118,12 +118,75 @@ pub struct CouponRedemptionRequest {
     pub idempotency_key: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CouponSubscriptionPeriod {
+    Day,
+    Week,
+    Month,
+    Year,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CouponRedemptionBenefit {
+    TokenBankCredit {
+        grant_amount: CommerceMoney,
+    },
+    Subscription {
+        product_id: String,
+        sku_id: String,
+        package_id: i64,
+        period: CouponSubscriptionPeriod,
+        duration_days: i64,
+        daily_quota: i64,
+        total_quota: i64,
+    },
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CouponRedemptionOutcome {
     pub accepted: bool,
     pub replayed: bool,
-    pub target_asset: AccountValueAssetCode,
-    pub grant_amount: CommerceMoney,
+    pub benefit: CouponRedemptionBenefit,
+}
+
+impl CouponSubscriptionPeriod {
+    pub fn parse(value: &str) -> Result<Self, CommerceServiceError> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "day" => Ok(Self::Day),
+            "week" => Ok(Self::Week),
+            "month" => Ok(Self::Month),
+            "year" => Ok(Self::Year),
+            _ => Err(CommerceServiceError::validation(
+                "coupon subscription period is invalid",
+            )),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Day => "day",
+            Self::Week => "week",
+            Self::Month => "month",
+            Self::Year => "year",
+        }
+    }
+}
+
+impl CouponRedemptionBenefit {
+    pub fn target_asset(&self) -> AccountValueAssetCode {
+        match self {
+            Self::TokenBankCredit { .. } => AccountValueAssetCode::TokenBank,
+            Self::Subscription { .. } => AccountValueAssetCode::Subscription,
+        }
+    }
+
+    pub fn grant_amount(&self) -> CommerceMoney {
+        match self {
+            Self::TokenBankCredit { grant_amount } => grant_amount.clone(),
+            Self::Subscription { total_quota, .. } => CommerceMoney::new(&total_quota.to_string())
+                .expect("validated subscription quota must be valid commerce money"),
+        }
+    }
 }
 
 pub trait AccountValueLedgerPort: Send + Sync {

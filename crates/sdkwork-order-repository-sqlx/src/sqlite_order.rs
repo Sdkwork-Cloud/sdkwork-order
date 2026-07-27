@@ -1,5 +1,6 @@
 use crate::money_amount::{commerce_money, multiply_money_amount, normalize_money_amount};
 use crate::order_limits::MAX_ORDER_LINE_ITEMS;
+use crate::order_settlement_context::membership_purchase_snapshot;
 use crate::read_model::{
     empty_rows_when_read_model_is_missing, none_when_read_model_is_missing,
     read_model_table_is_missing,
@@ -315,7 +316,9 @@ impl SqliteCommerceOrderStore {
         let row = sqlx::query(
             r#"
             SELECT o.owner_user_id,
+                   o.order_no,
                    o.subject,
+                   o.membership_action,
                    (
                        SELECT oi.sku_snapshot_json
                        FROM commerce_order_item oi
@@ -339,19 +342,30 @@ impl SqliteCommerceOrderStore {
         .await
         .map_err(|error| store_error("failed to load order payment settlement context", error))?;
 
-        Ok(row.map(|row| {
-            let stored_subject = row.try_get::<Option<String>, _>("subject").ok().flatten();
-            let snapshot = row
-                .try_get::<Option<String>, _>("sku_snapshot_json")
-                .ok()
-                .flatten();
-            OrderPaymentSettlementContext {
-                owner_user_id: string_cell(&row, "owner_user_id"),
-                subject: stable_order_settlement_subject(
-                    stored_subject.as_deref(),
-                    snapshot.as_deref(),
-                ),
-            }
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let stored_subject = row.try_get::<Option<String>, _>("subject").ok().flatten();
+        let snapshot = row
+            .try_get::<Option<String>, _>("sku_snapshot_json")
+            .ok()
+            .flatten();
+        let subject =
+            stable_order_settlement_subject(stored_subject.as_deref(), snapshot.as_deref());
+        let membership_action = row
+            .try_get::<Option<String>, _>("membership_action")
+            .ok()
+            .flatten();
+        let membership_purchase = membership_purchase_snapshot(
+            &subject,
+            &string_cell(&row, "order_no"),
+            membership_action.as_deref(),
+            snapshot.as_deref(),
+        )?;
+        Ok(Some(OrderPaymentSettlementContext {
+            membership_purchase,
+            owner_user_id: string_cell(&row, "owner_user_id"),
+            subject,
         }))
     }
 

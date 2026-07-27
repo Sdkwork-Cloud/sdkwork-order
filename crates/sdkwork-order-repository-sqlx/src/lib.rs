@@ -1,3 +1,4 @@
+mod membership_order_identity;
 mod money_amount;
 pub mod order_lifecycle;
 pub mod order_limits;
@@ -33,6 +34,9 @@ mod order_lifecycle_audit_tests;
 
 #[cfg(test)]
 mod order_management_parity_tests;
+
+#[cfg(test)]
+mod membership_order_postgres_tests;
 
 #[cfg(test)]
 mod order_payment_settlement_tests;

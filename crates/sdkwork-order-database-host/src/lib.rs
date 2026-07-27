@@ -84,6 +84,7 @@ pub async fn bootstrap_order_database_from_env() -> Result<OrderDatabaseHost, St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sdkwork_database_spi::MigrationProvider;
 
     #[test]
     fn database_module_exposes_seeded_order_assets() {
@@ -95,5 +96,33 @@ mod tests {
         assert_eq!(manifest.service_code, "ORDER");
         assert!(manifest.lifecycle.seed_on_boot);
         assert!(module.seeds_dir().join("seed.manifest.json").is_file());
+    }
+
+    #[tokio::test]
+    async fn database_module_exposes_membership_order_postgres_upgrade() {
+        let module = database_module().expect("load order database module");
+        let migrations = module
+            .list_migrations(DatabaseEngine::Postgres)
+            .await
+            .expect("list order postgres migrations");
+        let migration = migrations
+            .iter()
+            .find(|migration| migration.version == "0002")
+            .expect("membership order postgres migration");
+
+        assert_eq!(migration.name, "membership_order_purchase_intent");
+        let sql = std::fs::read_to_string(&migration.up_path)
+            .expect("read membership order postgres migration");
+        for required_schema_object in [
+            "request_fingerprint",
+            "purchase_intent_key",
+            "membership_action",
+            "uk_membership_order_active_purchase_intent",
+        ] {
+            assert!(
+                sql.contains(required_schema_object),
+                "migration must contain {required_schema_object}"
+            );
+        }
     }
 }

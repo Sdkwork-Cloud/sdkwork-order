@@ -50,11 +50,17 @@ impl HttpMembershipPurchaseFulfillmentAdapter {
             ));
         }
 
+        let membership_id = format!("membership-{}", request.order_id);
         let body = serde_json::json!({
-            "tenantId": request.tenant_id,
-            "organizationId": request.organization_id,
-            "ownerUserId": request.owner_user_id,
+            "action": request.action,
+            "tenantId": request.tenant_id.to_string(),
+            "organizationId": request.organization_id.to_string(),
+            "ownerUserId": request.owner_user_id.to_string(),
             "orderId": request.order_id,
+            "membershipId": membership_id,
+            "orderNo": request.order_no,
+            "packageId": request.package_id.to_string(),
+            "paidAt": request.paid_at,
             "requestNo": request.request_no,
             "idempotencyKey": request.idempotency_key,
         });

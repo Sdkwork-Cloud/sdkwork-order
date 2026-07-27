@@ -45,6 +45,7 @@ sdkwork-web-bootstrap = { path = "../sdkwork-web-framework/crates/sdkwork-web-bo
 sdkwork-iam-web-adapter = { path = "../sdkwork-iam/crates/sdkwork-iam-web-adapter" }
 sdkwork_iam_context_service = { path = "../sdkwork-iam/crates/sdkwork-iam-context-service", package = "sdkwork-iam-context-service" }
 sdkwork-database-config = { path = "../sdkwork-database/crates/sdkwork-database-config" }
+sdkwork-database-history = { path = "../sdkwork-database/crates/sdkwork-database-history" }
 sdkwork-database-lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle" }
 sdkwork-database-spi = { path = "../sdkwork-database/crates/sdkwork-database-spi" }
 sdkwork-database-sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx" }
@@ -64,6 +65,7 @@ sdkwork_order_integration_membership = { path = "crates/sdkwork-order-integratio
 sdkwork_order_integration_promotion = { path = "crates/sdkwork-order-integration-promotion", package = "sdkwork-order-integration-promotion" }
 sdkwork_commerce_promotion_service = { path = "../sdkwork-promotion/crates/sdkwork-commerce-promotion-service", package = "sdkwork-commerce-promotion-service" }
 sdkwork_commerce_promotion_repository_sqlx = { path = "../sdkwork-promotion/crates/sdkwork-commerce-promotion-repository-sqlx", package = "sdkwork-commerce-promotion-repository-sqlx" }
+sdkwork_membership_repository_sqlx = { path = "../sdkwork-membership/crates/sdkwork-membership-repository-sqlx", package = "sdkwork-membership-repository-sqlx" }
 sdkwork_account_service = { path = "../sdkwork-account/crates/sdkwork-account-service", package = "sdkwork-account-service" }
 sdkwork_account_repository_sqlx = { path = "../sdkwork-account/crates/sdkwork-account-repository-sqlx", package = "sdkwork-account-repository-sqlx" }
 sdkwork-utils-rust = { path = "../sdkwork-utils/packages/sdkwork-utils-rust" }

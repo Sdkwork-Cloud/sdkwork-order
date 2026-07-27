@@ -136,8 +136,9 @@ const result = await client.recharges.settings.retrieve();
 ### memberships
 
 ```typescript
-// Memberships orders create.
+// Create or reuse a membership purchase-intent order.
 const body = {
+  action: 'purchase',
   packageId: 'packageId',
   paymentMethod: 'paymentMethod',
   paymentProduct: 'mobile_cashier_h5',

@@ -3,7 +3,7 @@ use sdkwork_order_database_host::{bootstrap_order_database_from_env, OrderDataba
 use sdkwork_order_integration_account::{
     account_points_credit_port_from_env, account_value_ledger_port_from_env,
 };
-use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_env;
+use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_database_pool;
 use sdkwork_order_integration_payment::payment_refund_executor_port_from_database_pool;
 use sdkwork_order_integration_promotion::promotion_coupon_redemption_port_from_database_pool;
 pub use sdkwork_order_service::order_service_contract;
@@ -49,7 +49,8 @@ impl OrderServiceHost {
         let account_value_ledger_port = account_value_ledger_port_from_env().await?;
         let coupon_redemption_port =
             promotion_coupon_redemption_port_from_database_pool(database.pool());
-        let membership_fulfillment_port = membership_purchase_fulfillment_port_from_env()?;
+        let membership_fulfillment_port =
+            membership_purchase_fulfillment_port_from_database_pool(database.pool());
         let payment_refund_executor_port =
             payment_refund_executor_port_from_database_pool(database.pool());
         let payment_payout_executor_port = Arc::new(NoopPaymentPayoutExecutorPort);

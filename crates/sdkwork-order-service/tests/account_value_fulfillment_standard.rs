@@ -9,12 +9,14 @@ use sdkwork_order_service::{
     AccountValueFulfillmentContext, AccountValueFulfillmentFuture, AccountValueFulfillmentStore,
     AccountValueFuture, AccountValueLedgerCommand, AccountValueLedgerOutcome,
     AccountValueLedgerPort, AccountValueOrderSubject, ConfirmOwnerOrderPaymentOutcome,
-    CouponRedemptionOutcome, CouponRedemptionPort, CouponRedemptionRequest,
-    FulfillAccountValueOrderCommand, FulfillAccountValueOrderOutcome,
-    FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
-    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentFuture,
-    MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, NoopCouponRedemptionPort, OrderPaymentSettlementAttempt,
+    CouponRedemptionBenefit, CouponRedemptionOutcome, CouponRedemptionPort,
+    CouponRedemptionRequest, CouponSubscriptionFulfillmentOutcome,
+    CouponSubscriptionFulfillmentRequest, FulfillAccountValueOrderCommand,
+    FulfillAccountValueOrderOutcome, FulfillPointsRechargeOrderCommand,
+    FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
+    MembershipPurchaseFulfillmentFuture, MembershipPurchaseFulfillmentOutcome,
+    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
+    MembershipPurchaseSettlementSnapshot, NoopCouponRedemptionPort, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
     OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts, PointsRechargeCreditOutcome,
     PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentFuture,
@@ -38,6 +40,7 @@ async fn fulfill_token_bank_recharge_credits_account_value_ledger_then_commits_o
         grant_amount: CommerceMoney::new("30000").expect("grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
         coupon_code: None,
+        coupon_benefit: None,
     });
 
     let command = default_fulfill_account_value_order_command(
@@ -94,6 +97,7 @@ async fn fulfill_account_value_order_replays_without_duplicate_ledger_credit() {
         grant_amount: CommerceMoney::new("50000").expect("grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
         coupon_code: None,
+        coupon_benefit: None,
     });
 
     let command = default_fulfill_account_value_order_command(
@@ -139,6 +143,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
         grant_amount: CommerceMoney::new("120000").expect("grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
         coupon_code: None,
+        coupon_benefit: None,
     });
 
     let attempt = OrderPaymentSettlementAttempt {
@@ -163,6 +168,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
         },
         &attempt,
         Some("token_bank_recharge"),
+        None,
         "req-token-settle-1",
     )
     .await
@@ -217,6 +223,7 @@ async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillmen
         },
         &attempt,
         Some("physical_shipment"),
+        None,
         "req-product-settle-1",
     )
     .await
@@ -228,6 +235,63 @@ async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillmen
     assert_eq!(payment_store.confirm_calls(), 1);
     assert_eq!(order_state_store.mark_calls(), 1);
     assert!(account_value_ledger.commands().is_empty());
+}
+
+#[tokio::test]
+async fn membership_settlement_forwards_the_paid_order_snapshot_exactly_once() {
+    let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
+    let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::default());
+    let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
+    let points_store = Arc::new(UnsupportedPointsRechargeStore);
+    let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
+    let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let membership_port = Arc::new(CapturingMembershipPurchaseFulfillmentPort::default());
+    let coupon_port = Arc::new(NoopCouponRedemptionPort);
+    let attempt = OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("0".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-membership-settle".to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
+    };
+    let snapshot = MembershipPurchaseSettlementSnapshot {
+        action: "upgrade".to_owned(),
+        order_no: "MB-UPGRADE-1".to_owned(),
+        package_id: 202,
+    };
+
+    let outcome = settle_owner_order_after_payment_success(
+        OwnerOrderSettlementPorts {
+            payment_store: payment_store.as_ref(),
+            order_state_store: order_state_store.as_ref(),
+            recharge_store: points_store.as_ref(),
+            account_value_store: account_value_store.as_ref(),
+            credit_port: points_port.as_ref(),
+            account_value_ledger_port: account_value_ledger.as_ref(),
+            coupon_redemption_port: coupon_port.as_ref(),
+            membership_port: membership_port.as_ref(),
+        },
+        &attempt,
+        Some("membership"),
+        Some(&snapshot),
+        "request-membership-settle",
+    )
+    .await
+    .expect("membership settlement");
+
+    assert!(outcome.fulfillment_accepted);
+    assert_eq!(outcome.fulfillment_status, "active");
+    let requests = membership_port.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].action, "upgrade");
+    assert_eq!(requests[0].order_no, "MB-UPGRADE-1");
+    assert_eq!(requests[0].package_id, 202);
+    assert_eq!(requests[0].paid_at, "2026-07-08T00:00:00Z");
+    assert_eq!(
+        requests[0].idempotency_key,
+        "membership-purchase:fulfill:order-membership-settle"
+    );
 }
 
 #[tokio::test]
@@ -295,6 +359,9 @@ fn coupon_context(grant_amount: &str) -> AccountValueFulfillmentContext {
         grant_amount: CommerceMoney::new(grant_amount).expect("coupon grant"),
         asset_unit_code: "TOKEN_BANK".to_owned(),
         coupon_code: Some("WELCOME".to_owned()),
+        coupon_benefit: Some(CouponRedemptionBenefit::TokenBankCredit {
+            grant_amount: CommerceMoney::new(grant_amount).expect("coupon benefit grant"),
+        }),
     }
 }
 
@@ -337,8 +404,7 @@ impl CouponRedemptionPort for MockCouponRedemptionPort {
             Ok(CouponRedemptionOutcome {
                 accepted: true,
                 replayed: false,
-                target_asset: AccountValueAssetCode::TokenBank,
-                grant_amount,
+                benefit: CouponRedemptionBenefit::TokenBankCredit { grant_amount },
             })
         })
     }
@@ -523,6 +589,44 @@ impl AccountPointsCreditPort for UnsupportedAccountPointsCreditPort {
 
 struct UnsupportedMembershipPurchaseFulfillmentPort;
 
+#[derive(Default)]
+struct CapturingMembershipPurchaseFulfillmentPort {
+    requests: Mutex<Vec<MembershipPurchaseFulfillmentRequest>>,
+}
+
+impl CapturingMembershipPurchaseFulfillmentPort {
+    fn requests(&self) -> Vec<MembershipPurchaseFulfillmentRequest> {
+        self.requests.lock().expect("requests lock").clone()
+    }
+}
+
+impl MembershipPurchaseFulfillmentPort for CapturingMembershipPurchaseFulfillmentPort {
+    fn fulfill_membership_purchase<'a>(
+        &'a self,
+        request: MembershipPurchaseFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipPurchaseFulfillmentOutcome> {
+        self.requests.lock().expect("requests lock").push(request);
+        Box::pin(async {
+            Ok(MembershipPurchaseFulfillmentOutcome {
+                accepted: true,
+                replayed: false,
+                fulfillment_status: "active".to_owned(),
+            })
+        })
+    }
+
+    fn fulfill_coupon_subscription<'a>(
+        &'a self,
+        _request: CouponSubscriptionFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, CouponSubscriptionFulfillmentOutcome> {
+        Box::pin(async {
+            Err(CommerceServiceError::unsupported_capability(
+                "coupon subscription should not be called for membership purchase",
+            ))
+        })
+    }
+}
+
 impl MembershipPurchaseFulfillmentPort for UnsupportedMembershipPurchaseFulfillmentPort {
     fn fulfill_membership_purchase<'a>(
         &'a self,
@@ -531,6 +635,17 @@ impl MembershipPurchaseFulfillmentPort for UnsupportedMembershipPurchaseFulfillm
         Box::pin(async {
             Err(CommerceServiceError::unsupported_capability(
                 "membership port should not be called for token_bank_recharge",
+            ))
+        })
+    }
+
+    fn fulfill_coupon_subscription<'a>(
+        &'a self,
+        _request: CouponSubscriptionFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, CouponSubscriptionFulfillmentOutcome> {
+        Box::pin(async {
+            Err(CommerceServiceError::unsupported_capability(
+                "membership coupon port should not be called for token_bank_recharge",
             ))
         })
     }

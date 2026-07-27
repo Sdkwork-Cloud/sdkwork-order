@@ -5,9 +5,10 @@ use std::sync::Arc;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
-    enrich_owner_order_payment_postgres, enrich_owner_order_payment_sqlite,
-    OwnerOrderPaymentEnrichmentContext, PostgresCommerceOwnerOrderPaymentStore,
-    SqliteCommerceOwnerOrderPaymentStore,
+    cancel_owner_order_payments_with_provider_postgres,
+    cancel_owner_order_payments_with_provider_sqlite, enrich_owner_order_payment_postgres,
+    enrich_owner_order_payment_sqlite, OwnerOrderPaymentEnrichmentContext,
+    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_payment_service::{
     CancelOrderPaymentsCommand, PayOwnerOrderCommand, PayOwnerOrderOutcome,
@@ -77,9 +78,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
             let tenant_id = command.tenant_id.clone();
             let organization_id = command.organization_id.clone();
             let order_id = command.order_id.clone();
-            let idempotency_key = command.idempotency_key.clone();
             let payment_scene = command.payment_scene.clone();
-            let payment_metadata = command.payment_metadata.clone();
             let outcome = inner.pay_owner_order(command).await?;
             let fallback = outcome.clone();
             let enriched = enrich_owner_order_payment_sqlite(
@@ -90,9 +89,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
                     tenant_id: &tenant_id,
                     organization_id: organization_id.as_deref(),
                     order_id: &order_id,
-                    idempotency_key: &idempotency_key,
                     payment_scene: payment_scene.as_deref(),
-                    payment_metadata: Some(&payment_metadata),
                 },
                 outcome,
             )
@@ -105,7 +102,9 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
         &'a self,
         command: sdkwork_order_service::CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()> {
-        let inner = self.inner.clone();
+        let pool = self.pool.clone();
+        let registry = self.registry.clone();
+        let credentials = self.credentials.clone();
         Box::pin(async move {
             let payment_command = CancelOrderPaymentsCommand::new(
                 &command.tenant_id,
@@ -113,7 +112,13 @@ impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
                 &command.owner_user_id,
                 &command.order_id,
             )?;
-            inner.cancel_order_payments(payment_command).await
+            cancel_owner_order_payments_with_provider_sqlite(
+                &pool,
+                &registry,
+                &credentials,
+                payment_command,
+            )
+            .await
         })
     }
 }
@@ -131,9 +136,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
             let tenant_id = command.tenant_id.clone();
             let organization_id = command.organization_id.clone();
             let order_id = command.order_id.clone();
-            let idempotency_key = command.idempotency_key.clone();
             let payment_scene = command.payment_scene.clone();
-            let payment_metadata = command.payment_metadata.clone();
             let outcome = inner.pay_owner_order(command).await?;
             let fallback = outcome.clone();
             let enriched = enrich_owner_order_payment_postgres(
@@ -144,9 +147,7 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
                     tenant_id: &tenant_id,
                     organization_id: organization_id.as_deref(),
                     order_id: &order_id,
-                    idempotency_key: &idempotency_key,
                     payment_scene: payment_scene.as_deref(),
-                    payment_metadata: Some(&payment_metadata),
                 },
                 outcome,
             )
@@ -159,7 +160,9 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
         &'a self,
         command: sdkwork_order_service::CancelOwnerOrderCommand,
     ) -> CommerceOrderFuture<'a, ()> {
-        let inner = self.inner.clone();
+        let pool = self.pool.clone();
+        let registry = self.registry.clone();
+        let credentials = self.credentials.clone();
         Box::pin(async move {
             let payment_command = CancelOrderPaymentsCommand::new(
                 &command.tenant_id,
@@ -167,7 +170,13 @@ impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {
                 &command.owner_user_id,
                 &command.order_id,
             )?;
-            inner.cancel_order_payments(payment_command).await
+            cancel_owner_order_payments_with_provider_postgres(
+                &pool,
+                &registry,
+                &credentials,
+                payment_command,
+            )
+            .await
         })
     }
 }

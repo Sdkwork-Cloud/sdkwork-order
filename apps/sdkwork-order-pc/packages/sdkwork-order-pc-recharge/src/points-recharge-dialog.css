@@ -8,8 +8,8 @@
   --sdk-color-text-secondary: #a9b1bd;
   background: #20242a;
   color: #f4f7fb;
-  max-width: 1040px;
-  width: min(1040px, calc(100vw - 48px));
+  max-width: 960px;
+  width: min(960px, calc(100vw - 32px));
 }
 
 .sdkwork-points-recharge-inline {
@@ -118,25 +118,16 @@
 
 .sdkwork-points-recharge-dialog__body {
   display: grid;
-  gap: 36px;
-  grid-template-columns: minmax(0, 1.35fr) minmax(260px, .8fr);
-  padding: 36px 48px 42px;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+  padding: 28px 32px 32px;
 }
 
 .sdkwork-points-recharge-dialog__section-title {
-  align-items: center;
-  display: flex;
-  gap: 18px;
-  font-size: 24px;
-  font-weight: 700;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.sdkwork-points-recharge-dialog__section-title span {
-  background: var(--sdk-color-border-default, #3d444d);
-  height: 1px;
-  width: 84px;
+  color: var(--sdk-color-text-primary, #f4f7fb);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px;
 }
 
 .sdkwork-points-recharge-dialog__grid {
@@ -148,14 +139,14 @@
 .sdkwork-points-recharge-dialog__package {
   background: var(--sdk-color-surface-panel-muted, #343a43);
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 8px;
   color: inherit;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-height: 124px;
-  padding: 18px 14px;
+  min-height: 104px;
+  padding: 14px 12px;
   text-align: center;
 }
 
@@ -204,20 +195,20 @@
 .sdkwork-points-recharge-dialog__hint {
   font-size: 12px;
   line-height: 1.6;
-  margin: 28px 0 0;
-  text-align: center;
+  margin: 20px 0 0;
+  text-align: left;
 }
 
 .sdkwork-points-recharge-dialog__payment {
   align-items: center;
   background: var(--sdk-color-surface-base, #171a1f);
   border: 1px solid var(--sdk-color-border-default, #3d444d);
-  border-radius: 14px;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 364px;
-  padding: 24px;
+  min-height: 344px;
+  padding: 20px;
 }
 
 .sdkwork-points-recharge-dialog__payment-empty,
@@ -285,6 +276,30 @@
   text-align: center;
 }
 
+.sdkwork-points-recharge-dialog__qr h3 {
+  color: var(--sdk-color-text-primary, #f4f7fb);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sdkwork-points-recharge-dialog__countdown {
+  align-items: baseline;
+  color: var(--sdk-color-text-secondary, #a9b1bd);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: center;
+  margin: 8px 0 16px;
+  min-height: 20px;
+}
+
+.sdkwork-points-recharge-dialog__countdown strong {
+  color: var(--sdk-color-state-warning, #fbbf24);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
 .sdkwork-points-recharge-dialog__qr img {
   background: #fff;
   border-radius: 10px;
@@ -292,11 +307,6 @@
   height: 252px;
   padding: 10px;
   width: 252px;
-}
-
-.sdkwork-points-recharge-dialog__qr p {
-  color: #cbd2dc;
-  margin-top: 12px;
 }
 
 .sdkwork-points-recharge-dialog__qr .sdkwork-points-recharge-dialog__agreement-accepted {
@@ -353,6 +363,16 @@
     max-height: none;
     overflow: visible;
   }
+}
+
+.sdkwork-points-recharge-dialog__expired {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.sdkwork-points-recharge-dialog__expired button {
+  justify-self: center;
 }
 
 @media (max-width: 480px) {

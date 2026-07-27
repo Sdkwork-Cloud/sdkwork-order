@@ -113,6 +113,57 @@ async fn approve_token_bank_refund_holds_account_value_then_refunds_and_settles_
 }
 
 #[tokio::test]
+async fn processing_provider_refund_keeps_the_account_hold_unsettled() {
+    let store = Arc::new(MockAccountValueRequestStore::default());
+    let ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let refunds = Arc::new(MockPaymentRefundExecutorPort::with_processing());
+    let payouts = Arc::new(MockPaymentPayoutExecutorPort::default());
+    store.seed(
+        request_view(
+            "refund-processing-1",
+            Some("order-processing-1"),
+            AccountValueOrderSubject::RefundRequest,
+            AccountValueAssetCode::TokenBank,
+            "1200",
+            "TOKEN_BANK",
+            "requested",
+        )
+        .with_provider_amount("100", "USD"),
+    );
+
+    let outcome = execute_account_value_request_review(
+        store.as_ref(),
+        ledger.as_ref(),
+        refunds.as_ref(),
+        payouts.as_ref(),
+        review_command(
+            AccountValueOrderSubject::RefundRequest,
+            "refund-processing-1",
+            AccountValueRequestReviewAction::Approve,
+        ),
+    )
+    .await
+    .expect("processing refund execution");
+
+    assert_eq!(outcome.status, "provider_refund_processing");
+    assert_eq!(
+        ledger
+            .commands()
+            .iter()
+            .map(|command| command.operation)
+            .collect::<Vec<_>>(),
+        vec![AccountValueLedgerOperation::Hold]
+    );
+    assert_eq!(
+        store
+            .status_commands()
+            .last()
+            .map(|command| command.status.as_str()),
+        Some("provider_refund_processing")
+    );
+}
+
+#[tokio::test]
 async fn approve_cash_withdrawal_holds_cash_then_payouts_and_settles_hold() {
     let store = Arc::new(MockAccountValueRequestStore::default());
     let ledger = Arc::new(MockAccountValueLedgerPort::default());
@@ -392,6 +443,7 @@ impl AccountValueLedgerPort for MockAccountValueLedgerPort {
 struct MockPaymentRefundExecutorPort {
     requests: Mutex<Vec<PaymentRefundExecutionRequest>>,
     fail: bool,
+    processing: bool,
 }
 
 impl MockPaymentRefundExecutorPort {
@@ -399,6 +451,15 @@ impl MockPaymentRefundExecutorPort {
         Self {
             requests: Mutex::new(Vec::new()),
             fail: true,
+            processing: false,
+        }
+    }
+
+    fn with_processing() -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            fail: false,
+            processing: true,
         }
     }
 
@@ -421,7 +482,11 @@ impl PaymentRefundExecutorPort for MockPaymentRefundExecutorPort {
                 accepted: true,
                 replayed: false,
                 provider_reference_id: Some("provider-refund-1".to_owned()),
-                status: "succeeded".to_owned(),
+                status: if self.processing {
+                    "processing".to_owned()
+                } else {
+                    "succeeded".to_owned()
+                },
             })
         })
     }

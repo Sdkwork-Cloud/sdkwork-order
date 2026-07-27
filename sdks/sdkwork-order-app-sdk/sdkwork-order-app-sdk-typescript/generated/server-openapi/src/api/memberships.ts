@@ -16,7 +16,7 @@ export class MembershipsOrdersApi {
   }
 
 
-/** Memberships orders create. */
+/** Create or reuse a membership purchase-intent order. */
   async create(body: MembershipOrderCreateCommand, params: MembershipsOrdersCreateParams, requestOptions?: ApiRequestOptions): Promise<MembershipOrderCreateResult> {
     const requestHeaders = buildRequestHeaders(
       {

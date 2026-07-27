@@ -2,13 +2,14 @@ use sdkwork_commerce_promotion_repository_sqlx::{
     PostgresCommercePromotionStore, SqliteCommercePromotionStore,
 };
 use sdkwork_commerce_promotion_service::{
-    PromotionCodeRedemptionCommand, PromotionOrderCouponBenefit,
+    PromotionCodeRedemptionCommand, PromotionOrderCouponBenefit, PromotionOrderCouponBenefitKind,
+    PromotionSubscriptionPeriod,
 };
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service::{
-    AccountValueAssetCode, AccountValueFuture, CouponRedemptionOutcome, CouponRedemptionPort,
-    CouponRedemptionRequest,
+    AccountValueFuture, CouponRedemptionBenefit, CouponRedemptionOutcome, CouponRedemptionPort,
+    CouponRedemptionRequest, CouponSubscriptionPeriod,
 };
 use std::sync::Arc;
 
@@ -105,12 +106,44 @@ fn promotion_command(
 fn map_benefit(
     benefit: PromotionOrderCouponBenefit,
 ) -> Result<CouponRedemptionOutcome, CommerceServiceError> {
-    let grant_amount = CommerceMoney::new(&benefit.grant_units.to_string())
-        .map_err(CommerceServiceError::validation)?;
+    let replayed = benefit.replayed;
+    let benefit = match benefit.kind {
+        PromotionOrderCouponBenefitKind::TokenBankCredit { grant_units, .. } => {
+            CouponRedemptionBenefit::TokenBankCredit {
+                grant_amount: CommerceMoney::new(&grant_units.to_string())
+                    .map_err(CommerceServiceError::validation)?,
+            }
+        }
+        PromotionOrderCouponBenefitKind::Subscription {
+            product_id,
+            sku_id,
+            package_id,
+            period,
+            duration_days,
+            daily_quota,
+            total_quota,
+        } => CouponRedemptionBenefit::Subscription {
+            product_id,
+            sku_id,
+            package_id,
+            period: map_subscription_period(period),
+            duration_days,
+            daily_quota,
+            total_quota,
+        },
+    };
     Ok(CouponRedemptionOutcome {
         accepted: true,
-        replayed: benefit.replayed,
-        target_asset: AccountValueAssetCode::TokenBank,
-        grant_amount,
+        replayed,
+        benefit,
     })
+}
+
+fn map_subscription_period(period: PromotionSubscriptionPeriod) -> CouponSubscriptionPeriod {
+    match period {
+        PromotionSubscriptionPeriod::Day => CouponSubscriptionPeriod::Day,
+        PromotionSubscriptionPeriod::Week => CouponSubscriptionPeriod::Week,
+        PromotionSubscriptionPeriod::Month => CouponSubscriptionPeriod::Month,
+        PromotionSubscriptionPeriod::Year => CouponSubscriptionPeriod::Year,
+    }
 }

@@ -24,6 +24,7 @@ pub struct CreatePointsRechargeOrderOutcome {
     pub provider_code: String,
     pub payment_method: String,
     pub payment_product: String,
+    pub expires_at: String,
     pub status: String,
     pub next_action: String,
     pub cashier_url: String,

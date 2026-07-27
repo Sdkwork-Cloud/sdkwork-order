@@ -4,6 +4,7 @@ use sdkwork_contract_service::{CommerceLedgerBusinessType, CommerceMoney, Commer
 pub enum AccountValueAssetCode {
     Cash,
     Points,
+    Subscription,
     TokenBank,
 }
 
@@ -33,6 +34,7 @@ impl AccountValueAssetCode {
         match value.trim().to_ascii_lowercase().as_str() {
             "cash" => Ok(Self::Cash),
             "points" => Ok(Self::Points),
+            "subscription" => Ok(Self::Subscription),
             "token_bank" => Ok(Self::TokenBank),
             "token" | "compute_credit" | "compute_token" => Err(CommerceServiceError::validation(
                 "ambiguous account asset name; use token_bank for Token Bank",
@@ -47,6 +49,7 @@ impl AccountValueAssetCode {
         match self {
             Self::Cash => "cash",
             Self::Points => "points",
+            Self::Subscription => "subscription",
             Self::TokenBank => "token_bank",
         }
     }
@@ -55,6 +58,7 @@ impl AccountValueAssetCode {
         match self {
             Self::Cash => "",
             Self::Points => "POINT",
+            Self::Subscription => "SUBSCRIPTION_QUOTA",
             Self::TokenBank => "TOKEN_BANK",
         }
     }
@@ -168,6 +172,9 @@ impl AccountValueOrderSubject {
                 CommerceLedgerBusinessType::TOKEN_BANK_PURCHASE_CREDIT
             }
             (_, AccountValueAssetCode::Points) => CommerceLedgerBusinessType::POINTS_RECHARGE,
+            (_, AccountValueAssetCode::Subscription) => {
+                CommerceLedgerBusinessType::TOKEN_BANK_GRANT
+            }
             (_, AccountValueAssetCode::Cash) => CommerceLedgerBusinessType::CASH_ADJUSTMENT,
         }
     }
@@ -176,6 +183,7 @@ impl AccountValueOrderSubject {
         match target_asset {
             AccountValueAssetCode::TokenBank => CommerceLedgerBusinessType::TOKEN_BANK_REVERSAL,
             AccountValueAssetCode::Points => CommerceLedgerBusinessType::POINTS_CLAWBACK,
+            AccountValueAssetCode::Subscription => CommerceLedgerBusinessType::TOKEN_BANK_REVERSAL,
             AccountValueAssetCode::Cash => CommerceLedgerBusinessType::CASH_ADJUSTMENT,
         }
     }
@@ -249,6 +257,7 @@ pub struct AccountValueFulfillmentContext {
     pub grant_amount: CommerceMoney,
     pub asset_unit_code: String,
     pub coupon_code: Option<String>,
+    pub coupon_benefit: Option<crate::CouponRedemptionBenefit>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

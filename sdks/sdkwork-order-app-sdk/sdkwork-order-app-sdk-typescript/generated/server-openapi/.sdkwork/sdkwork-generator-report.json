@@ -12,7 +12,7 @@
   "mode": "apply",
   "hasChanges": true,
   "hasDestructiveChanges": false,
-  "changeFingerprint": "15345eb33257abf052aafa14f4be46acfd0fb5077ca2965bc069b964a29bee2a",
+  "changeFingerprint": "d190832286a7c1828523af69b32c944117f7444fd1dcfd40d226d6ca39fd72a9",
   "changeImpact": {
     "schemaVersion": 1,
     "areas": [
@@ -65,6 +65,11 @@
           "src/types/checkout-session.ts",
           "src/types/commerce-operation-command.ts",
           "src/types/common.ts",
+          "src/types/coupon-redemption-create-command.ts",
+          "src/types/coupon-redemption-response.ts",
+          "src/types/coupon-redemption-result.ts",
+          "src/types/coupon-subscription-benefit.ts",
+          "src/types/coupon-token-bank-benefit.ts",
           "src/types/create-after-sales-request-item.ts",
           "src/types/create-after-sales-request.ts",
           "src/types/create-after-sales-return-shipment-request.ts",
@@ -265,21 +270,21 @@
     "localVersions": []
   },
   "stats": {
-    "totalFiles": 80,
-    "models": 48,
+    "totalFiles": 85,
+    "models": 53,
     "apis": 9,
-    "types": 50
+    "types": 55
   },
   "warnings": [],
   "syncSummary": {
     "dryRun": false,
     "controlPlaneEnabled": true,
-    "writtenFiles": 80,
+    "writtenFiles": 85,
     "skippedScaffoldFiles": 0,
     "skippedUnchangedGeneratedFiles": 0,
     "deletedGeneratedFiles": 0,
     "changeSummaryPath": ".sdkwork/sdkwork-generator-changes.json",
-    "changeFingerprint": "15345eb33257abf052aafa14f4be46acfd0fb5077ca2965bc069b964a29bee2a",
+    "changeFingerprint": "d190832286a7c1828523af69b32c944117f7444fd1dcfd40d226d6ca39fd72a9",
     "changes": {
       "createdGeneratedFiles": [
         "bin/publish-core.mjs",
@@ -326,6 +331,11 @@
         "src/types/checkout-session.ts",
         "src/types/commerce-operation-command.ts",
         "src/types/common.ts",
+        "src/types/coupon-redemption-create-command.ts",
+        "src/types/coupon-redemption-response.ts",
+        "src/types/coupon-redemption-result.ts",
+        "src/types/coupon-subscription-benefit.ts",
+        "src/types/coupon-token-bank-benefit.ts",
         "src/types/create-after-sales-request-item.ts",
         "src/types/create-after-sales-request.ts",
         "src/types/create-after-sales-return-shipment-request.ts",
@@ -423,6 +433,11 @@
             "src/types/checkout-session.ts",
             "src/types/commerce-operation-command.ts",
             "src/types/common.ts",
+            "src/types/coupon-redemption-create-command.ts",
+            "src/types/coupon-redemption-response.ts",
+            "src/types/coupon-redemption-result.ts",
+            "src/types/coupon-subscription-benefit.ts",
+            "src/types/coupon-token-bank-benefit.ts",
             "src/types/create-after-sales-request-item.ts",
             "src/types/create-after-sales-request.ts",
             "src/types/create-after-sales-return-shipment-request.ts",

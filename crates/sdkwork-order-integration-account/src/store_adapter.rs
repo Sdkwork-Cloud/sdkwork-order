@@ -288,6 +288,9 @@ fn asset_type_for_account_value(asset: AccountValueAssetCode) -> CommerceAccount
         AccountValueAssetCode::Cash => CommerceAccountAssetType::Cash,
         AccountValueAssetCode::Points => CommerceAccountAssetType::Points,
         AccountValueAssetCode::TokenBank => CommerceAccountAssetType::TokenBank,
+        AccountValueAssetCode::Subscription => {
+            unreachable!("subscription coupons are fulfilled by Membership")
+        }
     }
 }
 

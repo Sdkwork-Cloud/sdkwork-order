@@ -224,6 +224,13 @@ const HTTP_ROUTES: &[HttpRoute] = &[
     )
     .with_idempotent(true),
     HttpRoute::dual_token(
+        HttpMethod::Post,
+        "/app/v3/api/orders/coupon_redemptions",
+        "orders",
+        "orders.couponRedemptions.create",
+    )
+    .with_idempotent(true),
+    HttpRoute::dual_token(
         HttpMethod::Get,
         "/app/v3/api/orders/refund_requests",
         "orders",

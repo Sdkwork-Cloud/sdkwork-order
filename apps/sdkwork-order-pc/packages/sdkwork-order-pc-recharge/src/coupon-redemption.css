@@ -1,0 +1,188 @@
+.sdkwork-coupon-redemption {
+  --coupon-border: var(--sdk-color-border-default, #39424d);
+  --coupon-panel: var(--sdk-color-surface-panel, #20252b);
+  --coupon-muted: var(--sdk-color-text-secondary, #aeb7c2);
+  --coupon-text: var(--sdk-color-text-primary, #f5f7fa);
+  background: var(--coupon-panel);
+  color: var(--coupon-text);
+  width: min(560px, calc(100vw - 32px));
+}
+
+.sdkwork-coupon-redemption--inline {
+  border: 1px solid var(--coupon-border);
+  border-radius: 8px;
+  width: 100%;
+}
+
+.sdkwork-coupon-redemption__header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  padding: 24px 24px 16px;
+}
+
+.sdkwork-coupon-redemption__heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sdkwork-coupon-redemption__heading > svg {
+  color: var(--sdk-color-brand-primary, #13c4dc);
+  flex: 0 0 22px;
+  height: 22px;
+  margin-top: 2px;
+  width: 22px;
+}
+
+.sdkwork-coupon-redemption__heading h2 {
+  font-size: 18px;
+  line-height: 24px;
+  margin: 0;
+}
+
+.sdkwork-coupon-redemption__heading p {
+  color: var(--coupon-muted);
+  font-size: 13px;
+  line-height: 20px;
+  margin: 4px 0 0;
+}
+
+.sdkwork-coupon-redemption__close {
+  flex: 0 0 36px;
+  height: 36px;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 36px;
+}
+
+.sdkwork-coupon-redemption__close svg {
+  height: 18px;
+  width: 18px;
+}
+
+.sdkwork-coupon-redemption__body {
+  display: grid;
+  gap: 16px;
+  padding: 8px 24px 24px;
+}
+
+.sdkwork-coupon-redemption__form {
+  display: grid;
+  gap: 8px;
+}
+
+.sdkwork-coupon-redemption__form label {
+  color: var(--coupon-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sdkwork-coupon-redemption__input-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.sdkwork-coupon-redemption__input-row input {
+  background: var(--sdk-color-surface-base, #15191e);
+  border: 1px solid var(--coupon-border);
+  border-radius: 6px;
+  color: var(--coupon-text);
+  font: inherit;
+  height: 42px;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.sdkwork-coupon-redemption__input-row input:focus {
+  border-color: var(--sdk-color-brand-primary, #13c4dc);
+  outline: 2px solid color-mix(in srgb, var(--sdk-color-brand-primary, #13c4dc) 24%, transparent);
+  outline-offset: 1px;
+}
+
+.sdkwork-coupon-redemption__input-row button {
+  min-height: 42px;
+  min-width: 112px;
+}
+
+.sdkwork-coupon-redemption__input-row button svg {
+  height: 17px;
+  width: 17px;
+}
+
+.sdkwork-coupon-redemption__spinner {
+  animation: sdkwork-coupon-redemption-spin 900ms linear infinite;
+}
+
+.sdkwork-coupon-redemption__result {
+  align-items: flex-start;
+  background: color-mix(in srgb, #1ea86f 14%, var(--coupon-panel));
+  border: 1px solid color-mix(in srgb, #33c487 46%, var(--coupon-border));
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+}
+
+.sdkwork-coupon-redemption__result > svg {
+  color: #45d394;
+  flex: 0 0 20px;
+  height: 20px;
+  width: 20px;
+}
+
+.sdkwork-coupon-redemption__result strong,
+.sdkwork-coupon-redemption__result span {
+  display: block;
+}
+
+.sdkwork-coupon-redemption__result span {
+  font-size: 22px;
+  margin-top: 4px;
+}
+
+.sdkwork-coupon-redemption__result-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.sdkwork-coupon-redemption__result dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 12px 0 0;
+}
+
+.sdkwork-coupon-redemption__result dl div {
+  min-width: 0;
+}
+
+.sdkwork-coupon-redemption__result dt {
+  color: var(--coupon-muted);
+  font-size: 12px;
+}
+
+.sdkwork-coupon-redemption__result dd {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+@keyframes sdkwork-coupon-redemption-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 560px) {
+  .sdkwork-coupon-redemption__input-row,
+  .sdkwork-coupon-redemption__result dl {
+    grid-template-columns: 1fr;
+  }
+
+  .sdkwork-coupon-redemption__input-row button {
+    width: 100%;
+  }
+}

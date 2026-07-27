@@ -27,6 +27,7 @@ export type SdkworkOrderCheckoutPaymentStatus = "completed" | "failed" | "pendin
 export interface SdkworkOrderCheckoutPayment {
   amountCny?: number | null;
   cashierUrl?: string;
+  expiresAt?: string;
   orderId?: string;
   qrCode?: string;
   status: SdkworkOrderCheckoutPaymentStatus;
@@ -46,6 +47,9 @@ export interface SdkworkOrderCheckoutDialogCopy {
   close: string;
   completed: string;
   creatingPayment: string;
+  expired?: string;
+  expiredDescription?: string;
+  expiresIn?: string;
   paymentUnavailable: string;
   paymentUnavailableDescription: string;
   payByQr: string;
@@ -55,6 +59,7 @@ export interface SdkworkOrderCheckoutDialogCopy {
   secureDescription: string;
   secureTitle: string;
   selectedItem: string;
+  title?: string;
 }
 
 export interface SdkworkOrderCheckoutDriver {
@@ -74,6 +79,23 @@ export interface SdkworkOrderCheckoutDialogProps {
 
 function isImageDataUrl(value: string | undefined): value is string {
   return Boolean(value?.startsWith("data:image/"));
+}
+
+function parseExpirationTime(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function formatRemainingTime(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  const segments = hours > 0 ? [hours, minutes, seconds] : [minutes, seconds];
+  return segments.map((segment) => String(segment).padStart(2, "0")).join(":");
 }
 
 /**
@@ -100,6 +122,16 @@ export function SdkworkOrderCheckoutDialog({
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [qrImagePayload, setQrImagePayload] = useState<string | null>(null);
+  const [currentTimeMs, setCurrentTimeMs] = useState(() => Date.now());
+  const expirationTimeMs = parseExpirationTime(payment?.expiresAt);
+  const remainingSeconds = expirationTimeMs === null
+    ? null
+    : Math.max(0, Math.ceil((expirationTimeMs - currentTimeMs) / 1_000));
+  const isExpired = remainingSeconds === 0;
+  const dialogTitle = copy.title ?? copy.payByQr;
+  const expiredDescription = copy.expiredDescription ?? copy.paymentUnavailableDescription;
+  const expiredTitle = copy.expired ?? copy.paymentUnavailable;
+  const expiresIn = copy.expiresIn ?? "Order expires in";
 
   createPaymentRef.current = driver.createPayment;
   getPaymentStatusRef.current = driver.getPaymentStatus;
@@ -119,6 +151,47 @@ export function SdkworkOrderCheckoutDialog({
       void Promise.resolve(onPaymentCompleted(result)).catch(() => undefined);
     }
   }, [summaryId]);
+
+  const retryPayment = useCallback(async () => {
+    if (isExpired) {
+      setAttempt((current) => current + 1);
+      return;
+    }
+
+    const currentPayment = payment;
+    const getPaymentStatus = getPaymentStatusRef.current;
+    if (!currentPayment?.orderId || !getPaymentStatus) {
+      setAttempt((current) => current + 1);
+      return;
+    }
+
+    setIsCreatingPayment(true);
+    setPaymentError(null);
+    try {
+      const update = await getPaymentStatus(currentPayment);
+      const nextPayment = {
+        ...currentPayment,
+        ...update,
+        orderId: update.orderId ?? currentPayment.orderId,
+      };
+      const qrCode = nextPayment.qrCode?.trim() || nextPayment.cashierUrl?.trim();
+      const normalizedPayment = qrCode ? { ...nextPayment, qrCode } : nextPayment;
+      setCurrentTimeMs(Date.now());
+      setPayment(normalizedPayment);
+      if (normalizedPayment.status === "completed") {
+        notifyPaymentCompleted(normalizedPayment);
+        return;
+      }
+      if (normalizedPayment.status === "pending" && normalizedPayment.qrCode) {
+        return;
+      }
+      setAttempt((current) => current + 1);
+    } catch {
+      setPaymentError(copyRef.current.paymentUnavailableDescription);
+    } finally {
+      setIsCreatingPayment(false);
+    }
+  }, [isExpired, notifyPaymentCompleted, payment]);
 
   useEffect(() => {
     completedPaymentKeyRef.current = null;
@@ -154,6 +227,7 @@ export function SdkworkOrderCheckoutDialog({
         const normalizedResult = qrCode
           ? { ...result, qrCode }
           : result;
+        setCurrentTimeMs(Date.now());
         setPayment(normalizedResult);
         if (normalizedResult.status === "failed") {
           setPaymentError(copyRef.current.paymentUnavailableDescription);
@@ -186,6 +260,26 @@ export function SdkworkOrderCheckoutDialog({
     if (
       !isOpen
       || payment?.status !== "pending"
+      || expirationTimeMs === null
+    ) {
+      return undefined;
+    }
+
+    const updateCurrentTime = () => setCurrentTimeMs(Date.now());
+    updateCurrentTime();
+    if (expirationTimeMs <= Date.now()) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(updateCurrentTime, 1_000);
+    return () => window.clearInterval(interval);
+  }, [expirationTimeMs, isOpen, payment?.status]);
+
+  useEffect(() => {
+    if (
+      !isOpen
+      || payment?.status !== "pending"
+      || isExpired
       || !payment.orderId
       || !getPaymentStatusRef.current
     ) {
@@ -217,6 +311,7 @@ export function SdkworkOrderCheckoutDialog({
           ...update,
           orderId: update.orderId ?? currentPayment.orderId,
         };
+        setCurrentTimeMs(Date.now());
         setPayment((current) => (
           current?.orderId === currentPayment.orderId ? nextPayment : current
         ));
@@ -245,7 +340,7 @@ export function SdkworkOrderCheckoutDialog({
       active = false;
       window.clearInterval(interval);
     };
-  }, [isOpen, notifyPaymentCompleted, payment?.orderId, payment?.status]);
+  }, [isExpired, isOpen, notifyPaymentCompleted, payment?.expiresAt, payment?.orderId, payment?.status]);
 
   useEffect(() => {
     if (!payment?.qrCode) {
@@ -297,12 +392,14 @@ export function SdkworkOrderCheckoutDialog({
   const isCompleted = payment?.status === "completed";
   const isPreparingQr = (
     payment?.status === "pending"
+    && !isExpired
     && Boolean(payment.qrCode)
     && qrImagePayload !== payment.qrCode
     && !paymentError
   );
   const canScan = (
     payment?.status === "pending"
+    && !isExpired
     && Boolean(qrImageUrl)
     && qrImagePayload === payment.qrCode
   );
@@ -325,7 +422,7 @@ export function SdkworkOrderCheckoutDialog({
       >
         <ModalHeader className="sdkwork-order-checkout-dialog__header">
           <ModalTitle className="sdkwork-order-checkout-dialog__title" id="sdkwork-order-checkout-title">
-            {copy.payByQr} {summary.priceLabel}
+            {dialogTitle}
           </ModalTitle>
           <ModalClose
             aria-label={copy.close}
@@ -383,7 +480,12 @@ export function SdkworkOrderCheckoutDialog({
             data-sdk-region="order-checkout-payment"
           >
             <p className="sdkwork-order-checkout-dialog__payment-label">{copy.payByQr}</p>
-            <p className="sdkwork-order-checkout-dialog__payment-price">{summary.priceLabel}</p>
+            {payment?.status === "pending" && remainingSeconds !== null && !isExpired ? (
+              <p className="sdkwork-order-checkout-dialog__countdown" role="timer">
+                <span>{expiresIn}</span>
+                <strong>{formatRemainingTime(remainingSeconds)}</strong>
+              </p>
+            ) : null}
             {isCreatingPayment || isPreparingQr ? (
               <div className="sdkwork-order-checkout-dialog__pending">
                 <QrCode aria-hidden="true" className="sdkwork-order-checkout-dialog__pending-icon" />
@@ -414,14 +516,16 @@ export function SdkworkOrderCheckoutDialog({
             ) : null}
             {!isCreatingPayment && !isPreparingQr && !canScan && !isCompleted ? (
               <div className="sdkwork-order-checkout-dialog__unavailable">
-                <StatusNotice tone="danger" title={copy.paymentUnavailable}>
+                <StatusNotice tone="danger" title={isExpired ? expiredTitle : copy.paymentUnavailable}>
                   <span className="sdkwork-order-checkout-dialog__error-copy">
-                    {paymentError ?? copy.paymentUnavailableDescription}
+                    {isExpired
+                      ? expiredDescription
+                      : paymentError ?? copy.paymentUnavailableDescription}
                   </span>
                 </StatusNotice>
                 <Button
                   className="sdkwork-order-checkout-dialog__retry"
-                  onClick={() => setAttempt((current) => current + 1)}
+                  onClick={() => void retryPayment()}
                   type="button"
                   variant="secondary"
                 >

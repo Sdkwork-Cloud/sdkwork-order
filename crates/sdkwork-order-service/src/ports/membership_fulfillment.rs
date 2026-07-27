@@ -7,11 +7,22 @@ pub type MembershipPurchaseFulfillmentFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MembershipPurchaseSettlementSnapshot {
+    pub action: String,
+    pub order_no: String,
+    pub package_id: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MembershipPurchaseFulfillmentRequest {
+    pub action: String,
     pub tenant_id: String,
     pub organization_id: Option<String>,
     pub owner_user_id: String,
     pub order_id: String,
+    pub order_no: String,
+    pub package_id: i64,
+    pub paid_at: String,
     pub request_no: String,
     pub idempotency_key: String,
 }
@@ -23,11 +34,43 @@ pub struct MembershipPurchaseFulfillmentOutcome {
     pub fulfillment_status: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CouponSubscriptionFulfillmentRequest {
+    pub tenant_id: String,
+    pub organization_id: Option<String>,
+    pub owner_user_id: String,
+    pub order_id: String,
+    pub product_id: String,
+    pub sku_id: String,
+    pub package_id: i64,
+    pub period: String,
+    pub duration_days: i64,
+    pub daily_quota: i64,
+    pub total_quota: i64,
+    pub request_no: String,
+    pub idempotency_key: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CouponSubscriptionFulfillmentOutcome {
+    pub accepted: bool,
+    pub replayed: bool,
+    pub subscription_id: String,
+    pub starts_at: String,
+    pub expires_at: String,
+    pub fulfillment_status: String,
+}
+
 pub trait MembershipPurchaseFulfillmentPort: Send + Sync {
     fn fulfill_membership_purchase<'a>(
         &'a self,
         request: MembershipPurchaseFulfillmentRequest,
     ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipPurchaseFulfillmentOutcome>;
+
+    fn fulfill_coupon_subscription<'a>(
+        &'a self,
+        request: CouponSubscriptionFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, CouponSubscriptionFulfillmentOutcome>;
 }
 
 pub fn membership_purchase_fulfillment_idempotency_key(order_id: &str) -> String {
@@ -50,6 +93,17 @@ impl MembershipPurchaseFulfillmentPort for NoopMembershipPurchaseFulfillmentPort
                 replayed: false,
                 fulfillment_status: "awaiting_external_fulfillment".to_owned(),
             })
+        })
+    }
+
+    fn fulfill_coupon_subscription<'a>(
+        &'a self,
+        _request: CouponSubscriptionFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, CouponSubscriptionFulfillmentOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "membership coupon subscription fulfillment port is not configured",
+            ))
         })
     }
 }

@@ -3,7 +3,7 @@
 Status: active  
 Owner: SDKWork maintainers  
 Application: order  
-Updated: 2026-07-08
+Updated: 2026-07-26
 Specs: REQUIREMENTS_SPEC.md, DOCUMENTATION_SPEC.md
 
 ## Document Map
@@ -67,7 +67,7 @@ Primary API prefixes:
 - A buyer creates a checkout session, places an order, pays via the cashier, and receives fulfillment after the order gateway processes the PSP webhook.
 - A user purchases Token Bank value through a one-time recharge, package, or plan; order snapshots the commercial facts, payment collects money, and account credits `token_bank`.
 - A user redeems a coupon for account value; order records coupon evidence, skips provider payment for zero-amount redemptions, and credits the target account asset through account.
-- A user or operator creates a refund request; order holds or reverses the account value first, calls payment for provider refund, then commits or releases the account ledger effect.
+- A user or operator creates a refund request; order holds the account value first, calls payment with the original provider/account/transaction snapshot, retains the hold while the refund is submitted, processing, or ambiguous, commits only after provider-confirmed success, and releases only after deterministic failure.
 - A user creates a cash withdrawal request; order holds cash in account and reaches the payout executor boundary. With the current default runtime, payout is fail-closed, the hold is released on executor failure, and no real provider payout is claimed until `sdkwork-payment` publishes a concrete payout executor.
 - An operator lists orders, inspects lifecycle events, and cancels or closes orders through the backend API.
 - An operator replays stuck payment settlement via `POST /backend/v3/api/orders/{orderId}/payment_confirmations` with permission `commerce.orders.fulfill`.
@@ -88,8 +88,9 @@ Primary API prefixes:
 - Phase 5 (complete): Order-owned PSP webhooks, in-process payment settlement, and `payment_confirmations` backend replay.
 - Phase 6 (complete): Backend after-sales management (`afterSales.management.*`, `afterSales.reviews.create`), shipment management (`shipments.list`, `shipments.packages.*`), aligned service contract, table registry, and operator PC filters.
 - Phase 7 (complete): Payment-before-cancel/close orchestration, server-owned idempotency fingerprints, recharge cancel idempotency parity, SQL unique-key to HTTP 409 mapping, canonical checkout-bound order creation, and OpenAPI authority-to-SDK synchronization.
-- Phase 8 (complete): Membership order create (`memberships.orders.create`), membership payment settlement via `MembershipPurchaseFulfillmentPort`, `sdkwork-order-integration-membership` wired at `OrderServiceHost`, topology/spec/docs aligned to implemented membership fulfillment.
-- Phase 9 (active): Account value order expansion for Token Bank recharge, Token Bank plan purchase and renewal, account recharge packages, coupon recharge, refund request, and cash withdrawal. Payment-success settlement for paid Token Bank/package/coupon account-value orders is implemented through `AccountValueFulfillmentStore` and `AccountValueLedgerPort`. Refund approval execution is implemented through account holds and the payment refund executor. Withdrawal approval uses the same account hold lifecycle and remains fail-closed at provider payout until payment publishes a concrete payout executor.
+- Phase 8 (complete): Membership order create (`memberships.orders.create`), immutable paid-order settlement snapshot via `MembershipPurchaseFulfillmentPort`, and `sdkwork-order-integration-membership` wired at `OrderServiceHost`. Membership atomically reserves and activates the paid period; no pre-payment pending subscription is required.
+- Phase 9 (complete): Membership checkout business idempotency. Transport replay validates a server-owned request fingerprint; command timestamps are RFC3339 and expiration must be later than request creation after timezone normalization; active membership orders are unique by tenant, organization, owner, action, and catalog-price snapshot; only Orders with an explicit future expiration boundary are reusable, while missing or invalid boundaries fail closed; expired orders are closed before replacement; payment-method switching reuses the Order, closes the previous PSP attempt through its historical channel, and creates or reuses only the appropriate Payment attempt. Shared checkout retry refreshes an existing Order before issuing another create command.
+- Phase 10 (active): Account value order expansion for Token Bank recharge, Token Bank plan purchase and renewal, account recharge packages, coupon recharge, refund request, and cash withdrawal. Points recharge creation returns an ISO 8601 UTC expiration boundary, reuses only a checkout with an explicit future expiry, atomically marks stale Orders expired, and creates a replacement after explicit customer retry. Payment-success settlement for paid Token Bank/package/coupon account-value orders is implemented through `AccountValueFulfillmentStore` and `AccountValueLedgerPort`. Refund approval execution is implemented through account holds and the payment refund executor; processing or ambiguous PSP outcomes retain the hold and original refund identity, confirmed success settles it, and deterministic failure releases it. Withdrawal approval uses the same account hold lifecycle and remains fail-closed at provider payout until payment publishes a concrete payout executor.
 - Platform ingress (outside this repo): Redis-backed rate limiting at the mesh layer and Grafana dashboards per deployment topology.
 
 ## 8. Linked Requirements
@@ -132,7 +133,7 @@ None blocking the account value order architecture. Platform ingress rate-limit 
 | `coupon_recharge` | Implemented settlement path - coupon evidence plus target account asset credit; zero-amount orders skip provider payment |
 | `refund_request` | Implemented review execution - account reversal hold, provider refund through Payment service, then hold settlement or release |
 | `cash_withdrawal` | Implemented account hold lifecycle - provider payout boundary is `PaymentPayoutExecutorPort`, fail-closed by default until payment publishes payout execution |
-| `membership` | Complete - subscription activation via `MembershipPurchaseFulfillmentPort` after payment |
+| `membership` | Complete - atomic reserve-and-activate fulfillment via `MembershipPurchaseFulfillmentPort`, replay-safe by source Order |
 | `product`, `virtual_goods`, `coupon_package` | Planned/external - payment confirmed only; downstream shop, fulfillment, or promotion capabilities own delivery |
 
 Operator replay for stuck payment settlement: `POST /backend/v3/api/orders/{orderId}/payment_confirmations`. Account value refund and withdrawal review/retry routes call payment/account executor ports and must never write provider or ledger state directly.

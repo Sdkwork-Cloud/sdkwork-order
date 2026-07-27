@@ -9,8 +9,8 @@ use axum::routing::post;
 use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
-    SqliteCommerceRechargeStore,
+    OrderPaymentSettlementContext, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
+    SqliteCommerceOrderStore, SqliteCommerceRechargeStore,
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
@@ -67,7 +67,7 @@ struct PaymentWebhookRuntime<'a, Pool> {
     deployment_registry: &'a PaymentProviderRegistry,
     credentials: &'a ProviderCredentialBundle,
     pool: &'a Pool,
-    order_subject_loader: &'a dyn OrderSubjectLoader,
+    order_context_loader: &'a dyn OrderSettlementContextLoader,
     settlement_ports: OwnerOrderSettlementPorts<'a>,
 }
 
@@ -204,7 +204,7 @@ async fn receive_provider_webhook(
                     deployment_registry: registry.as_ref(),
                     credentials: &credentials,
                     pool: &pool,
-                    order_subject_loader: orders.as_ref(),
+                    order_context_loader: orders.as_ref(),
                     settlement_ports: OwnerOrderSettlementPorts {
                         payment_store: payments.as_ref(),
                         order_state_store: orders.as_ref(),
@@ -242,7 +242,7 @@ async fn receive_provider_webhook(
                     deployment_registry: registry.as_ref(),
                     credentials: &credentials,
                     pool: &pool,
-                    order_subject_loader: orders.as_ref(),
+                    order_context_loader: orders.as_ref(),
                     settlement_ports: OwnerOrderSettlementPorts {
                         payment_store: payments.as_ref(),
                         order_state_store: orders.as_ref(),
@@ -277,7 +277,7 @@ where
         deployment_registry,
         credentials,
         pool,
-        order_subject_loader,
+        order_context_loader,
         settlement_ports,
     } = runtime;
     let ProviderWebhookRequest {
@@ -372,21 +372,22 @@ where
     };
 
     if let Some(attempt) = ingest.payment_attempt_context.as_ref() {
-        let order_subject = order_subject_loader
-            .load_order_subject(
+        let order_context = order_context_loader
+            .load_order_payment_settlement_context(
                 &attempt.tenant_id,
                 attempt.organization_id.as_deref(),
                 &attempt.order_id,
             )
             .await;
-        match order_subject {
-            Ok(Some(subject)) => {
+        match order_context {
+            Ok(Some(context)) => {
                 let request_no = format!("webhook:{}", ingest.webhook_event_id);
                 let settlement_attempt = order_payment_settlement_attempt_from_webhook(attempt);
                 if let Err(error) = settle_owner_order_after_payment_success(
                     settlement_ports,
                     &settlement_attempt,
-                    Some(subject.as_str()),
+                    Some(context.subject.as_str()),
+                    context.membership_purchase.as_ref(),
                     &request_no,
                 )
                 .await
@@ -432,56 +433,59 @@ fn order_payment_settlement_attempt_from_webhook(
     }
 }
 
-trait OrderSubjectLoader: Send + Sync {
-    fn load_order_subject<'a>(
+trait OrderSettlementContextLoader: Send + Sync {
+    fn load_order_payment_settlement_context<'a>(
         &'a self,
         tenant_id: &'a str,
         organization_id: Option<&'a str>,
         order_id: &'a str,
     ) -> std::pin::Pin<
         Box<
-            dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>>
-                + Send
+            dyn std::future::Future<
+                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
+                > + Send
                 + 'a,
         >,
     >;
 }
 
-impl OrderSubjectLoader for SqliteCommerceOrderStore {
-    fn load_order_subject<'a>(
+impl OrderSettlementContextLoader for SqliteCommerceOrderStore {
+    fn load_order_payment_settlement_context<'a>(
         &'a self,
         tenant_id: &'a str,
         organization_id: Option<&'a str>,
         order_id: &'a str,
     ) -> std::pin::Pin<
         Box<
-            dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>>
-                + Send
+            dyn std::future::Future<
+                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
+                > + Send
                 + 'a,
         >,
     > {
         Box::pin(async move {
-            self.load_order_subject(tenant_id, organization_id, order_id)
+            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
                 .await
         })
     }
 }
 
-impl OrderSubjectLoader for PostgresCommerceOrderStore {
-    fn load_order_subject<'a>(
+impl OrderSettlementContextLoader for PostgresCommerceOrderStore {
+    fn load_order_payment_settlement_context<'a>(
         &'a self,
         tenant_id: &'a str,
         organization_id: Option<&'a str>,
         order_id: &'a str,
     ) -> std::pin::Pin<
         Box<
-            dyn std::future::Future<Output = Result<Option<String>, CommerceServiceError>>
-                + Send
+            dyn std::future::Future<
+                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
+                > + Send
                 + 'a,
         >,
     > {
         Box::pin(async move {
-            self.load_order_subject(tenant_id, organization_id, order_id)
+            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
                 .await
         })
     }

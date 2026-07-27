@@ -430,6 +430,9 @@ fn account_value_hold_create_path(asset: AccountValueAssetCode) -> String {
         AccountValueAssetCode::Cash | AccountValueAssetCode::Points => {
             "/backend/v3/api/wallet/holds".to_owned()
         }
+        AccountValueAssetCode::Subscription => {
+            unreachable!("subscription coupons are fulfilled by Membership")
+        }
     }
 }
 
@@ -449,6 +452,9 @@ fn account_value_hold_mutation_path(
         }
         AccountValueAssetCode::Cash | AccountValueAssetCode::Points => {
             format!("/backend/v3/api/wallet/holds/{hold_id}/{suffix}")
+        }
+        AccountValueAssetCode::Subscription => {
+            unreachable!("subscription coupons are fulfilled by Membership")
         }
     }
 }
@@ -472,6 +478,9 @@ fn account_value_adjustment_path(
         }
         AccountValueAssetCode::Points => "/backend/v3/api/wallet/adjustments/points",
         AccountValueAssetCode::Cash => "/backend/v3/api/wallet/adjustments/cash",
+        AccountValueAssetCode::Subscription => {
+            unreachable!("subscription coupons are fulfilled by Membership")
+        }
     }
 }
 

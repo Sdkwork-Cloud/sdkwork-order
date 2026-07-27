@@ -1,7 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Extension, Path, Query, State};
 use axum::http::HeaderMap;
@@ -18,20 +17,23 @@ use sdkwork_order_repository_sqlx::{
 };
 use sdkwork_order_service::{
     default_fulfill_account_value_order_command, redeem_coupon_and_fulfill_account_value_order,
-    AccountValueAssetCode, AccountValueCatalogListQuery, AccountValueFulfillmentStore,
-    AccountValueLedgerPort, AccountValueOrderSubject, AccountValueRequestDetailQuery,
-    AccountValueRequestListPage, AccountValueRequestListQuery, AccountValueRequestView,
-    CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot, CouponRedemptionPort,
-    CouponRedemptionRequest, CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
+    redeem_coupon_and_fulfill_order, AccountValueAssetCode, AccountValueCatalogListQuery,
+    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
+    AccountValueRequestDetailQuery, AccountValueRequestListPage, AccountValueRequestListQuery,
+    AccountValueRequestView, CancelOwnerOrderCommand, CheckoutStatusQuery, CheckoutStatusSnapshot,
+    CouponRedemptionBenefit, CouponRedemptionPort, CouponRedemptionRequest,
+    CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
     CreateOrderRefundRequestCommand, CreatePointsRechargeOrderCommand,
-    CreatePointsRechargeOrderOutcome, NoopAccountValueLedgerPort, NoopCouponRedemptionPort,
-    OrderOwnerListQuery, PayOwnerOrderCommand, PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
-    RechargeGrantPreview, RechargePackageItem, RechargePackageListPage, RechargePackageListQuery,
-    RechargeSettingsQuery, RechargeSettingsSnapshot, TokenBankPlanItem, TokenBankPlanListPage,
-    TokenBankPlanPeriod,
+    CreatePointsRechargeOrderOutcome, FulfillAccountValueOrderCommand,
+    MembershipPurchaseFulfillmentPort, NoopAccountValueLedgerPort, NoopCouponRedemptionPort,
+    NoopMembershipPurchaseFulfillmentPort, OrderOwnerListQuery, PayOwnerOrderCommand,
+    PayOwnerOrderCommandInput, PayOwnerOrderOutcome, RechargeGrantPreview, RechargePackageItem,
+    RechargePackageListPage, RechargePackageListQuery, RechargeSettingsQuery,
+    RechargeSettingsSnapshot, TokenBankPlanItem, TokenBankPlanListPage, TokenBankPlanPeriod,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
+use sdkwork_utils_rust::{add_minutes, format_datetime, now};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
 use sqlx::{PgPool, SqlitePool};
@@ -51,7 +53,7 @@ use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 const MAX_CHECKOUT_ORDER_NO_LEN: usize = 128;
 const MAX_RECHARGE_CENTS: i64 = 1_000_000;
-const PAYMENT_EXPIRE_SECONDS: i64 = 1_800;
+const PAYMENT_EXPIRE_MINUTES: i64 = 30;
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 const DEFAULT_PAYMENT_PRODUCT: &str = "mobile_cashier_h5";
 
@@ -97,6 +99,14 @@ pub trait CommerceRechargeCheckoutStore: Send + Sync {
         command: CreateCouponRechargeOrderCommand,
     ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome>;
 
+    fn load_account_value_order_by_idempotency<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        idempotency_key: &'a str,
+    ) -> CommerceRechargeCheckoutFuture<'a, Option<CreateAccountRechargeOrderOutcome>>;
+
     fn list_order_refund_requests<'a>(
         &'a self,
         query: AccountValueRequestListQuery,
@@ -129,6 +139,7 @@ struct AppRechargeCheckoutState {
     fulfillment_store: Arc<dyn AccountValueFulfillmentStore>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     orders: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
 }
@@ -258,6 +269,22 @@ struct SubmitRechargeRequest {
     payment_product: Option<String>,
     payment_password: Option<String>,
     source: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CouponRedemptionCreateBody {
+    coupon_code: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CouponRedemptionResponse {
+    order_id: String,
+    order_no: String,
+    status: String,
+    replayed: bool,
+    benefit: serde_json::Value,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -397,6 +424,8 @@ struct SubmitRechargeResponse {
     provider_code: String,
     payment_method: String,
     payment_product: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at: Option<String>,
     status: String,
     next_action: String,
     cashier_url: String,
@@ -513,6 +542,24 @@ impl CommerceRechargeCheckoutStore for SqliteCommerceRechargeStore {
         Box::pin(async move { self.create_coupon_recharge_order(command).await })
     }
 
+    fn load_account_value_order_by_idempotency<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        idempotency_key: &'a str,
+    ) -> CommerceRechargeCheckoutFuture<'a, Option<CreateAccountRechargeOrderOutcome>> {
+        Box::pin(async move {
+            self.load_account_value_order_by_idempotency(
+                tenant_id,
+                organization_id,
+                owner_user_id,
+                idempotency_key,
+            )
+            .await
+        })
+    }
+
     fn list_order_refund_requests<'a>(
         &'a self,
         query: AccountValueRequestListQuery,
@@ -599,6 +646,24 @@ impl CommerceRechargeCheckoutStore for PostgresCommerceRechargeStore {
         Box::pin(async move { self.create_coupon_recharge_order(command).await })
     }
 
+    fn load_account_value_order_by_idempotency<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        organization_id: Option<&'a str>,
+        owner_user_id: &'a str,
+        idempotency_key: &'a str,
+    ) -> CommerceRechargeCheckoutFuture<'a, Option<CreateAccountRechargeOrderOutcome>> {
+        Box::pin(async move {
+            self.load_account_value_order_by_idempotency(
+                tenant_id,
+                organization_id,
+                owner_user_id,
+                idempotency_key,
+            )
+            .await
+        })
+    }
+
     fn list_order_refund_requests<'a>(
         &'a self,
         query: AccountValueRequestListQuery,
@@ -647,6 +712,7 @@ pub fn app_recharge_checkout_router_with_sqlite_pool(
         store,
         Arc::new(NoopCouponRedemptionPort),
         Arc::new(NoopAccountValueLedgerPort),
+        Arc::new(NoopMembershipPurchaseFulfillmentPort),
         Arc::new(SqliteCommerceOrderStore::new(pool_for_orders.clone())),
         enriched_sqlite_owner_order_payments(pool_for_orders, registry, credentials),
     )
@@ -664,6 +730,7 @@ pub fn app_recharge_checkout_router_with_postgres_pool(
         store,
         Arc::new(NoopCouponRedemptionPort),
         Arc::new(NoopAccountValueLedgerPort),
+        Arc::new(NoopMembershipPurchaseFulfillmentPort),
         Arc::new(PostgresCommerceOrderStore::new(pool_for_orders.clone())),
         enriched_postgres_owner_order_payments(pool_for_orders, registry, credentials),
     )
@@ -679,6 +746,7 @@ pub fn build_app_recharge_checkout_router(
         Arc::new(NoopAccountValueFulfillmentStore),
         Arc::new(NoopCouponRedemptionPort),
         Arc::new(NoopAccountValueLedgerPort),
+        Arc::new(NoopMembershipPurchaseFulfillmentPort),
         orders,
         payments,
     )
@@ -689,6 +757,7 @@ pub fn build_app_recharge_checkout_router_with_integrations(
     fulfillment_store: Arc<dyn AccountValueFulfillmentStore>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
     orders: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
 ) -> Router {
@@ -715,6 +784,10 @@ pub fn build_app_recharge_checkout_router_with_integrations(
             post(cancel_recharge_order),
         )
         .route(
+            "/app/v3/api/orders/coupon_redemptions",
+            post(create_coupon_redemption),
+        )
+        .route(
             "/app/v3/api/orders/refund_requests",
             get(list_refund_requests).post(create_refund_request),
         )
@@ -735,6 +808,7 @@ pub fn build_app_recharge_checkout_router_with_integrations(
             fulfillment_store,
             coupon_redemption_port,
             account_value_ledger_port,
+            membership_fulfillment_port,
             orders,
             payments,
         })
@@ -1262,55 +1336,64 @@ async fn submit_recharge(
             Ok(value) => value,
             Err(error) => return map_service_error(ctx, error),
         };
-    let grant_amount = if matches!(order_subject, AccountValueOrderSubject::CouponRecharge) {
-        if request.grant_amount_value().is_some() {
-            return validation(ctx, "coupon recharge grantAmount is server-controlled");
-        }
-        let coupon_code = match request
-            .coupon_code()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            Some(value) => value,
-            None => return validation(ctx, "coupon recharge requires couponCode"),
-        };
-        let preview = state
-            .coupon_redemption_port
-            .preview_coupon(CouponRedemptionRequest {
-                tenant_id: subject.tenant_id.clone(),
-                organization_id: subject.organization_id.clone(),
-                owner_user_id: subject.user_id.clone(),
-                coupon_code: coupon_code.to_owned(),
-                order_id: write_headers.request_no.clone(),
-                request_no: write_headers.request_no.clone(),
-                idempotency_key: format!(
-                    "coupon-recharge:preview:{}",
-                    write_headers.idempotency_key
-                ),
-            })
-            .await;
-        match preview {
-            Ok(value)
-                if value.accepted && value.target_asset == AccountValueAssetCode::TokenBank =>
+    let (grant_amount, coupon_benefit) =
+        if matches!(order_subject, AccountValueOrderSubject::CouponRecharge) {
+            if request.grant_amount_value().is_some() {
+                return validation(ctx, "coupon recharge grantAmount is server-controlled");
+            }
+            let coupon_code = match request
+                .coupon_code()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
             {
-                value.grant_amount
-            }
-            Ok(_) => {
-                return map_service_error(
-                    ctx,
-                    CommerceServiceError::conflict(
-                        "coupon does not grant a supported Token Bank benefit",
+                Some(value) => value,
+                None => return validation(ctx, "coupon recharge requires couponCode"),
+            };
+            let preview = state
+                .coupon_redemption_port
+                .preview_coupon(CouponRedemptionRequest {
+                    tenant_id: subject.tenant_id.clone(),
+                    organization_id: subject.organization_id.clone(),
+                    owner_user_id: subject.user_id.clone(),
+                    coupon_code: coupon_code.to_owned(),
+                    order_id: write_headers.request_no.clone(),
+                    request_no: write_headers.request_no.clone(),
+                    idempotency_key: format!(
+                        "coupon-recharge:preview:{}",
+                        write_headers.idempotency_key
                     ),
-                )
+                })
+                .await;
+            match preview {
+                Ok(value) if value.accepted => match value.benefit {
+                    benefit @ CouponRedemptionBenefit::TokenBankCredit { .. } => {
+                        (benefit.grant_amount(), Some(benefit))
+                    }
+                    CouponRedemptionBenefit::Subscription { .. } => {
+                        return map_service_error(
+                            ctx,
+                            CommerceServiceError::conflict(
+                                "subscription coupons must use the coupon redemption API",
+                            ),
+                        )
+                    }
+                },
+                Ok(_) => {
+                    return map_service_error(
+                        ctx,
+                        CommerceServiceError::conflict(
+                            "coupon does not grant a supported Token Bank benefit",
+                        ),
+                    )
+                }
+                Err(error) => return map_service_error(ctx, error),
             }
-            Err(error) => return map_service_error(ctx, error),
-        }
-    } else {
-        match resolve_grant_amount(order_subject, &amount, request.grant_amount_value()) {
-            Ok(value) => value,
-            Err(error) => return map_service_error(ctx, error),
-        }
-    };
+        } else {
+            match resolve_grant_amount(order_subject, &amount, request.grant_amount_value()) {
+                Ok(value) => (value, None),
+                Err(error) => return map_service_error(ctx, error),
+            }
+        };
     let plan_period = match request
         .plan_period()
         .map(TokenBankPlanPeriod::parse)
@@ -1321,8 +1404,8 @@ async fn submit_recharge(
     };
 
     if matches!(order_subject, AccountValueOrderSubject::CouponRecharge) {
-        let command =
-            match build_create_coupon_recharge_command(CreateAccountRechargeCommandInput {
+        let command = match build_create_coupon_recharge_command(
+            CreateAccountRechargeCommandInput {
                 subject: &subject,
                 order_subject,
                 target_asset,
@@ -1337,10 +1420,12 @@ async fn submit_recharge(
                 plan_period,
                 coupon_code: request.coupon_code(),
                 client_request_no: request.client_request_no(),
-            }) {
-                Ok(command) => command,
-                Err(error) => return map_service_error(ctx, error),
-            };
+            },
+            coupon_benefit.expect("coupon preview benefit must be available"),
+        ) {
+            Ok(command) => command,
+            Err(error) => return map_service_error(ctx, error),
+        };
         let command_for_payment = command.clone();
         return match state.store.create_coupon_recharge_order(command).await {
             Ok(outcome) if command_for_payment.payment_required => {
@@ -1431,6 +1516,236 @@ async fn submit_recharge(
             .await
         }
         Err(error) => map_service_error(ctx, error),
+    }
+}
+
+async fn create_coupon_redemption(
+    State(state): State<AppRechargeCheckoutState>,
+    runtime_context: Option<Extension<IamAppContext>>,
+    request_context: Option<Extension<WebRequestContext>>,
+    headers: HeaderMap,
+    Json(request): Json<CouponRedemptionCreateBody>,
+) -> Response {
+    let ctx = request_context.as_ref().map(|value| &value.0);
+    let subject = match app_runtime_subject_from_contexts(runtime_context, ctx) {
+        Ok(subject) => subject,
+        Err(message) => return unauthorized(ctx, message),
+    };
+    let coupon_code = request.coupon_code.trim();
+    if coupon_code.is_empty() {
+        return validation(ctx, "couponCode is required");
+    }
+    let zero = CommerceMoney::new("0").expect("zero must be valid commerce money");
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        fallback_account_value_request_no(
+            &subject,
+            AccountValueOrderSubject::CouponRecharge,
+            zero.as_str(),
+            None,
+            idempotency_key,
+        )
+    }) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
+    let existing_order = match state
+        .store
+        .load_account_value_order_by_idempotency(
+            &subject.tenant_id,
+            subject.organization_id.as_deref(),
+            &subject.user_id,
+            &write_headers.idempotency_key,
+        )
+        .await
+    {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    if let Some(existing_order) = existing_order {
+        let fulfill_command = match default_fulfill_account_value_order_command(
+            AccountValueOrderSubject::CouponRecharge,
+            &subject.tenant_id,
+            subject.organization_id.as_deref(),
+            &subject.user_id,
+            &existing_order.order_id,
+            &write_headers.request_no,
+        ) {
+            Ok(value) => value,
+            Err(error) => return map_service_error(ctx, error),
+        };
+        let context = match state
+            .fulfillment_store
+            .load_account_value_fulfillment_context(&fulfill_command)
+            .await
+        {
+            Ok(Some(value)) => value,
+            Ok(None) => {
+                return map_service_error(
+                    ctx,
+                    CommerceServiceError::not_found("coupon redemption order was not found"),
+                )
+            }
+            Err(error) => return map_service_error(ctx, error),
+        };
+        if let Err(error) = validate_coupon_redemption_replay(
+            existing_order.subject,
+            context.coupon_code.as_deref(),
+            coupon_code,
+        ) {
+            return map_service_error(ctx, error);
+        }
+        return fulfill_coupon_redemption_order(&state, ctx, fulfill_command).await;
+    }
+    let preview = match state
+        .coupon_redemption_port
+        .preview_coupon(CouponRedemptionRequest {
+            tenant_id: subject.tenant_id.clone(),
+            organization_id: subject.organization_id.clone(),
+            owner_user_id: subject.user_id.clone(),
+            coupon_code: coupon_code.to_owned(),
+            order_id: write_headers.request_no.clone(),
+            request_no: write_headers.request_no.clone(),
+            idempotency_key: format!(
+                "coupon-redemption:preview:{}",
+                write_headers.idempotency_key
+            ),
+        })
+        .await
+    {
+        Ok(value) if value.accepted => value,
+        Ok(_) => {
+            return map_service_error(
+                ctx,
+                CommerceServiceError::conflict("coupon redemption preview was rejected"),
+            )
+        }
+        Err(error) => return map_service_error(ctx, error),
+    };
+    let benefit = preview.benefit;
+    let target_asset = benefit.target_asset();
+    let grant_amount = benefit.grant_amount();
+    let command = match build_create_coupon_recharge_command(
+        CreateAccountRechargeCommandInput {
+            subject: &subject,
+            order_subject: AccountValueOrderSubject::CouponRecharge,
+            target_asset,
+            amount: zero,
+            grant_amount,
+            currency_code: "CNY",
+            method: None,
+            request_no: &write_headers.request_no,
+            idempotency_key: &write_headers.idempotency_key,
+            package_id: None,
+            plan_code: None,
+            plan_period: None,
+            coupon_code: Some(coupon_code),
+            client_request_no: None,
+        },
+        benefit,
+    ) {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    let order_id = command.order_id.clone();
+    match state.store.create_coupon_recharge_order(command).await {
+        Ok(_) => {}
+        Err(error) => return map_service_error(ctx, error),
+    }
+    let fulfill_command = match default_fulfill_account_value_order_command(
+        AccountValueOrderSubject::CouponRecharge,
+        &subject.tenant_id,
+        subject.organization_id.as_deref(),
+        &subject.user_id,
+        &order_id,
+        &write_headers.request_no,
+    ) {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
+    fulfill_coupon_redemption_order(&state, ctx, fulfill_command).await
+}
+
+fn validate_coupon_redemption_replay(
+    existing_subject: AccountValueOrderSubject,
+    stored_coupon_code: Option<&str>,
+    requested_coupon_code: &str,
+) -> Result<(), CommerceServiceError> {
+    if existing_subject != AccountValueOrderSubject::CouponRecharge {
+        return Err(CommerceServiceError::conflict(
+            "idempotency key is already used by a different order subject",
+        ));
+    }
+    if stored_coupon_code.map(str::trim) != Some(requested_coupon_code.trim()) {
+        return Err(CommerceServiceError::conflict(
+            "idempotency key was replayed with a different coupon code",
+        ));
+    }
+    Ok(())
+}
+
+async fn fulfill_coupon_redemption_order(
+    state: &AppRechargeCheckoutState,
+    ctx: Option<&WebRequestContext>,
+    command: FulfillAccountValueOrderCommand,
+) -> Response {
+    match redeem_coupon_and_fulfill_order(
+        &*state.fulfillment_store,
+        &*state.coupon_redemption_port,
+        &*state.account_value_ledger_port,
+        &*state.membership_fulfillment_port,
+        command,
+    )
+    .await
+    {
+        Ok(outcome) => success_created_item(
+            ctx,
+            CouponRedemptionResponse {
+                order_id: outcome.order_id,
+                order_no: outcome.order_no,
+                status: outcome.fulfillment_status,
+                replayed: outcome.replayed,
+                benefit: map_coupon_fulfilled_benefit(outcome.benefit),
+            },
+        ),
+        Err(error) => map_service_error(ctx, error),
+    }
+}
+
+fn map_coupon_fulfilled_benefit(
+    benefit: sdkwork_order_service::CouponFulfilledBenefit,
+) -> serde_json::Value {
+    match benefit {
+        sdkwork_order_service::CouponFulfilledBenefit::TokenBankCredit { grant_amount } => {
+            serde_json::json!({
+                "kind": "token_bank_credit",
+                "targetAsset": "token_bank",
+                "grantAmount": grant_amount.as_str(),
+            })
+        }
+        sdkwork_order_service::CouponFulfilledBenefit::Subscription {
+            product_id,
+            sku_id,
+            package_id,
+            period,
+            duration_days,
+            daily_quota,
+            total_quota,
+            subscription_id,
+            starts_at,
+            expires_at,
+        } => serde_json::json!({
+            "kind": "subscription",
+            "productId": product_id,
+            "skuId": sku_id,
+            "packageId": package_id.to_string(),
+            "period": period,
+            "durationDays": duration_days,
+            "dailyQuota": daily_quota.to_string(),
+            "totalQuota": total_quota.to_string(),
+            "subscriptionId": subscription_id,
+            "startsAt": starts_at,
+            "expiresAt": expires_at,
+        }),
     }
 }
 
@@ -1817,9 +2132,12 @@ fn validate_recharge_order_lookup_key(order_lookup: String) -> Result<String, St
 fn build_create_recharge_command(
     input: CreateRechargeCommandInput<'_>,
 ) -> Result<CreatePointsRechargeOrderCommand, CommerceServiceError> {
-    let now = current_unix_timestamp();
-    let requested_at = format_unix_timestamp(now);
-    let expire_at = format_unix_timestamp(now + PAYMENT_EXPIRE_SECONDS);
+    let requested_at_instant = now();
+    let requested_at = format_datetime(requested_at_instant, None);
+    let expire_at = format_datetime(
+        add_minutes(requested_at_instant, PAYMENT_EXPIRE_MINUTES),
+        None,
+    );
     let seed = format!(
         "{}|{}|{}|{}|{}|{}|{}",
         input.subject.tenant_id,
@@ -1870,9 +2188,12 @@ fn build_create_account_recharge_command(
             "account recharge command requires a paid account value order subject",
         ));
     }
-    let now = current_unix_timestamp();
-    let requested_at = format_unix_timestamp(now);
-    let expire_at = format_unix_timestamp(now + PAYMENT_EXPIRE_SECONDS);
+    let requested_at_instant = now();
+    let requested_at = format_datetime(requested_at_instant, None);
+    let expire_at = format_datetime(
+        add_minutes(requested_at_instant, PAYMENT_EXPIRE_MINUTES),
+        None,
+    );
     let seed = account_value_command_seed(&input);
     let token = stable_hex_token(&seed);
     let order_no = format!("AV{}", token);
@@ -1906,6 +2227,7 @@ fn build_create_account_recharge_command(
 
 fn build_create_coupon_recharge_command(
     input: CreateAccountRechargeCommandInput<'_>,
+    benefit: CouponRedemptionBenefit,
 ) -> Result<CreateCouponRechargeOrderCommand, CommerceServiceError> {
     if !matches!(
         input.order_subject,
@@ -1946,6 +2268,7 @@ fn build_create_coupon_recharge_command(
         payment_required,
     )?;
     command.grant_amount = input.grant_amount;
+    command.benefit = benefit;
     Ok(command)
 }
 
@@ -2220,6 +2543,7 @@ fn map_recharge_outcome(value: CreatePointsRechargeOrderOutcome) -> SubmitRechar
         provider_code: value.provider_code,
         payment_method: value.payment_method,
         payment_product: value.payment_product,
+        expires_at: Some(value.expires_at),
         status: value.status,
         next_action: value.next_action,
         cashier_url: value.cashier_url,
@@ -2250,6 +2574,7 @@ fn map_account_recharge_outcome(
         provider_code: value.provider_code,
         payment_method: value.payment_method,
         payment_product: value.payment_product,
+        expires_at: None,
         status: value.status,
         next_action: value.next_action,
         cashier_url: value.cashier_url,
@@ -2371,38 +2696,6 @@ fn money_cents(amount: &str) -> Result<i64, ()> {
         .ok_or(())
 }
 
-fn current_unix_timestamp() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-fn format_unix_timestamp(seconds: i64) -> String {
-    let days = seconds.div_euclid(86_400);
-    let seconds_of_day = seconds.rem_euclid(86_400);
-    let (year, month, day) = civil_from_days(days);
-    let hour = seconds_of_day / 3_600;
-    let minute = (seconds_of_day % 3_600) / 60;
-    let second = seconds_of_day % 60;
-    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
-}
-
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let days = days + 719_468;
-    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
-    let day_of_era = days - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    let year = year + if month <= 2 { 1 } else { 0 };
-    (year, month, day)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2412,6 +2705,34 @@ mod tests {
         assert_eq!("0.00", format_money_minor("0"));
         assert_eq!("75.00", format_money_minor("7500"));
         assert_eq!("899.00", format_money_minor("89900"));
+    }
+
+    #[test]
+    fn recharge_commands_use_iso_8601_utc_expiration_boundaries() {
+        let subject = test_subject();
+        let command = build_create_recharge_command(CreateRechargeCommandInput {
+            subject: &subject,
+            amount: CommerceMoney::new("5000").expect("recharge amount"),
+            currency_code: "CNY",
+            method: "wechat_pay",
+            request_no: "REQ-RECHARGE-UTC-1",
+            idempotency_key: "IDEMP-RECHARGE-UTC-1",
+            package_id: Some("recharge-500"),
+            client_request_no: None,
+            source: Some("token-plan"),
+        })
+        .expect("recharge command");
+
+        let requested_at = sdkwork_utils_rust::parse_datetime(&command.requested_at, None)
+            .expect("requestedAt must be ISO 8601 UTC");
+        let expire_at = sdkwork_utils_rust::parse_datetime(&command.expire_at, None)
+            .expect("expiresAt must be ISO 8601 UTC");
+        assert_eq!(
+            PAYMENT_EXPIRE_MINUTES,
+            (expire_at - requested_at).num_minutes()
+        );
+        assert!(command.requested_at.ends_with('Z'));
+        assert!(command.expire_at.ends_with('Z'));
     }
 
     #[test]
@@ -2451,22 +2772,28 @@ mod tests {
     #[test]
     fn builds_zero_amount_coupon_recharge_without_payment_required() {
         let subject = test_subject();
-        let command = build_create_coupon_recharge_command(CreateAccountRechargeCommandInput {
-            subject: &subject,
-            order_subject: AccountValueOrderSubject::CouponRecharge,
-            target_asset: AccountValueAssetCode::TokenBank,
-            amount: CommerceMoney::new("0").unwrap(),
+        let benefit = CouponRedemptionBenefit::TokenBankCredit {
             grant_amount: CommerceMoney::new("5000").unwrap(),
-            currency_code: "CNY",
-            method: None,
-            request_no: "REQ-COUPON-1",
-            idempotency_key: "IDEMP-COUPON-1",
-            package_id: None,
-            plan_code: None,
-            plan_period: None,
-            coupon_code: Some("WELCOME-TOKEN-BANK"),
-            client_request_no: Some("client-coupon-1"),
-        })
+        };
+        let command = build_create_coupon_recharge_command(
+            CreateAccountRechargeCommandInput {
+                subject: &subject,
+                order_subject: AccountValueOrderSubject::CouponRecharge,
+                target_asset: AccountValueAssetCode::TokenBank,
+                amount: CommerceMoney::new("0").unwrap(),
+                grant_amount: CommerceMoney::new("5000").unwrap(),
+                currency_code: "CNY",
+                method: None,
+                request_no: "REQ-COUPON-1",
+                idempotency_key: "IDEMP-COUPON-1",
+                package_id: None,
+                plan_code: None,
+                plan_period: None,
+                coupon_code: Some("WELCOME-TOKEN-BANK"),
+                client_request_no: Some("client-coupon-1"),
+            },
+            benefit,
+        )
         .expect("coupon recharge command");
 
         assert_eq!(AccountValueOrderSubject::CouponRecharge, command.subject);
@@ -2492,6 +2819,37 @@ mod tests {
         .expect_err("coupon grant must be supplied by Promotion preview instead");
 
         assert_eq!("validation", error.code());
+    }
+
+    #[test]
+    fn coupon_redemption_replay_requires_the_original_coupon_code() {
+        assert!(validate_coupon_redemption_replay(
+            AccountValueOrderSubject::CouponRecharge,
+            Some(" SUB-MONTH "),
+            "SUB-MONTH",
+        )
+        .is_ok());
+        let error = validate_coupon_redemption_replay(
+            AccountValueOrderSubject::CouponRecharge,
+            Some("SUB-MONTH"),
+            "TOKEN-500",
+        )
+        .expect_err("different coupon code must not replay the original order");
+        assert_eq!("conflict", error.code());
+    }
+
+    #[test]
+    fn coupon_redemption_restores_an_existing_order_before_promotion_preview() {
+        let source = include_str!("recharge_router.rs");
+        let handler = source
+            .split("async fn create_coupon_redemption")
+            .nth(1)
+            .expect("coupon redemption handler");
+        let replay_lookup = handler
+            .find("load_account_value_order_by_idempotency")
+            .expect("order replay lookup");
+        let promotion_preview = handler.find(".preview_coupon").expect("Promotion preview");
+        assert!(replay_lookup < promotion_preview);
     }
 
     #[test]

@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS commerce_order (
     refund_status TEXT,
     request_no TEXT,
     idempotency_key TEXT,
+    request_fingerprint TEXT,
+    purchase_intent_key TEXT,
+    membership_action TEXT,
     created_at TEXT NOT NULL,
     paid_at TEXT,
     cancelled_at TEXT,
@@ -29,6 +32,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_order_owner_idempotency
 
 CREATE INDEX IF NOT EXISTS idx_order_owner_list
     ON commerce_order(tenant_id, organization_id, owner_user_id, created_at DESC, id DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_membership_order_active_purchase_intent
+    ON commerce_order(
+        tenant_id,
+        COALESCE(organization_id, '0'),
+        owner_user_id,
+        subject,
+        purchase_intent_key
+    )
+    WHERE purchase_intent_key IS NOT NULL
+      AND status IN ('draft', 'pending', 'pending_payment', 'unpaid', 'wait_pay', 'created');
 
 CREATE TABLE IF NOT EXISTS commerce_order_item (
     id TEXT NOT NULL PRIMARY KEY,

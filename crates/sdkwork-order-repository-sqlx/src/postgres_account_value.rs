@@ -6,7 +6,7 @@ use sdkwork_order_service::{
     AccountValueOrderSubject, AccountValuePackageItem, AccountValuePackageListPage,
     AccountValueRequestDetailQuery, AccountValueRequestExecutionStore, AccountValueRequestListPage,
     AccountValueRequestListQuery, AccountValueRequestStatusCommand, AccountValueRequestView,
-    CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
+    CouponRedemptionBenefit, CreateAccountRechargeOrderCommand, CreateAccountRechargeOrderOutcome,
     CreateCashWithdrawalRequestCommand, CreateCouponRechargeOrderCommand,
     CreateOrderRefundRequestCommand, RetireAccountValuePackageCommand, RetireTokenBankPlanCommand,
     ReviewAccountValueRequestCommand, TokenBankPlanItem, TokenBankPlanListPage,
@@ -1254,7 +1254,7 @@ impl PostgresCommerceRechargeStore {
         })
     }
 
-    async fn load_account_value_order_by_idempotency(
+    pub async fn load_account_value_order_by_idempotency(
         &self,
         tenant_id: &str,
         organization_id: Option<&str>,
@@ -1471,6 +1471,7 @@ async fn insert_coupon_recharge_order(
         "grantAmount": command.grant_amount.as_str(),
         "bonusAmount": "0",
         "couponCode": command.coupon_code,
+        "couponBenefit": coupon_benefit_snapshot(&command.benefit),
         "paymentRequired": command.payment_required,
         "outTradeNo": command.out_trade_no,
     })
@@ -1507,6 +1508,34 @@ async fn insert_coupon_recharge_order(
         &now,
     )
     .await
+}
+
+fn coupon_benefit_snapshot(benefit: &CouponRedemptionBenefit) -> serde_json::Value {
+    match benefit {
+        CouponRedemptionBenefit::TokenBankCredit { grant_amount } => serde_json::json!({
+            "kind": "token_bank_credit",
+            "targetAsset": "token_bank",
+            "grantAmount": grant_amount.as_str(),
+        }),
+        CouponRedemptionBenefit::Subscription {
+            product_id,
+            sku_id,
+            package_id,
+            period,
+            duration_days,
+            daily_quota,
+            total_quota,
+        } => serde_json::json!({
+            "kind": "subscription",
+            "productId": product_id,
+            "skuId": sku_id,
+            "packageId": package_id.to_string(),
+            "period": period.as_str(),
+            "durationDays": duration_days,
+            "dailyQuota": daily_quota.to_string(),
+            "totalQuota": total_quota.to_string(),
+        }),
+    }
 }
 
 async fn insert_account_value_amount_breakdown(

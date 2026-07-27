@@ -142,7 +142,7 @@ impl PaymentRefundExecutorPort for RecordingRefundExecutorPort {
                 accepted: true,
                 replayed: false,
                 provider_reference_id: Some("payment-refund-1".to_owned()),
-                status: "submitted".to_owned(),
+                status: "succeeded".to_owned(),
             })
         })
     }
