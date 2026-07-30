@@ -103,9 +103,7 @@
     "events": [],
     "configKeys": [
       "SDKWORK_DATABASE_URL",
-      "SDKWORK_ORDER_APP_ROOT",
-      "SDKWORK_ORDER_DATABASE_URL",
-      "SDKWORK_ORDER_DATABASE_ENGINE"
+      "SDKWORK_ORDER_APP_ROOT"
     ]
   },
   "apiCoverage": {

@@ -24,7 +24,7 @@
     "runtimeEntrypoints": ["src/lib.rs"],
     "sdkClients": [],
     "events": [],
-    "configKeys": ["SDKWORK_MERCHANDISE_DATABASE_URL", "SDKWORK_SHOP_DATABASE_URL", "SDKWORK_INVENTORY_DATABASE_URL"],
+    "configKeys": ["SDKWORK_DATABASE_URL"],
     "routeManifest": null
   },
   "integration": {
@@ -35,4 +35,3 @@
   },
   "verification": {"commands": ["cargo test -p sdkwork-order-integration-physical-commerce"]}
 }
-
