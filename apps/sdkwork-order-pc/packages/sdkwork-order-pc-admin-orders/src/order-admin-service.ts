@@ -69,16 +69,16 @@ export function createOrderAdminService(
       const requestBody = body ?? { reason: "platform-cancel" };
       await client.orders.admin.cancel(
         orderId,
-        requestBody,
         createSdkworkIdempotencyParams(),
+        requestBody,
       );
     },
     async closeOrder(orderId, body) {
       const requestBody = body ?? { reason: "platform-close" };
       await client.orders.admin.close(
         orderId,
-        requestBody,
         createSdkworkIdempotencyParams(),
+        requestBody,
       );
     },
   };

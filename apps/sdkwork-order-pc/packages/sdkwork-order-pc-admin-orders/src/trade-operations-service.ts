@@ -24,6 +24,18 @@ export interface TradeOperationsPage<T> {
 
 export type TradeRequestAction = "approve" | "reject" | "retry";
 
+type TradeReviewMethod = (
+  id: string,
+  params: { idempotencyKey: string },
+  body?: { reviewComment: string },
+) => Promise<unknown>;
+
+interface TradeReviewApi {
+  approve: TradeReviewMethod;
+  reject: TradeReviewMethod;
+  retry: TradeReviewMethod;
+}
+
 export interface TradeOperationsService {
   listAfterSales(query?: TradeOperationsQuery): Promise<TradeOperationsPage<AfterSalesRequestSummary>>;
   listShipments(query?: TradeOperationsQuery): Promise<TradeOperationsPage<ShipmentSummary>>;
@@ -62,10 +74,10 @@ export function createTradeOperationsService(client: SdkworkOrderBackendClient):
   const review = async (
     id: string,
     action: TradeRequestAction,
-    api: { approve: Function; reject: Function; retry: Function },
+    api: TradeReviewApi,
   ) => {
     const body = { reviewComment: "manager trade operation" };
-    await api[action](id, body, createSdkworkIdempotencyParams());
+    await api[action](id, createSdkworkIdempotencyParams(), body);
   };
 
   return {

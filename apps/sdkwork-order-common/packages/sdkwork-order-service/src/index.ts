@@ -15,16 +15,67 @@ type PublicSdkPort<T> = {
 };
 
 export type SdkworkOrderOrdersService = PublicSdkPort<SdkworkAppClient["orders"]>;
+export type SdkworkOrderCheckoutService = PublicSdkPort<SdkworkAppClient["checkout"]>;
 export type SdkworkOrderRechargesService = PublicSdkPort<SdkworkAppClient["recharges"]>;
 export type SdkworkOrderMembershipsService = PublicSdkPort<SdkworkAppClient["memberships"]>;
 export type SdkworkOrderWithdrawalsService = PublicSdkPort<SdkworkAppClient["withdrawals"]>;
 
 export type SdkworkOrderAppService = {
+  checkout: SdkworkOrderCheckoutService;
   memberships: SdkworkOrderMembershipsService;
   orders: SdkworkOrderOrdersService;
   recharges: SdkworkOrderRechargesService;
   withdrawals: SdkworkOrderWithdrawalsService;
 };
+
+export interface SdkworkPhysicalPurchaseItem {
+  quantity: number;
+  skuId: string;
+}
+
+export interface SdkworkPhysicalShippingAddress {
+  city: string;
+  countryCode: string;
+  detailAddress: string;
+  district?: string;
+  postalCode?: string;
+  province: string;
+  receiverName: string;
+  receiverPhone: string;
+}
+
+export interface SdkworkPhysicalCheckoutInput {
+  currencyCode?: string;
+  items: SdkworkPhysicalPurchaseItem[];
+  shippingAddress: SdkworkPhysicalShippingAddress;
+}
+
+export interface SdkworkPhysicalCheckout {
+  checkoutSessionId: string;
+  currencyCode: string;
+  discountAmount: string;
+  originalAmount: string;
+  payableAmount: string;
+  quoteId: string;
+  status: string;
+}
+
+export interface SdkworkPhysicalOrder {
+  orderId: string;
+  orderNo: string;
+  orderSn: string;
+  status: string;
+  totalAmount: string;
+}
+
+export interface SdkworkPhysicalPurchaseService {
+  placeOrder(checkoutSessionId: string): Promise<SdkworkPhysicalOrder>;
+  prepareCheckout(input: SdkworkPhysicalCheckoutInput): Promise<SdkworkPhysicalCheckout>;
+}
+
+export interface CreateSdkworkPhysicalPurchaseServiceOptions {
+  appService?: SdkworkOrderAppService;
+}
 
 export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade";
 
@@ -230,10 +281,74 @@ export function requireSdkworkOrderSession(message = "Authentication required"):
 
 export function createSdkworkOrderAppService(input: CreateSdkworkOrderAppServiceInput): SdkworkOrderAppService {
   return {
+    checkout: input.appClient.checkout,
     memberships: input.appClient.memberships,
     orders: input.appClient.orders,
     recharges: input.appClient.recharges,
     withdrawals: input.appClient.withdrawals,
+  };
+}
+
+export function createSdkworkPhysicalPurchaseService(
+  options: CreateSdkworkPhysicalPurchaseServiceOptions = {},
+): SdkworkPhysicalPurchaseService {
+  const resolveAppService = () => options.appService ?? getSdkworkOrderService();
+
+  return {
+    async prepareCheckout(input) {
+      requireSdkworkOrderSession();
+      const items = input.items.map((item) => ({
+        quantity: normalizePhysicalQuantity(item.quantity),
+        skuId: requirePhysicalText("SKU", item.skuId),
+      }));
+      if (items.length === 0) {
+        throw new Error("At least one physical SKU is required.");
+      }
+      if (new Set(items.map((item) => item.skuId)).size !== items.length) {
+        throw new Error("Duplicate physical SKU lines are not allowed.");
+      }
+      const shippingAddress = normalizePhysicalShippingAddress(input.shippingAddress);
+      const session = await resolveAppService().checkout.sessions.create(
+        {
+          currencyCode: (input.currencyCode ?? "CNY").trim().toUpperCase(),
+          items: items.map((item) => ({
+            quantity: String(item.quantity),
+            skuId: item.skuId,
+          })),
+          shippingAddress,
+        },
+        createSdkworkIdempotencyParams(),
+      );
+      const checkoutSessionId = requirePhysicalText(
+        "checkout session id",
+        session.checkoutSessionId,
+      );
+      const quote = await resolveAppService().checkout.sessions.quotes.create(
+        checkoutSessionId,
+        createSdkworkIdempotencyParams(),
+      );
+      return {
+        checkoutSessionId,
+        currencyCode: quote.currencyCode,
+        discountAmount: quote.discountAmount,
+        originalAmount: quote.originalAmount,
+        payableAmount: quote.payableAmount,
+        quoteId: quote.quoteId,
+        status: session.status,
+      };
+    },
+
+    async placeOrder(checkoutSessionId) {
+      requireSdkworkOrderSession();
+      const normalizedSessionId = requirePhysicalText(
+        "checkout session id",
+        checkoutSessionId,
+      );
+      return resolveAppService().checkout.sessions.orders.create(
+        normalizedSessionId,
+        createSdkworkIdempotencyParams(),
+      );
+    },
   };
 }
 
@@ -667,6 +782,36 @@ function normalizeMembershipPaymentMethod(
     return normalized === "wechat" ? "wechat_pay" : normalized;
   }
   return paymentProduct === "alipay_native" ? "alipay" : "wechat_pay";
+}
+
+function normalizePhysicalQuantity(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error("Physical SKU quantity must be a positive integer.");
+  }
+  return value;
+}
+
+function normalizePhysicalShippingAddress(
+  address: SdkworkPhysicalShippingAddress,
+): SdkworkPhysicalShippingAddress {
+  return {
+    city: requirePhysicalText("shipping city", address.city),
+    countryCode: requirePhysicalText("shipping country code", address.countryCode).toUpperCase(),
+    detailAddress: requirePhysicalText("shipping detail address", address.detailAddress),
+    district: toSdkworkOrderOptionalString(address.district),
+    postalCode: toSdkworkOrderOptionalString(address.postalCode),
+    province: requirePhysicalText("shipping province", address.province),
+    receiverName: requirePhysicalText("shipping receiver name", address.receiverName),
+    receiverPhone: requirePhysicalText("shipping receiver phone", address.receiverPhone),
+  };
+}
+
+function requirePhysicalText(field: string, value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`A valid ${field} is required.`);
+  }
+  return normalized;
 }
 
 function normalizePointsRechargeStatus(value: unknown): SdkworkPointsRechargePayment["status"] {

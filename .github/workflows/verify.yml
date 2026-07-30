@@ -13,18 +13,18 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: order
+          POSTGRES_USER: sdkwork_ai_test
           POSTGRES_PASSWORD: order
-          POSTGRES_DB: order_test
+          POSTGRES_DB: sdkwork_ai_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U order -d order_test"
+          --health-cmd "pg_isready -U sdkwork_ai_test -d sdkwork_ai_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      SDKWORK_DATABASE_TEST_POSTGRES_URL: postgres://order:order@localhost:5432/order_test
+      SDKWORK_DATABASE_TEST_POSTGRES_URL: postgres://sdkwork_ai_test:order@localhost:5432/sdkwork_ai_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

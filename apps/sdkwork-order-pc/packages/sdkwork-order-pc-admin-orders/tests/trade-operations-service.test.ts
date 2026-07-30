@@ -40,10 +40,10 @@ describe("createTradeOperationsService", () => {
 
     expect(client.backend.refundRequests.approve).toHaveBeenCalledWith(
       "refund-1",
-      { reviewComment: "manager trade operation" },
       {
         idempotencyKey: expect.any(String),
       },
+      { reviewComment: "manager trade operation" },
     );
   });
 });

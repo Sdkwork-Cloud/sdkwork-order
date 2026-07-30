@@ -46,7 +46,7 @@ describe("createOrderAdminService", () => {
     await service.cancelOrder("o-1", { reason: "operator cancel" });
 
     expect(cancel).toHaveBeenCalledTimes(1);
-    const [orderId, body, params] = cancel.mock.calls[0] ?? [];
+    const [orderId, params, body] = cancel.mock.calls[0] ?? [];
     expect(orderId).toBe("o-1");
     expect(body).toEqual({ reason: "operator cancel" });
     expect(params).toEqual({
