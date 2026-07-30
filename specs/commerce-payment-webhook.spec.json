@@ -30,6 +30,17 @@
     "load_order_subject",
     "settle_owner_order_after_payment_success"
   ],
+  "successProcessing": {
+    "entrypoint": "settle_owner_order_after_payment_success",
+    "notificationSource": "verified webhook -> persisted exact payment attempt",
+    "reconciliationSource": "provider query -> verified exact payment attempt",
+    "transactionRule": "provider I/O happens before the database transaction; exact attempt confirmation uses conditional transactional writes and idempotent replay",
+    "supportedProviders": [
+      "wechat_pay",
+      "alipay",
+      "stripe"
+    ]
+  },
   "paymentPort": {
     "crate": "sdkwork-payment-repository-sqlx",
     "operations": [

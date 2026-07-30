@@ -12,15 +12,17 @@ use sdkwork_order_service::{
     CouponRedemptionBenefit, CouponRedemptionOutcome, CouponRedemptionPort,
     CouponRedemptionRequest, CouponSubscriptionFulfillmentOutcome,
     CouponSubscriptionFulfillmentRequest, FulfillAccountValueOrderCommand,
-    FulfillAccountValueOrderOutcome, FulfillPointsRechargeOrderCommand,
-    FulfillPointsRechargeOrderOutcome, MarkPointsRechargePaymentSucceededCommand,
-    MembershipPurchaseFulfillmentFuture, MembershipPurchaseFulfillmentOutcome,
-    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
-    MembershipPurchaseSettlementSnapshot, NoopCouponRedemptionPort, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
-    OwnerOrderPaymentStatePort, OwnerOrderSettlementPorts, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest, PointsRechargeFulfillmentContext, PointsRechargeFulfillmentFuture,
-    PointsRechargeFulfillmentStore,
+    FulfillAccountValueOrderOutcome, FulfillPaidPhysicalOrderRequest,
+    FulfillPointsRechargeOrderCommand, FulfillPointsRechargeOrderOutcome,
+    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentFuture,
+    MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
+    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
+    NoopCouponRedemptionPort, OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStateOutcome, OwnerOrderPaymentStatePort,
+    OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentOutcome, PhysicalGoodsFulfillmentPort,
+    PhysicalGoodsFuture, PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
+    PointsRechargeFulfillmentContext, PointsRechargeFulfillmentFuture,
+    PointsRechargeFulfillmentStore, UnavailablePhysicalGoodsFulfillmentPort,
 };
 
 #[tokio::test]
@@ -165,6 +167,7 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
             account_value_ledger_port: account_value_ledger.as_ref(),
             coupon_redemption_port: coupon_port.as_ref(),
             membership_port: membership_port.as_ref(),
+            physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
         },
         &attempt,
         Some("token_bank_recharge"),
@@ -192,7 +195,57 @@ async fn settlement_payment_success_dispatches_token_bank_recharge_to_account_va
 }
 
 #[tokio::test]
-async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillment() {
+async fn late_payment_records_payment_but_suppresses_account_value_fulfillment() {
+    let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
+    let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::terminal("cancelled"));
+    let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
+    let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let points_store = Arc::new(UnsupportedPointsRechargeStore);
+    let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
+    let membership_port = Arc::new(UnsupportedMembershipPurchaseFulfillmentPort);
+    let coupon_port = Arc::new(NoopCouponRedemptionPort);
+    let attempt = OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("org-1".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-late-payment".to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
+    };
+
+    let outcome = settle_owner_order_after_payment_success(
+        OwnerOrderSettlementPorts {
+            payment_store: payment_store.as_ref(),
+            order_state_store: order_state_store.as_ref(),
+            recharge_store: points_store.as_ref(),
+            account_value_store: account_value_store.as_ref(),
+            credit_port: points_port.as_ref(),
+            account_value_ledger_port: account_value_ledger.as_ref(),
+            coupon_redemption_port: coupon_port.as_ref(),
+            membership_port: membership_port.as_ref(),
+            physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
+        },
+        &attempt,
+        Some("token_bank_recharge"),
+        None,
+        "req-late-payment-1",
+    )
+    .await
+    .expect("late payment settlement");
+
+    assert!(outcome.payment_confirmed);
+    assert!(!outcome.fulfillment_accepted);
+    assert!(!outcome.fulfillment_replayed);
+    assert_eq!(outcome.fulfillment_status, "late_payment_requires_recovery");
+    assert_eq!(payment_store.confirm_calls(), 1);
+    assert_eq!(order_state_store.mark_calls(), 1);
+    assert_eq!(account_value_store.reserve_calls(), 0);
+    assert_eq!(account_value_store.commit_calls(), 0);
+    assert!(account_value_ledger.commands().is_empty());
+}
+
+#[tokio::test]
+async fn ordinary_product_settlement_fails_closed_without_inventory_fulfillment() {
     let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
     let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::default());
     let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
@@ -220,21 +273,70 @@ async fn ordinary_product_settlement_marks_order_paid_before_external_fulfillmen
             account_value_ledger_port: account_value_ledger.as_ref(),
             coupon_redemption_port: coupon_port.as_ref(),
             membership_port: membership_port.as_ref(),
+            physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
         },
         &attempt,
         Some("physical_shipment"),
         None,
         "req-product-settle-1",
     )
-    .await
-    .expect("product settlement");
+    .await;
 
-    assert!(outcome.payment_confirmed);
-    assert!(!outcome.fulfillment_accepted);
-    assert_eq!(outcome.fulfillment_status, "awaiting_external_fulfillment");
+    assert!(outcome.is_err());
     assert_eq!(payment_store.confirm_calls(), 1);
     assert_eq!(order_state_store.mark_calls(), 1);
     assert!(account_value_ledger.commands().is_empty());
+}
+
+#[tokio::test]
+async fn physical_product_settlement_consumes_inventory_and_opens_shipment_once() {
+    let payment_store = Arc::new(MockOwnerOrderPaymentStore::default());
+    let order_state_store = Arc::new(MockOwnerOrderPaymentStateStore::default());
+    let account_value_store = Arc::new(MockAccountValueFulfillmentStore::default());
+    let points_store = Arc::new(UnsupportedPointsRechargeStore);
+    let points_port = Arc::new(UnsupportedAccountPointsCreditPort);
+    let account_value_ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let membership_port = Arc::new(UnsupportedMembershipPurchaseFulfillmentPort);
+    let coupon_port = Arc::new(NoopCouponRedemptionPort);
+    let physical_port = Arc::new(CapturingPhysicalGoodsFulfillmentPort::default());
+    let attempt = OrderPaymentSettlementAttempt {
+        tenant_id: "tenant-1".to_owned(),
+        organization_id: Some("buyer-org".to_owned()),
+        owner_user_id: "user-1".to_owned(),
+        order_id: "order-physical-1".to_owned(),
+        payment_attempt_id: None,
+        out_trade_no: None,
+    };
+
+    let outcome = settle_owner_order_after_payment_success(
+        OwnerOrderSettlementPorts {
+            payment_store: payment_store.as_ref(),
+            order_state_store: order_state_store.as_ref(),
+            recharge_store: points_store.as_ref(),
+            account_value_store: account_value_store.as_ref(),
+            credit_port: points_port.as_ref(),
+            account_value_ledger_port: account_value_ledger.as_ref(),
+            coupon_redemption_port: coupon_port.as_ref(),
+            membership_port: membership_port.as_ref(),
+            physical_goods_port: physical_port.as_ref(),
+        },
+        &attempt,
+        Some("physical_shipment"),
+        None,
+        "request-physical-1",
+    )
+    .await
+    .expect("physical fulfillment");
+
+    assert!(outcome.fulfillment_accepted);
+    assert_eq!(outcome.fulfillment_status, "awaiting_shipment");
+    let requests = physical_port.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].order_id, "order-physical-1");
+    assert_eq!(
+        requests[0].idempotency_key,
+        "physical-goods:fulfill:order-physical-1"
+    );
 }
 
 #[tokio::test]
@@ -271,6 +373,7 @@ async fn membership_settlement_forwards_the_paid_order_snapshot_exactly_once() {
             account_value_ledger_port: account_value_ledger.as_ref(),
             coupon_redemption_port: coupon_port.as_ref(),
             membership_port: membership_port.as_ref(),
+            physical_goods_port: &UnavailablePhysicalGoodsFulfillmentPort,
         },
         &attempt,
         Some("membership"),
@@ -443,9 +546,17 @@ struct MockOwnerOrderPaymentStore {
 #[derive(Default)]
 struct MockOwnerOrderPaymentStateStore {
     mark_calls: Mutex<u32>,
+    order_status: Option<String>,
 }
 
 impl MockOwnerOrderPaymentStateStore {
+    fn terminal(order_status: &str) -> Self {
+        Self {
+            mark_calls: Mutex::new(0),
+            order_status: Some(order_status.to_owned()),
+        }
+    }
+
     fn mark_calls(&self) -> u32 {
         *self.mark_calls.lock().expect("mark lock")
     }
@@ -456,9 +567,19 @@ impl OwnerOrderPaymentStatePort for MockOwnerOrderPaymentStateStore {
         &'a self,
         _attempt: &'a OrderPaymentSettlementAttempt,
         _paid_at: &'a str,
-    ) -> OwnerOrderPaymentConfirmationFuture<'a, ()> {
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, OwnerOrderPaymentStateOutcome> {
         *self.mark_calls.lock().expect("mark lock") += 1;
-        Box::pin(async { Ok(()) })
+        let order_status = self
+            .order_status
+            .clone()
+            .unwrap_or_else(|| "paid".to_owned());
+        let terminal_order_preserved = self.order_status.is_some();
+        Box::pin(async move {
+            Ok(OwnerOrderPaymentStateOutcome {
+                order_status,
+                terminal_order_preserved,
+            })
+        })
     }
 }
 
@@ -588,6 +709,39 @@ impl AccountPointsCreditPort for UnsupportedAccountPointsCreditPort {
 }
 
 struct UnsupportedMembershipPurchaseFulfillmentPort;
+
+#[derive(Default)]
+struct CapturingPhysicalGoodsFulfillmentPort {
+    requests: Mutex<Vec<FulfillPaidPhysicalOrderRequest>>,
+}
+
+impl CapturingPhysicalGoodsFulfillmentPort {
+    fn requests(&self) -> Vec<FulfillPaidPhysicalOrderRequest> {
+        self.requests
+            .lock()
+            .expect("physical requests lock")
+            .clone()
+    }
+}
+
+impl PhysicalGoodsFulfillmentPort for CapturingPhysicalGoodsFulfillmentPort {
+    fn fulfill_paid_physical_order<'a>(
+        &'a self,
+        request: FulfillPaidPhysicalOrderRequest,
+    ) -> PhysicalGoodsFuture<'a, PhysicalGoodsFulfillmentOutcome> {
+        self.requests
+            .lock()
+            .expect("physical requests lock")
+            .push(request);
+        Box::pin(async {
+            Ok(PhysicalGoodsFulfillmentOutcome {
+                accepted: true,
+                replayed: false,
+                fulfillment_status: "awaiting_shipment".to_owned(),
+            })
+        })
+    }
+}
 
 #[derive(Default)]
 struct CapturingMembershipPurchaseFulfillmentPort {

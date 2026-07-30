@@ -6,22 +6,23 @@ mod bootstrap;
 mod generated;
 
 pub use bootstrap::{
-    assemble_api_router, assemble_app_api_contribution, assemble_backend_business_router,
-    ApiAssembly, ApiAssemblyContribution,
+    assemble_api_router, assemble_api_router_with_pool, assemble_app_api_contribution,
+    assemble_app_api_contribution_with_pool, assemble_backend_business_router, ApiAssembly,
+    ApiAssemblyContribution, BusinessRouterAssembly, OrderAssemblyContract,
 };
 
 pub async fn assemble_api_router_from_env() -> Result<ApiAssembly, String> {
     let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);
-    Ok(assemble_api_router(host).await)
+    assemble_api_router(host).await
 }
 
-pub async fn assemble_backend_business_router_from_env() -> Result<ApiAssembly, String> {
+pub async fn assemble_backend_business_router_from_env() -> Result<BusinessRouterAssembly, String> {
     let host = std::sync::Arc::new(sdkwork_order_service_host::OrderServiceHost::from_env().await?);
     Ok(assemble_backend_business_router(host).await)
 }
 
 pub fn order_contract_fallback_config() -> sdkwork_web_bootstrap::ContractFallbackConfig {
-    ApiAssembly::contract_fallback_config()
+    OrderAssemblyContract::contract_fallback_config()
 }
 
 pub fn assembly_route_count() -> usize {

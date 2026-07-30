@@ -10,18 +10,12 @@ description = "Order → Membership fulfillment integration adapters."
 path = "src/lib.rs"
 
 [dependencies]
-reqwest = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 sdkwork-database-sqlx.workspace = true
 sdkwork_contract_service.workspace = true
 sdkwork_membership_repository_sqlx.workspace = true
 sdkwork_order_service.workspace = true
-sdkwork-utils-rust.workspace = true
 
 [dev-dependencies]
 sdkwork-database-config.workspace = true
-sdkwork-database-history.workspace = true
-sdkwork_order_repository_sqlx.workspace = true
 sqlx.workspace = true
 tokio.workspace = true

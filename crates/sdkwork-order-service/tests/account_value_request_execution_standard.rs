@@ -85,7 +85,7 @@ async fn approve_token_bank_refund_holds_account_value_then_refunds_and_settles_
     );
     assert_eq!(
         ledger_commands[1].idempotency_key,
-        "refund-request:account-hold:refund-token-1:settle"
+        "refund-request:account-hold:refund-token-1:account-hold-1:settle"
     );
 
     let refund_requests = refunds.requests();
@@ -227,7 +227,7 @@ async fn approve_cash_withdrawal_holds_cash_then_payouts_and_settles_hold() {
     assert_eq!(ledger_commands[1].resource_id, "account-hold-1");
     assert_eq!(
         ledger_commands[1].idempotency_key,
-        "withdrawal:account-hold:withdrawal-cash-1:settle"
+        "withdrawal:account-hold:withdrawal-cash-1:account-hold-1:settle"
     );
 
     let payout_requests = payouts.requests();
@@ -292,6 +292,88 @@ async fn reject_refund_request_only_persists_rejected_status() {
 }
 
 #[tokio::test]
+async fn processing_provider_payout_keeps_the_cash_hold_unsettled() {
+    let store = Arc::new(MockAccountValueRequestStore::default());
+    let ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let refunds = Arc::new(MockPaymentRefundExecutorPort::default());
+    let payouts = Arc::new(MockPaymentPayoutExecutorPort::with_status("processing"));
+    store.seed(request_view(
+        "withdrawal-processing-1",
+        None,
+        AccountValueOrderSubject::CashWithdrawal,
+        AccountValueAssetCode::Cash,
+        "8800",
+        "CNY",
+        "requested",
+    ));
+
+    let outcome = execute_account_value_request_review(
+        store.as_ref(),
+        ledger.as_ref(),
+        refunds.as_ref(),
+        payouts.as_ref(),
+        review_command(
+            AccountValueOrderSubject::CashWithdrawal,
+            "withdrawal-processing-1",
+            AccountValueRequestReviewAction::Approve,
+        ),
+    )
+    .await
+    .expect("processing payout execution");
+
+    assert_eq!(outcome.status, "provider_payout_processing");
+    assert_eq!(ledger.commands().len(), 1);
+    assert_eq!(
+        ledger.commands()[0].operation,
+        AccountValueLedgerOperation::Hold
+    );
+}
+
+#[tokio::test]
+async fn failed_provider_payout_releases_the_cash_hold() {
+    let store = Arc::new(MockAccountValueRequestStore::default());
+    let ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let refunds = Arc::new(MockPaymentRefundExecutorPort::default());
+    let payouts = Arc::new(MockPaymentPayoutExecutorPort::with_status("failed"));
+    store.seed(request_view(
+        "withdrawal-failed-1",
+        None,
+        AccountValueOrderSubject::CashWithdrawal,
+        AccountValueAssetCode::Cash,
+        "8800",
+        "CNY",
+        "requested",
+    ));
+
+    let outcome = execute_account_value_request_review(
+        store.as_ref(),
+        ledger.as_ref(),
+        refunds.as_ref(),
+        payouts.as_ref(),
+        review_command(
+            AccountValueOrderSubject::CashWithdrawal,
+            "withdrawal-failed-1",
+            AccountValueRequestReviewAction::Approve,
+        ),
+    )
+    .await
+    .expect("failed payout result");
+
+    assert_eq!(outcome.status, "provider_payout_failed");
+    assert_eq!(
+        ledger
+            .commands()
+            .iter()
+            .map(|command| command.operation)
+            .collect::<Vec<_>>(),
+        vec![
+            AccountValueLedgerOperation::Hold,
+            AccountValueLedgerOperation::HoldRelease,
+        ]
+    );
+}
+
+#[tokio::test]
 async fn refund_provider_failure_releases_account_hold_and_marks_failure() {
     let store = Arc::new(MockAccountValueRequestStore::default());
     let ledger = Arc::new(MockAccountValueLedgerPort::default());
@@ -340,7 +422,7 @@ async fn refund_provider_failure_releases_account_hold_and_marks_failure() {
     assert_eq!(ledger_commands[1].resource_id, "account-hold-1");
     assert_eq!(
         ledger_commands[1].idempotency_key,
-        "refund-request:account-hold:refund-fail-1:release"
+        "refund-request:account-hold:refund-fail-1:account-hold-1:release"
     );
     assert_eq!(
         store
@@ -350,6 +432,116 @@ async fn refund_provider_failure_releases_account_hold_and_marks_failure() {
             .status,
         "provider_refund_failed"
     );
+}
+
+#[tokio::test]
+async fn ambiguous_refund_error_retains_the_account_hold_for_reconciliation() {
+    let store = Arc::new(MockAccountValueRequestStore::default());
+    let ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let refunds = Arc::new(MockPaymentRefundExecutorPort::with_ambiguous_failure());
+    let payouts = Arc::new(MockPaymentPayoutExecutorPort::default());
+    store.seed(
+        request_view(
+            "refund-ambiguous-1",
+            Some("order-ambiguous-1"),
+            AccountValueOrderSubject::RefundRequest,
+            AccountValueAssetCode::TokenBank,
+            "1200",
+            "TOKEN_BANK",
+            "requested",
+        )
+        .with_provider_amount("100", "USD"),
+    );
+
+    execute_account_value_request_review(
+        store.as_ref(),
+        ledger.as_ref(),
+        refunds.as_ref(),
+        payouts.as_ref(),
+        review_command(
+            AccountValueOrderSubject::RefundRequest,
+            "refund-ambiguous-1",
+            AccountValueRequestReviewAction::Approve,
+        ),
+    )
+    .await
+    .expect_err("ambiguous provider error remains retryable");
+
+    assert_eq!(ledger.commands().len(), 1);
+    assert_eq!(
+        ledger.commands()[0].operation,
+        AccountValueLedgerOperation::Hold
+    );
+    assert_eq!(
+        store
+            .status_commands()
+            .last()
+            .map(|command| command.status.as_str()),
+        Some("provider_refund_processing")
+    );
+}
+
+#[tokio::test]
+async fn retry_after_failed_refund_uses_a_new_hold_identity() {
+    let store = Arc::new(MockAccountValueRequestStore::default());
+    let ledger = Arc::new(MockAccountValueLedgerPort::default());
+    let failing_refunds = Arc::new(MockPaymentRefundExecutorPort::with_failure());
+    let successful_refunds = Arc::new(MockPaymentRefundExecutorPort::default());
+    let payouts = Arc::new(MockPaymentPayoutExecutorPort::default());
+    store.seed(
+        request_view(
+            "refund-retry-1",
+            Some("order-retry-1"),
+            AccountValueOrderSubject::RefundRequest,
+            AccountValueAssetCode::TokenBank,
+            "1200",
+            "TOKEN_BANK",
+            "requested",
+        )
+        .with_provider_amount("100", "USD"),
+    );
+
+    execute_account_value_request_review(
+        store.as_ref(),
+        ledger.as_ref(),
+        failing_refunds.as_ref(),
+        payouts.as_ref(),
+        review_command(
+            AccountValueOrderSubject::RefundRequest,
+            "refund-retry-1",
+            AccountValueRequestReviewAction::Approve,
+        ),
+    )
+    .await
+    .expect_err("first deterministic attempt fails");
+
+    let outcome = execute_account_value_request_review(
+        store.as_ref(),
+        ledger.as_ref(),
+        successful_refunds.as_ref(),
+        payouts.as_ref(),
+        review_command(
+            AccountValueOrderSubject::RefundRequest,
+            "refund-retry-1",
+            AccountValueRequestReviewAction::Retry,
+        ),
+    )
+    .await
+    .expect("retry succeeds");
+
+    assert_eq!(outcome.status, "refunded");
+    let commands = ledger.commands();
+    assert_eq!(commands.len(), 4);
+    assert_eq!(commands[2].operation, AccountValueLedgerOperation::Hold);
+    assert_eq!(
+        commands[2].idempotency_key,
+        "refund-request:account-hold:refund-retry-1:retry:review:refund-retry-1:retry"
+    );
+    assert_eq!(
+        commands[3].operation,
+        AccountValueLedgerOperation::HoldSettle
+    );
+    assert_eq!(commands[3].resource_id, "account-hold-2");
 }
 
 #[derive(Default)]
@@ -427,13 +619,19 @@ impl AccountValueLedgerPort for MockAccountValueLedgerPort {
         &'a self,
         command: AccountValueLedgerCommand,
     ) -> AccountValueFuture<'a, AccountValueLedgerOutcome> {
-        self.commands.lock().expect("commands lock").push(command);
-        Box::pin(async {
+        let mut commands = self.commands.lock().expect("commands lock");
+        commands.push(command);
+        let hold_count = commands
+            .iter()
+            .filter(|command| command.operation == AccountValueLedgerOperation::Hold)
+            .count();
+        let account_effect_reference_id = format!("account-hold-{hold_count}");
+        Box::pin(async move {
             Ok(AccountValueLedgerOutcome {
                 accepted: true,
                 replayed: false,
                 ledger_entry_id: Some("ledger-1".to_owned()),
-                account_effect_reference_id: Some("account-hold-1".to_owned()),
+                account_effect_reference_id: Some(account_effect_reference_id),
             })
         })
     }
@@ -442,7 +640,7 @@ impl AccountValueLedgerPort for MockAccountValueLedgerPort {
 #[derive(Default)]
 struct MockPaymentRefundExecutorPort {
     requests: Mutex<Vec<PaymentRefundExecutionRequest>>,
-    fail: bool,
+    error: Option<CommerceServiceError>,
     processing: bool,
 }
 
@@ -450,7 +648,17 @@ impl MockPaymentRefundExecutorPort {
     fn with_failure() -> Self {
         Self {
             requests: Mutex::new(Vec::new()),
-            fail: true,
+            error: Some(CommerceServiceError::validation("provider refund failed")),
+            processing: false,
+        }
+    }
+
+    fn with_ambiguous_failure() -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            error: Some(CommerceServiceError::storage(
+                "provider refund response was not observed",
+            )),
             processing: false,
         }
     }
@@ -458,7 +666,7 @@ impl MockPaymentRefundExecutorPort {
     fn with_processing() -> Self {
         Self {
             requests: Mutex::new(Vec::new()),
-            fail: false,
+            error: None,
             processing: true,
         }
     }
@@ -475,8 +683,8 @@ impl PaymentRefundExecutorPort for MockPaymentRefundExecutorPort {
     ) -> AccountValueFuture<'a, PaymentExecutorOutcome> {
         self.requests.lock().expect("refund lock").push(request);
         Box::pin(async move {
-            if self.fail {
-                return Err(CommerceServiceError::storage("provider refund failed"));
+            if let Some(error) = self.error.clone() {
+                return Err(error);
             }
             Ok(PaymentExecutorOutcome {
                 accepted: true,
@@ -495,9 +703,17 @@ impl PaymentRefundExecutorPort for MockPaymentRefundExecutorPort {
 #[derive(Default)]
 struct MockPaymentPayoutExecutorPort {
     requests: Mutex<Vec<PaymentPayoutExecutionRequest>>,
+    status: Option<&'static str>,
 }
 
 impl MockPaymentPayoutExecutorPort {
+    fn with_status(status: &'static str) -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            status: Some(status),
+        }
+    }
+
     fn requests(&self) -> Vec<PaymentPayoutExecutionRequest> {
         self.requests.lock().expect("payout lock").clone()
     }
@@ -514,7 +730,7 @@ impl PaymentPayoutExecutorPort for MockPaymentPayoutExecutorPort {
                 accepted: true,
                 replayed: false,
                 provider_reference_id: Some("provider-payout-1".to_owned()),
-                status: "succeeded".to_owned(),
+                status: self.status.unwrap_or("succeeded").to_owned(),
             })
         })
     }

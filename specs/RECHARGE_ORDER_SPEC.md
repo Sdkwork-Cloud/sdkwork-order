@@ -59,7 +59,9 @@ Backend admin: `RechargeAdminService` (package publish) on order-backend-api.
 7. Order                    → fulfillment_status = fulfilled; account ledger credit
 ```
 
-Production path: **webhook ingestion** on the **order gateway** (`POST /app/v3/api/orders/payments/webhooks/{providerCode}`) verifies the PSP signature, calls the payment repository port, then runs settlement in-process when status maps to `succeeded`. **Manual replay** uses `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
+Production path: **webhook ingestion** on the **order gateway** (`POST /app/v3/api/orders/payments/webhooks/{providerCode}`) verifies the PSP signature, calls the payment repository port, then runs settlement in-process when status maps to `succeeded`. **Manual reconciliation** uses `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`): it resolves one exact payment attempt, queries the original PSP account, validates provider status, merchant order number, amount, and currency, and only then enters the same `settle_owner_order_after_payment_success` flow used by webhooks.
+
+Provider query I/O runs before database mutation. The returned exact payment-attempt identity is then confirmed with conditional writes inside the Payment repository transaction. A verified webhook success already persisted for that attempt is replayed without another provider call. Settlement and subject fulfillment remain idempotent, so either notification delivery or reconciliation converges on the same success processing path without duplicate credits or fulfillment.
 
 Saga entrypoints (order-service):
 
@@ -105,7 +107,7 @@ Recharge SQL, routes, and lifecycle ownership belong exclusively to **sdkwork-or
 | Component | Route / env | Role |
 | --- | --- | --- |
 | PSP webhook | `POST .../orders/payments/webhooks/{providerCode}` | Order-owned public route; verify + ingest + settle |
-| Manual confirm | `POST .../orders/{orderId}/payment_confirmations` | Operator replay of settlement saga |
+| Manual reconciliation | `POST .../orders/{orderId}/payment_confirmations` | Query PSP, verify the exact payment, then replay the shared settlement saga |
 | Webhook base URL | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
 | Account credit (HTTP) | `SDKWORK_ACCOUNT_BACKEND_API_ORIGIN`, `SDKWORK_ACCESS_TOKEN` | Default adapter: `POST .../wallet/adjustments/points` |
 | Account credit (store) | `SDKWORK_ORDER_ACCOUNT_LEDGER_ADAPTER=store` | In-process ledger via shared ACCOUNT database pool |

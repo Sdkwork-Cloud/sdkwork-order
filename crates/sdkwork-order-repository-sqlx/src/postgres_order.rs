@@ -568,6 +568,7 @@ impl PostgresCommerceOrderStore {
                 o.id AS order_id,
                 o.order_no AS order_sn,
                 o.status,
+                o.merchant_organization_id,
                 COALESCE(
                     (
                         SELECT b.payable_amount
@@ -597,11 +598,19 @@ impl PostgresCommerceOrderStore {
         .map_err(|error| store_error("failed to lock owner order for create", error))?;
 
         if let Some(row) = existing {
+            let inventory_lines = load_order_inventory_lines_postgres(
+                &mut tx,
+                &command.tenant_id,
+                &string_cell(&row, "order_id"),
+            )
+            .await?;
             tx.commit().await.map_err(|error| {
                 store_error("failed to commit existing owner order lookup", error)
             })?;
             let total_amount = commerce_money(&string_cell(&row, "total_amount"))?;
             return Ok(CreateOwnerOrderOutcome {
+                inventory_lines,
+                merchant_organization_id: optional_string_cell(&row, "merchant_organization_id"),
                 order_id: string_cell(&row, "order_id"),
                 order_sn: string_cell(&row, "order_sn"),
                 status: string_cell(&row, "status"),
@@ -632,11 +641,12 @@ impl PostgresCommerceOrderStore {
             r#"
             INSERT INTO commerce_order
                 (id, tenant_id, organization_id, owner_user_id, order_no, status, payment_status,
-                 fulfillment_status, refund_status, subject, currency_code, request_no,
+                fulfillment_status, refund_status, subject, currency_code, merchant_organization_id,
+                 shop_id, shipping_address_snapshot_json, shop_snapshot_json, request_no,
                  idempotency_key, created_at, paid_at, cancelled_at, expired_at, updated_at)
             VALUES
-                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_payment',
-                 'pending', 'unfulfilled', 'none', $6, $7, $8, $9, $10, NULL, NULL, $11, $12)
+                ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), CAST($4 AS TEXT), $5, 'pending_inventory',
+                 'pending', 'unfulfilled', 'none', $6, $7, $8, $9, $10, $11, $12, $13, $14, NULL, NULL, $15, $16)
             "#,
         )
         .bind(&order_id)
@@ -646,6 +656,10 @@ impl PostgresCommerceOrderStore {
         .bind(&order_sn)
         .bind(&subject)
         .bind(&currency_code)
+        .bind(optional_string_cell(&session, "merchant_organization_id"))
+        .bind(optional_string_cell(&session, "shop_id"))
+        .bind(optional_string_cell(&session, "shipping_address_snapshot_json"))
+        .bind(optional_string_cell(&session, "shop_snapshot_json"))
         .bind(&command.request_no)
         .bind(&command.idempotency_key)
         .bind(&now)
@@ -736,11 +750,66 @@ impl PostgresCommerceOrderStore {
         })?;
 
         Ok(CreateOwnerOrderOutcome {
+            inventory_lines: physical_inventory_lines_postgres(&lines),
+            merchant_organization_id: optional_string_cell(&session, "merchant_organization_id"),
             order_id,
             order_sn,
-            status: "pending_payment".to_owned(),
+            status: "pending_inventory".to_owned(),
             total_amount,
         })
+    }
+
+    pub async fn mark_owner_order_inventory_reserved(
+        &self,
+        tenant_id: &str,
+        owner_user_id: &str,
+        order_id: &str,
+    ) -> Result<(), CommerceServiceError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET status = 'pending_payment', fulfillment_status = 'inventory_reserved', updated_at = $1
+            WHERE tenant_id = CAST($2 AS TEXT) AND owner_user_id = CAST($3 AS TEXT)
+              AND id = CAST($4 AS TEXT) AND status IN ('pending_inventory', 'pending_payment')
+            "#,
+        )
+        .bind(current_command_timestamp())
+        .bind(tenant_id)
+        .bind(owner_user_id)
+        .bind(order_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to activate inventory-reserved order", error))?;
+        if result.rows_affected() == 0 {
+            return Err(CommerceServiceError::invalid_state(
+                "order is not waiting for inventory reservation",
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn mark_owner_order_inventory_failed(
+        &self,
+        tenant_id: &str,
+        owner_user_id: &str,
+        order_id: &str,
+    ) -> Result<(), CommerceServiceError> {
+        sqlx::query(
+            r#"
+            UPDATE commerce_order
+            SET status = 'inventory_failed', fulfillment_status = 'inventory_failed', updated_at = $1
+            WHERE tenant_id = CAST($2 AS TEXT) AND owner_user_id = CAST($3 AS TEXT)
+              AND id = CAST($4 AS TEXT) AND status = 'pending_inventory'
+            "#,
+        )
+        .bind(current_command_timestamp())
+        .bind(tenant_id)
+        .bind(owner_user_id)
+        .bind(order_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|error| store_error("failed to close inventory-failed order", error))?;
+        Ok(())
     }
 
     pub async fn cancel_owner_order(
@@ -988,7 +1057,8 @@ async fn load_checkout_session_for_order(
 ) -> Result<sqlx::postgres::PgRow, CommerceServiceError> {
     let row = sqlx::query(
         r#"
-        SELECT currency_code, expires_at, status
+        SELECT currency_code, expires_at, status, shop_id, merchant_organization_id,
+               shop_snapshot_json, shipping_address_snapshot_json
         FROM commerce_checkout_session
         WHERE id = $1
           AND tenant_id = CAST($2 AS TEXT)
@@ -1064,6 +1134,57 @@ fn checkout_order_subject(lines: &[sqlx::postgres::PgRow]) -> String {
             stable_checkout_order_subject(fulfillment_type.as_deref(), snapshot.as_deref())
         },
     )
+}
+
+fn physical_inventory_lines_postgres(
+    lines: &[sqlx::postgres::PgRow],
+) -> Vec<sdkwork_order_service::PhysicalInventoryLine> {
+    lines
+        .iter()
+        .filter_map(|line| {
+            let fulfillment_type = string_cell(line, "fulfillment_type");
+            if !matches!(
+                fulfillment_type.trim().to_ascii_lowercase().as_str(),
+                "physical" | "physical_shipment"
+            ) {
+                return None;
+            }
+            Some(sdkwork_order_service::PhysicalInventoryLine {
+                sku_id: string_cell(line, "sku_id"),
+                shop_id: string_cell(line, "shop_id"),
+                quantity: line.try_get::<i64, _>("quantity").unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+async fn load_order_inventory_lines_postgres(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: &str,
+    order_id: &str,
+) -> Result<Vec<sdkwork_order_service::PhysicalInventoryLine>, CommerceServiceError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT sku_id, shop_id, quantity
+        FROM commerce_order_item
+        WHERE tenant_id = CAST($1 AS TEXT) AND order_id = CAST($2 AS TEXT)
+        ORDER BY created_at ASC, id ASC
+        "#,
+    )
+    .bind(tenant_id)
+    .bind(order_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|error| store_error("failed to load order inventory lines", error))?;
+
+    Ok(rows
+        .iter()
+        .map(|row| sdkwork_order_service::PhysicalInventoryLine {
+            sku_id: string_cell(row, "sku_id"),
+            shop_id: string_cell(row, "shop_id"),
+            quantity: row.try_get::<i64, _>("quantity").unwrap_or(0),
+        })
+        .collect())
 }
 
 fn checkout_line_title(row: &sqlx::postgres::PgRow) -> String {

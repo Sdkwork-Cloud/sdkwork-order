@@ -1,11 +1,11 @@
 import { backendApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { AfterSalesRequestSummary, PageInfo, ReviewAfterSalesRequest } from '../types';
 
 
 export interface AfterSalesReviewsCreateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class AfterSalesReviewsApi {
@@ -17,14 +17,14 @@ export class AfterSalesReviewsApi {
 
 
 /** Review after-sales request */
-  async create(afterSalesRequestId: string, body: ReviewAfterSalesRequest, params?: AfterSalesReviewsCreateParams): Promise<AfterSalesRequestSummary> {
+  async create(afterSalesRequestId: string, body: ReviewAfterSalesRequest, params: AfterSalesReviewsCreateParams, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestSummary> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/reviews`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}/reviews`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -45,7 +45,7 @@ export class AfterSalesManagementApi {
 
 
 /** List after-sales requests for operator review */
-  async list(params?: AfterSalesManagementListParams): Promise<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }> {
+  async list(params?: AfterSalesManagementListParams, requestOptions?: ApiRequestOptions): Promise<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'after_sales_type', value: params?.afterSalesType, style: 'form', explode: true, allowReserved: false },
@@ -53,22 +53,22 @@ export class AfterSalesManagementApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/after_sales/requests`), query));
+    return this.client.request<{ items: AfterSalesRequestSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/after_sales/requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Retrieve after-sales request for operator review */
-  async retrieve(afterSalesRequestId: string): Promise<AfterSalesRequestSummary> {
-    return this.client.get<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`));
+  async retrieve(afterSalesRequestId: string, requestOptions?: ApiRequestOptions): Promise<AfterSalesRequestSummary> {
+    return this.client.request<AfterSalesRequestSummary>(backendApiPath(`/after_sales/requests/${serializePathParameter(afterSalesRequestId, { name: 'afterSalesRequestId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 
 export class AfterSalesApi {
-
+  private client: HttpClient;
   public readonly management: AfterSalesManagementApi;
   public readonly reviews: AfterSalesReviewsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.management = new AfterSalesManagementApi(client);
     this.reviews = new AfterSalesReviewsApi(client);
   }

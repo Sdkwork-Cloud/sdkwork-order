@@ -9,7 +9,7 @@
     "protocol": "http",
     "packageName": "@sdkwork/order-app-sdk"
   },
-  "changeFingerprint": "d190832286a7c1828523af69b32c944117f7444fd1dcfd40d226d6ca39fd72a9",
+  "changeFingerprint": "2dfa7b84482c9125c56871a931e5c6e21433c6119a6b5852c2a9fd3db4ec296c",
   "changes": {
     "createdGeneratedFiles": [
       "bin/publish-core.mjs",
@@ -89,6 +89,7 @@
       "src/types/sdk-work-platform-error-code.ts",
       "src/types/sdk-work-resource-data.ts",
       "src/types/sdk-work-resource-response.ts",
+      "src/types/shipping-address-request.ts",
       "src/types/shop-readiness-item.ts",
       "src/types/shop-readiness.ts",
       "src/types/token-bank-plan-response.ts",
@@ -191,6 +192,7 @@
           "src/types/sdk-work-platform-error-code.ts",
           "src/types/sdk-work-resource-data.ts",
           "src/types/sdk-work-resource-response.ts",
+          "src/types/shipping-address-request.ts",
           "src/types/shop-readiness-item.ts",
           "src/types/shop-readiness.ts",
           "src/types/token-bank-plan-response.ts",

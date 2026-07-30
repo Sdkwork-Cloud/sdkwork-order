@@ -1,5 +1,5 @@
 import { backendApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { AccountValuePackageWriteCommand, AccountValueRequestReviewCommand, SdkWorkCommandData, SdkWorkPageData, TokenBankPlanWriteCommand } from '../types';
 
@@ -11,15 +11,15 @@ export interface BackendWithdrawalRequestsListParams {
 }
 
 export interface BackendWithdrawalRequestsApproveParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendWithdrawalRequestsRejectParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendWithdrawalRequestsRetryParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class BackendWithdrawalRequestsApi {
@@ -31,46 +31,46 @@ export class BackendWithdrawalRequestsApi {
 
 
 /** Withdrawal requests list. */
-  async list(params?: BackendWithdrawalRequestsListParams): Promise<SdkWorkPageData> {
+  async list(params?: BackendWithdrawalRequestsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(backendApiPath(`/withdrawal_requests`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/withdrawal_requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Withdrawal requests approve. */
-  async approve(withdrawalRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendWithdrawalRequestsApproveParams): Promise<SdkWorkCommandData> {
+  async approve(withdrawalRequestId: string, params: BackendWithdrawalRequestsApproveParams, body?: AccountValueRequestReviewCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/approve`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/approve`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 
 /** Withdrawal requests reject. */
-  async reject(withdrawalRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendWithdrawalRequestsRejectParams): Promise<SdkWorkCommandData> {
+  async reject(withdrawalRequestId: string, params: BackendWithdrawalRequestsRejectParams, body?: AccountValueRequestReviewCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/reject`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/reject`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 
 /** Withdrawal requests retry. */
-  async retry(withdrawalRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendWithdrawalRequestsRetryParams): Promise<SdkWorkCommandData> {
+  async retry(withdrawalRequestId: string, params: BackendWithdrawalRequestsRetryParams, body?: AccountValueRequestReviewCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/retry`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/withdrawal_requests/${serializePathParameter(withdrawalRequestId, { name: 'withdrawalRequestId', style: 'simple', explode: false })}/retry`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -81,15 +81,15 @@ export interface BackendRefundRequestsListParams {
 }
 
 export interface BackendRefundRequestsApproveParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendRefundRequestsRejectParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendRefundRequestsRetryParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class BackendRefundRequestsApi {
@@ -101,46 +101,46 @@ export class BackendRefundRequestsApi {
 
 
 /** Refund requests list. */
-  async list(params?: BackendRefundRequestsListParams): Promise<SdkWorkPageData> {
+  async list(params?: BackendRefundRequestsListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(backendApiPath(`/refund_requests`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/refund_requests`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Refund requests approve. */
-  async approve(refundRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendRefundRequestsApproveParams): Promise<SdkWorkCommandData> {
+  async approve(refundRequestId: string, params: BackendRefundRequestsApproveParams, body?: AccountValueRequestReviewCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/approve`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/approve`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 
 /** Refund requests reject. */
-  async reject(refundRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendRefundRequestsRejectParams): Promise<SdkWorkCommandData> {
+  async reject(refundRequestId: string, params: BackendRefundRequestsRejectParams, body?: AccountValueRequestReviewCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/reject`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/reject`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 
 /** Refund requests retry. */
-  async retry(refundRequestId: string, body?: AccountValueRequestReviewCommand, params?: BackendRefundRequestsRetryParams): Promise<SdkWorkCommandData> {
+  async retry(refundRequestId: string, params: BackendRefundRequestsRetryParams, body?: AccountValueRequestReviewCommand, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/retry`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/refund_requests/${serializePathParameter(refundRequestId, { name: 'refundRequestId', style: 'simple', explode: false })}/retry`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -151,15 +151,15 @@ export interface BackendTokenBankPlansListParams {
 }
 
 export interface BackendTokenBankPlansCreateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendTokenBankPlansUpdateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendTokenBankPlansRetireParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class BackendTokenBankPlansApi {
@@ -171,46 +171,46 @@ export class BackendTokenBankPlansApi {
 
 
 /** Token Bank plans list. */
-  async list(params?: BackendTokenBankPlansListParams): Promise<SdkWorkPageData> {
+  async list(params?: BackendTokenBankPlansListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(backendApiPath(`/token_bank_plans`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/token_bank_plans`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Token Bank plans create. */
-  async create(body: TokenBankPlanWriteCommand, params?: BackendTokenBankPlansCreateParams): Promise<Record<string, unknown>> {
+  async create(body: TokenBankPlanWriteCommand, params: BackendTokenBankPlansCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(backendApiPath(`/token_bank_plans`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/token_bank_plans`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 
 /** Token Bank plans update. */
-  async update(planCode: string, body: TokenBankPlanWriteCommand, params?: BackendTokenBankPlansUpdateParams): Promise<Record<string, unknown>> {
+  async update(planCode: string, body: TokenBankPlanWriteCommand, params: BackendTokenBankPlansUpdateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.patch<Record<string, unknown>>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 
 /** Token Bank plans retire. */
-  async retire(planCode: string, params?: BackendTokenBankPlansRetireParams): Promise<SdkWorkCommandData> {
+  async retire(planCode: string, params: BackendTokenBankPlansRetireParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}/retire`), undefined, undefined, requestHeaders);
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/token_bank_plans/${serializePathParameter(planCode, { name: 'planCode', style: 'simple', explode: false })}/retire`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders, sdkworkUnwrapKind: 'command' });
   }
 }
 
@@ -222,15 +222,15 @@ export interface BackendAccountValuePackagesListParams {
 }
 
 export interface BackendAccountValuePackagesCreateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendAccountValuePackagesUpdateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface BackendAccountValuePackagesRetireParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class BackendAccountValuePackagesApi {
@@ -242,59 +242,59 @@ export class BackendAccountValuePackagesApi {
 
 
 /** Account value packages list. */
-  async list(params?: BackendAccountValuePackagesListParams): Promise<SdkWorkPageData> {
+  async list(params?: BackendAccountValuePackagesListParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkPageData> {
     const query = buildQueryString([
       { name: 'target_asset', value: params?.targetAsset, style: 'form', explode: true, allowReserved: false },
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<SdkWorkPageData>(appendQueryString(backendApiPath(`/account_value_packages`), query));
+    return this.client.request<SdkWorkPageData>(appendQueryString(backendApiPath(`/account_value_packages`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Account value packages create. */
-  async create(body: AccountValuePackageWriteCommand, params?: BackendAccountValuePackagesCreateParams): Promise<Record<string, unknown>> {
+  async create(body: AccountValuePackageWriteCommand, params: BackendAccountValuePackagesCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(backendApiPath(`/account_value_packages`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/account_value_packages`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 
 /** Account value packages update. */
-  async update(packageId: string, body: AccountValuePackageWriteCommand, params?: BackendAccountValuePackagesUpdateParams): Promise<Record<string, unknown>> {
+  async update(packageId: string, body: AccountValuePackageWriteCommand, params: BackendAccountValuePackagesUpdateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.patch<Record<string, unknown>>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 
 /** Account value packages retire. */
-  async retire(packageId: string, params?: BackendAccountValuePackagesRetireParams): Promise<SdkWorkCommandData> {
+  async retire(packageId: string, params: BackendAccountValuePackagesRetireParams, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}/retire`), undefined, undefined, requestHeaders);
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/account_value_packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}/retire`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, headers: requestHeaders, sdkworkUnwrapKind: 'command' });
   }
 }
 
 export class BackendApi {
-
+  private client: HttpClient;
   public readonly accountValuePackages: BackendAccountValuePackagesApi;
   public readonly tokenBankPlans: BackendTokenBankPlansApi;
   public readonly refundRequests: BackendRefundRequestsApi;
   public readonly withdrawalRequests: BackendWithdrawalRequestsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.accountValuePackages = new BackendAccountValuePackagesApi(client);
     this.tokenBankPlans = new BackendTokenBankPlansApi(client);
     this.refundRequests = new BackendRefundRequestsApi(client);

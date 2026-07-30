@@ -1,0 +1,211 @@
+use super::*;
+use sdkwork_database_config::DatabaseConfig;
+use sdkwork_database_sqlx::{DatabasePool, PoolContext};
+use sdkwork_order_service::{
+    PhysicalInventoryLine, ReleasePhysicalOrderInventoryRequest,
+    ReservePhysicalOrderInventoryRequest,
+};
+use sqlx::sqlite::SqlitePoolOptions;
+
+async fn fixture() -> (sqlx::SqlitePool, PhysicalInventoryAdapter) {
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect("sqlite::memory:")
+        .await
+        .expect("sqlite pool");
+    sqlx::query(
+        r#"
+        CREATE TABLE commerce_inventory_stock (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            organization_id TEXT,
+            shop_id TEXT,
+            sku_id TEXT NOT NULL,
+            warehouse_id TEXT,
+            fulfillment_node_id TEXT,
+            available_quantity INTEGER NOT NULL,
+            reserved_quantity INTEGER NOT NULL,
+            sold_quantity INTEGER NOT NULL,
+            safety_stock_quantity INTEGER NOT NULL,
+            version INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        CREATE TABLE commerce_inventory_reservation (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            organization_id TEXT,
+            reservation_no TEXT NOT NULL,
+            order_id TEXT NOT NULL,
+            reservation_source_type TEXT NOT NULL,
+            reservation_source_id TEXT NOT NULL,
+            reservation_type TEXT NOT NULL,
+            sku_id TEXT NOT NULL,
+            warehouse_id TEXT,
+            fulfillment_node_id TEXT,
+            quantity INTEGER NOT NULL,
+            reserved_quantity INTEGER NOT NULL,
+            consumed_quantity INTEGER NOT NULL,
+            released_quantity INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            release_reason_code TEXT,
+            request_no TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            consumed_at TEXT,
+            released_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        INSERT INTO commerce_inventory_stock (
+            id, tenant_id, organization_id, shop_id, sku_id, warehouse_id,
+            fulfillment_node_id, available_quantity, reserved_quantity,
+            sold_quantity, safety_stock_quantity, version, status, updated_at
+        ) VALUES ('stock-1', 'tenant-1', 'merchant-1', 'shop-1', 'sku-1', 'wh-1',
+                  'node-1', 10, 0, 0, 0, 1, 'active', 'now');
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("inventory fixture schema");
+
+    let context = PoolContext {
+        config: DatabaseConfig::default(),
+    };
+    let database_pool = DatabasePool::Sqlite(pool.clone(), context);
+    (pool, PhysicalInventoryAdapter::new(database_pool))
+}
+
+fn reserve_request(order_id: &str, key: &str) -> ReservePhysicalOrderInventoryRequest {
+    ReservePhysicalOrderInventoryRequest {
+        tenant_id: "tenant-1".to_owned(),
+        merchant_organization_id: "merchant-1".to_owned(),
+        order_id: order_id.to_owned(),
+        request_no: format!("request-{order_id}"),
+        idempotency_key: key.to_owned(),
+        lines: vec![PhysicalInventoryLine {
+            sku_id: "sku-1".to_owned(),
+            shop_id: "shop-1".to_owned(),
+            quantity: 3,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn reserve_replay_only_decrements_stock_once_and_rejects_changed_payload() {
+    let (pool, adapter) = fixture().await;
+    let request = reserve_request("order-1", "reserve-key-1");
+
+    let first = adapter
+        .reserve_physical_order_inventory(request.clone())
+        .await
+        .expect("first reservation");
+    let replay = adapter
+        .reserve_physical_order_inventory(request.clone())
+        .await
+        .expect("reservation replay");
+    assert!(!first.replayed);
+    assert!(replay.replayed);
+
+    let changed = ReservePhysicalOrderInventoryRequest {
+        lines: vec![PhysicalInventoryLine {
+            quantity: 4,
+            ..request.lines[0].clone()
+        }],
+        ..request
+    };
+    assert!(adapter
+        .reserve_physical_order_inventory(changed)
+        .await
+        .is_err());
+
+    let (available, reserved, count): (i64, i64, i64) = sqlx::query_as(
+        "SELECT available_quantity, reserved_quantity, (SELECT COUNT(*) FROM commerce_inventory_reservation) FROM commerce_inventory_stock WHERE id = 'stock-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("stock state");
+    assert_eq!((available, reserved, count), (7, 3, 1));
+}
+
+#[tokio::test]
+async fn consume_replay_is_idempotent_and_consumed_stock_cannot_be_released() {
+    let (pool, adapter) = fixture().await;
+    let request = reserve_request("order-2", "reserve-key-2");
+    adapter
+        .reserve_physical_order_inventory(request)
+        .await
+        .expect("reservation");
+
+    let database_pool = DatabasePool::Sqlite(
+        pool.clone(),
+        PoolContext {
+            config: DatabaseConfig::default(),
+        },
+    );
+    let first = consume_order_inventory(&database_pool, "tenant-1", "order-2", "consume-key-2")
+        .await
+        .expect("first consume");
+    let replay = consume_order_inventory(&database_pool, "tenant-1", "order-2", "consume-key-2")
+        .await
+        .expect("consume replay");
+    assert!(!first.replayed);
+    assert!(replay.replayed);
+
+    let release = adapter
+        .release_physical_order_inventory(ReleasePhysicalOrderInventoryRequest {
+            tenant_id: "tenant-1".to_owned(),
+            order_id: "order-2".to_owned(),
+            reason_code: "buyer_cancelled".to_owned(),
+            request_no: "cancel-order-2".to_owned(),
+            idempotency_key: "release-key-2".to_owned(),
+        })
+        .await;
+    assert!(release.is_err());
+
+    let (available, reserved, sold, status): (i64, i64, i64, String) = sqlx::query_as(
+        "SELECT available_quantity, reserved_quantity, sold_quantity, (SELECT status FROM commerce_inventory_reservation WHERE order_id = 'order-2') FROM commerce_inventory_stock WHERE id = 'stock-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("consumed stock state");
+    assert_eq!(
+        (available, reserved, sold, status),
+        (7, 0, 3, "consumed".to_owned())
+    );
+}
+
+#[tokio::test]
+async fn release_replay_restores_stock_only_once() {
+    let (pool, adapter) = fixture().await;
+    let request = reserve_request("order-3", "reserve-key-3");
+    adapter
+        .reserve_physical_order_inventory(request)
+        .await
+        .expect("reservation");
+    let request = ReleasePhysicalOrderInventoryRequest {
+        tenant_id: "tenant-1".to_owned(),
+        order_id: "order-3".to_owned(),
+        reason_code: "buyer_cancelled".to_owned(),
+        request_no: "cancel-order-3".to_owned(),
+        idempotency_key: "release-key-3".to_owned(),
+    };
+    let first = adapter
+        .release_physical_order_inventory(request.clone())
+        .await
+        .expect("first release");
+    let replay = adapter
+        .release_physical_order_inventory(request)
+        .await
+        .expect("release replay");
+    assert!(!first.replayed);
+    assert!(replay.replayed);
+
+    let (available, reserved, version): (i64, i64, i64) = sqlx::query_as(
+        "SELECT available_quantity, reserved_quantity, version FROM commerce_inventory_stock WHERE id = 'stock-1'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("released stock state");
+    assert_eq!((available, reserved, version), (10, 0, 3));
+}

@@ -21,14 +21,17 @@ async fn sqlite_payment_success_marks_order_paid_and_is_idempotent() {
         .expect("settlement context");
     assert_eq!(context.subject, "notary");
 
-    store
+    let first = store
         .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T01:02:03Z")
         .await
         .expect("mark payment success");
-    store
+    let replay = store
         .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T04:05:06Z")
         .await
         .expect("replay payment success");
+    assert_eq!(first.order_status, "paid");
+    assert!(!first.terminal_order_preserved);
+    assert!(!replay.terminal_order_preserved);
 
     assert_order_paid_sqlite(&pool, &ids.0, "2026-07-11T01:02:03Z").await;
     let query = owner_list_query(&ids.1);
@@ -58,14 +61,17 @@ async fn postgres_payment_success_marks_order_paid_and_is_idempotent() {
         .expect("settlement context");
     assert_eq!(context.subject, "notary");
 
-    store
+    let first = store
         .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T01:02:03Z")
         .await
         .expect("mark payment success");
-    store
+    let replay = store
         .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T04:05:06Z")
         .await
         .expect("replay payment success");
+    assert_eq!(first.order_status, "paid");
+    assert!(!first.terminal_order_preserved);
+    assert!(!replay.terminal_order_preserved);
 
     assert_order_paid_postgres(&pool, &ids.0, "2026-07-11T01:02:03Z").await;
     let query = owner_list_query(&ids.1);
@@ -87,14 +93,18 @@ async fn sqlite_late_payment_preserves_terminal_status_and_is_idempotent() {
         let store = SqliteCommerceOrderStore::new(pool.clone());
         let attempt = payment_attempt(&ids.0, &ids.1);
 
-        store
+        let first = store
             .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T01:02:03Z")
             .await
             .expect("record late payment success");
-        store
+        let replay = store
             .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T04:05:06Z")
             .await
             .expect("replay late payment success");
+        assert_eq!(first.order_status, terminal_status);
+        assert!(first.terminal_order_preserved);
+        assert_eq!(replay.order_status, terminal_status);
+        assert!(replay.terminal_order_preserved);
 
         assert_terminal_payment_sqlite(&pool, &ids.0, terminal_status, "2026-07-11T01:02:03Z")
             .await;
@@ -125,14 +135,18 @@ async fn postgres_late_payment_preserves_terminal_status_and_is_idempotent() {
         let store = PostgresCommerceOrderStore::new(pool.clone());
         let attempt = payment_attempt(&ids.0, &ids.1);
 
-        store
+        let first = store
             .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T01:02:03Z")
             .await
             .expect("record late payment success");
-        store
+        let replay = store
             .mark_owner_order_payment_succeeded(&attempt, "2026-07-11T04:05:06Z")
             .await
             .expect("replay late payment success");
+        assert_eq!(first.order_status, terminal_status);
+        assert!(first.terminal_order_preserved);
+        assert_eq!(replay.order_status, terminal_status);
+        assert!(replay.terminal_order_preserved);
 
         assert_terminal_payment_postgres(&pool, &ids.0, terminal_status, "2026-07-11T01:02:03Z")
             .await;

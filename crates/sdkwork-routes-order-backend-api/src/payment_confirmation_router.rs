@@ -14,7 +14,9 @@ use sdkwork_order_repository_sqlx::{
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
     CouponRedemptionPort, MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort,
-    OrderPaymentSettlementAttempt, OwnerOrderSettlementPorts,
+    OwnerOrderPaymentReconciliationPort, OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentPort,
+    ReconcileOwnerOrderPaymentRequest, UnavailableOwnerOrderPaymentReconciliationPort,
+    UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_repository_sqlx::{
     PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
@@ -26,7 +28,7 @@ use sqlx::{PgPool, SqlitePool};
 use crate::api_response::{
     forbidden, map_service_error, not_found, success_created_item, unauthorized, validation,
 };
-use crate::backend_command_headers::resolve_backend_write_command_headers;
+use crate::backend_command_headers::resolve_required_backend_write_command_headers;
 
 use crate::subject::{backend_operator_scope_from_iam, BackendOperatorScope};
 
@@ -55,6 +57,8 @@ struct PaymentConfirmationState {
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
+    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -97,6 +101,26 @@ pub fn payment_confirmation_router_with_sqlite_pool_and_coupon(
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
+    payment_confirmation_router_with_sqlite_pool_and_integrations(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        coupon_redemption_port,
+        membership_port,
+        Arc::new(UnavailableOwnerOrderPaymentReconciliationPort),
+        Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
+    )
+}
+
+pub fn payment_confirmation_router_with_sqlite_pool_and_integrations(
+    pool: SqlitePool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
+    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Sqlite {
             payments: Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
@@ -107,6 +131,8 @@ pub fn payment_confirmation_router_with_sqlite_pool_and_coupon(
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        reconciliation_port,
+        physical_goods_port,
     })
 }
 
@@ -132,6 +158,26 @@ pub fn payment_confirmation_router_with_postgres_pool_and_coupon(
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
 ) -> Router {
+    payment_confirmation_router_with_postgres_pool_and_integrations(
+        pool,
+        credit_port,
+        account_value_ledger_port,
+        coupon_redemption_port,
+        membership_port,
+        Arc::new(UnavailableOwnerOrderPaymentReconciliationPort),
+        Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
+    )
+}
+
+pub fn payment_confirmation_router_with_postgres_pool_and_integrations(
+    pool: PgPool,
+    credit_port: Arc<dyn AccountPointsCreditPort>,
+    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
+    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
+    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
+    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
+) -> Router {
     build_payment_confirmation_router(PaymentConfirmationState {
         store: PaymentConfirmationStoreKind::Postgres {
             payments: Arc::new(PostgresCommerceOwnerOrderPaymentStore::new(pool.clone())),
@@ -142,6 +188,8 @@ pub fn payment_confirmation_router_with_postgres_pool_and_coupon(
         account_value_ledger_port,
         coupon_redemption_port,
         membership_port,
+        reconciliation_port,
+        physical_goods_port,
     })
 }
 
@@ -172,18 +220,22 @@ async fn confirm_order_payment(
         return validation(ctx, "request_no is required");
     }
 
-    let _write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+    let write_headers =
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("pay-confirm-{order_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
             Err(response) => return *response,
         };
+    let settlement_request_no =
+        payment_reconciliation_request_no(&order_id, &write_headers.idempotency_key);
 
     let credit_port = state.credit_port.clone();
     let account_value_ledger_port = state.account_value_ledger_port.clone();
     let coupon_redemption_port = state.coupon_redemption_port.clone();
     let membership_port = state.membership_port.clone();
+    let reconciliation_port = state.reconciliation_port.clone();
+    let physical_goods_port = state.physical_goods_port.clone();
     match state.store {
         PaymentConfirmationStoreKind::Sqlite {
             ref payments,
@@ -194,8 +246,9 @@ async fn confirm_order_payment(
                 ctx,
                 &subject,
                 &order_id,
-                &body.request_no,
+                &settlement_request_no,
                 orders.as_ref(),
+                reconciliation_port.as_ref(),
                 OwnerOrderSettlementPorts {
                     payment_store: payments.as_ref(),
                     order_state_store: orders.as_ref(),
@@ -205,6 +258,7 @@ async fn confirm_order_payment(
                     account_value_ledger_port: account_value_ledger_port.as_ref(),
                     coupon_redemption_port: coupon_redemption_port.as_ref(),
                     membership_port: membership_port.as_ref(),
+                    physical_goods_port: physical_goods_port.as_ref(),
                 },
             )
             .await
@@ -218,8 +272,9 @@ async fn confirm_order_payment(
                 ctx,
                 &subject,
                 &order_id,
-                &body.request_no,
+                &settlement_request_no,
                 orders.as_ref(),
+                reconciliation_port.as_ref(),
                 OwnerOrderSettlementPorts {
                     payment_store: payments.as_ref(),
                     order_state_store: orders.as_ref(),
@@ -229,11 +284,16 @@ async fn confirm_order_payment(
                     account_value_ledger_port: account_value_ledger_port.as_ref(),
                     coupon_redemption_port: coupon_redemption_port.as_ref(),
                     membership_port: membership_port.as_ref(),
+                    physical_goods_port: physical_goods_port.as_ref(),
                 },
             )
             .await
         }
     }
+}
+
+fn payment_reconciliation_request_no(order_id: &str, idempotency_key: &str) -> String {
+    format!("pay-confirm-{order_id}-{idempotency_key}")
 }
 
 async fn confirm_order_payment_inner(
@@ -242,6 +302,7 @@ async fn confirm_order_payment_inner(
     order_id: &str,
     request_no: &str,
     order_context_loader: &dyn OrderSettlementContextLoader,
+    reconciliation_port: &dyn OwnerOrderPaymentReconciliationPort,
     settlement_ports: OwnerOrderSettlementPorts<'_>,
 ) -> Response {
     let order_context = match order_context_loader
@@ -257,18 +318,31 @@ async fn confirm_order_payment_inner(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    let attempt = OrderPaymentSettlementAttempt {
-        tenant_id: subject.tenant_id.clone(),
-        organization_id: subject.organization_id.clone(),
-        owner_user_id: order_context.owner_user_id,
-        order_id: order_id.to_owned(),
-        payment_attempt_id: None,
-        out_trade_no: None,
+    let reconciliation = match reconciliation_port
+        .reconcile_owner_order_payment(ReconcileOwnerOrderPaymentRequest {
+            tenant_id: subject.tenant_id.clone(),
+            organization_id: subject.organization_id.clone(),
+            owner_user_id: order_context.owner_user_id,
+            order_id: order_id.to_owned(),
+        })
+        .await
+    {
+        Ok(outcome) => outcome,
+        Err(error) => return map_service_error(ctx, error),
     };
+
+    tracing::info!(
+        target = "order.payment.reconciliation",
+        order_id,
+        provider = %reconciliation.provider_code,
+        provider_status = %reconciliation.provider_status,
+        replayed = reconciliation.replayed,
+        "payment provider reconciliation confirmed success"
+    );
 
     let settlement_outcome = match settle_owner_order_after_payment_success(
         settlement_ports,
-        &attempt,
+        &reconciliation.attempt,
         Some(order_context.subject.as_str()),
         order_context.membership_purchase.as_ref(),
         request_no,
@@ -370,5 +444,22 @@ impl OrderSettlementContextLoader for PostgresCommerceOrderStore {
             self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
                 .await
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::payment_reconciliation_request_no;
+
+    #[test]
+    fn reconciliation_settlement_identity_is_derived_from_the_required_idempotency_key() {
+        assert_eq!(
+            payment_reconciliation_request_no("order-1", "idem-key-123"),
+            payment_reconciliation_request_no("order-1", "idem-key-123")
+        );
+        assert_ne!(
+            payment_reconciliation_request_no("order-1", "idem-key-123"),
+            payment_reconciliation_request_no("order-1", "idem-key-456")
+        );
     }
 }

@@ -1,6 +1,7 @@
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_service::{
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentStatePort,
+    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture,
+    OwnerOrderPaymentStateOutcome, OwnerOrderPaymentStatePort,
 };
 use sqlx::{Postgres, Row, Sqlite, Transaction};
 
@@ -18,7 +19,7 @@ impl SqliteCommerceOrderStore {
         &self,
         attempt: &OrderPaymentSettlementAttempt,
         paid_at: &str,
-    ) -> Result<(), CommerceServiceError> {
+    ) -> Result<OwnerOrderPaymentStateOutcome, CommerceServiceError> {
         let paid_at = required_paid_at(paid_at)?;
         let mut tx = self.pool().begin().await.map_err(|error| {
             map_sqlx_store_error(
@@ -57,8 +58,9 @@ impl SqliteCommerceOrderStore {
             .try_get::<Option<String>, _>("payment_status")
             .ok()
             .flatten();
-        let late_payment = terminal_order_status(&order_status).is_some()
-            && !payment_status_is_success(payment_status.as_deref());
+        let terminal_order_preserved = terminal_order_status(&order_status).is_some();
+        let late_payment =
+            terminal_order_preserved && !payment_status_is_success(payment_status.as_deref());
 
         let update = sqlx::query(
             r#"
@@ -106,6 +108,14 @@ impl SqliteCommerceOrderStore {
                 "failed to commit owner order payment-state transaction",
                 error,
             )
+        })?;
+        Ok(OwnerOrderPaymentStateOutcome {
+            order_status: if terminal_order_preserved {
+                order_status
+            } else {
+                "paid".to_owned()
+            },
+            terminal_order_preserved,
         })
     }
 }
@@ -115,7 +125,7 @@ impl PostgresCommerceOrderStore {
         &self,
         attempt: &OrderPaymentSettlementAttempt,
         paid_at: &str,
-    ) -> Result<(), CommerceServiceError> {
+    ) -> Result<OwnerOrderPaymentStateOutcome, CommerceServiceError> {
         let paid_at = required_paid_at(paid_at)?;
         let mut tx = self.pool().begin().await.map_err(|error| {
             map_sqlx_store_error(
@@ -154,8 +164,9 @@ impl PostgresCommerceOrderStore {
             .try_get::<Option<String>, _>("payment_status")
             .ok()
             .flatten();
-        let late_payment = terminal_order_status(&order_status).is_some()
-            && !payment_status_is_success(payment_status.as_deref());
+        let terminal_order_preserved = terminal_order_status(&order_status).is_some();
+        let late_payment =
+            terminal_order_preserved && !payment_status_is_success(payment_status.as_deref());
 
         let update = sqlx::query(
             r#"
@@ -201,6 +212,14 @@ impl PostgresCommerceOrderStore {
                 "failed to commit owner order payment-state transaction",
                 error,
             )
+        })?;
+        Ok(OwnerOrderPaymentStateOutcome {
+            order_status: if terminal_order_preserved {
+                order_status
+            } else {
+                "paid".to_owned()
+            },
+            terminal_order_preserved,
         })
     }
 }
@@ -210,7 +229,7 @@ impl OwnerOrderPaymentStatePort for SqliteCommerceOrderStore {
         &'a self,
         attempt: &'a OrderPaymentSettlementAttempt,
         paid_at: &'a str,
-    ) -> OwnerOrderPaymentConfirmationFuture<'a, ()> {
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, OwnerOrderPaymentStateOutcome> {
         Box::pin(async move {
             SqliteCommerceOrderStore::mark_owner_order_payment_succeeded(self, attempt, paid_at)
                 .await
@@ -223,7 +242,7 @@ impl OwnerOrderPaymentStatePort for PostgresCommerceOrderStore {
         &'a self,
         attempt: &'a OrderPaymentSettlementAttempt,
         paid_at: &'a str,
-    ) -> OwnerOrderPaymentConfirmationFuture<'a, ()> {
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, OwnerOrderPaymentStateOutcome> {
         Box::pin(async move {
             PostgresCommerceOrderStore::mark_owner_order_payment_succeeded(self, attempt, paid_at)
                 .await

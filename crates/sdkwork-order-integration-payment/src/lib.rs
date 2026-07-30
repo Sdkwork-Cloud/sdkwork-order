@@ -1,5 +1,12 @@
 //! Order to Payment executor integration adapters.
 
+mod payment_reconciliation;
+
+pub use payment_reconciliation::{
+    owner_order_payment_reconciliation_port_from_database_pool,
+    StoreOwnerOrderPaymentReconciliationAdapter,
+};
+
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service::{

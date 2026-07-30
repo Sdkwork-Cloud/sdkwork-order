@@ -553,7 +553,7 @@
     "/backend/v3/api/orders/{orderId}/payment_confirmations": {
       "post": {
         "operationId": "orders.paymentConfirmations.create",
-        "summary": "Manually confirm payment and run order settlement saga",
+        "summary": "Reconcile provider payment and run the shared order settlement saga",
         "tags": [
           "orders"
         ],
@@ -568,7 +568,15 @@
             }
           },
           {
-            "$ref": "#/components/parameters/WriteCommandIdempotencyKey"
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Stable retry key for one payment reconciliation command."
           }
         ],
         "requestBody": {
@@ -612,7 +620,7 @@
         "x-sdkwork-idempotent": true,
         "x-sdkwork-owner": "sdkwork-order",
         "x-sdkwork-api-authority": "sdkwork-order-backend-api",
-        "x-sdkwork-permission": "commerce.orders.manage"
+        "x-sdkwork-permission": "commerce.orders.fulfill"
       }
     },
     "/backend/v3/api/after_sales/requests": {
@@ -4108,13 +4116,13 @@
       "WriteCommandIdempotencyKey": {
         "name": "Idempotency-Key",
         "in": "header",
-        "required": false,
+        "required": true,
         "schema": {
           "type": "string",
-          "minLength": 8,
+          "minLength": 1,
           "maxLength": 128
         },
-        "description": "Optional client retry key scoped by tenant, principal, method, and path. The server generates a unique key when omitted."
+        "description": "Client retry key scoped by tenant, principal, method, and path."
       }
     }
   }

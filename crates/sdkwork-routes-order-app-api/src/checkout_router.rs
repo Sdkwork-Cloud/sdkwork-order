@@ -11,9 +11,13 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
 use sdkwork_order_service::{
-    CheckoutLineInput, CheckoutQuoteView, CheckoutSessionDetailQuery, CheckoutSessionView,
-    CreateCheckoutQuoteCommand, CreateCheckoutSessionCommand, CreateOwnerOrderCommand,
-    CreateOwnerOrderOutcome,
+    physical_inventory_reserve_idempotency_key, CheckoutLineInput, CheckoutQuoteView,
+    CheckoutSessionDetailQuery, CheckoutSessionView, CreateCheckoutQuoteCommand,
+    CreateCheckoutSessionCommand, CreateOwnerOrderCommand, CreateOwnerOrderOutcome,
+    PhysicalCheckoutResolverPort, PhysicalInventoryReservationPort,
+    ReservePhysicalOrderInventoryRequest, ResolvePhysicalCheckoutLine,
+    ResolvePhysicalCheckoutRequest, ShippingAddressSnapshot,
+    UnavailablePhysicalCheckoutResolverPort, UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
@@ -48,11 +52,27 @@ pub trait CommerceCheckoutStore: Send + Sync {
         &'a self,
         command: CreateOwnerOrderCommand,
     ) -> CommerceCheckoutFuture<'a, CreateOwnerOrderOutcome>;
+
+    fn mark_owner_order_inventory_reserved<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+    ) -> CommerceCheckoutFuture<'a, ()>;
+
+    fn mark_owner_order_inventory_failed<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+    ) -> CommerceCheckoutFuture<'a, ()>;
 }
 
 #[derive(Clone)]
 struct AppCheckoutState {
     store: Arc<dyn CommerceCheckoutStore>,
+    checkout_resolver: Arc<dyn PhysicalCheckoutResolverPort>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +87,20 @@ struct CheckoutLineRequest {
 struct CreateCheckoutSessionRequest {
     items: Vec<CheckoutLineRequest>,
     currency_code: Option<String>,
+    shipping_address: ShippingAddressRequest,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShippingAddressRequest {
+    receiver_name: String,
+    receiver_phone: String,
+    country_code: String,
+    province: String,
+    city: String,
+    district: Option<String>,
+    detail_address: String,
+    postal_code: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -131,6 +165,30 @@ impl CommerceCheckoutStore for SqliteCommerceOrderStore {
     ) -> CommerceCheckoutFuture<'a, CreateOwnerOrderOutcome> {
         Box::pin(async move { self.create_owner_order(command).await })
     }
+
+    fn mark_owner_order_inventory_reserved<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+    ) -> CommerceCheckoutFuture<'a, ()> {
+        Box::pin(async move {
+            self.mark_owner_order_inventory_reserved(tenant_id, owner_user_id, order_id)
+                .await
+        })
+    }
+
+    fn mark_owner_order_inventory_failed<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+    ) -> CommerceCheckoutFuture<'a, ()> {
+        Box::pin(async move {
+            self.mark_owner_order_inventory_failed(tenant_id, owner_user_id, order_id)
+                .await
+        })
+    }
 }
 
 impl CommerceCheckoutStore for PostgresCommerceOrderStore {
@@ -161,17 +219,61 @@ impl CommerceCheckoutStore for PostgresCommerceOrderStore {
     ) -> CommerceCheckoutFuture<'a, CreateOwnerOrderOutcome> {
         Box::pin(async move { self.create_owner_order(command).await })
     }
+
+    fn mark_owner_order_inventory_reserved<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+    ) -> CommerceCheckoutFuture<'a, ()> {
+        Box::pin(async move {
+            self.mark_owner_order_inventory_reserved(tenant_id, owner_user_id, order_id)
+                .await
+        })
+    }
+
+    fn mark_owner_order_inventory_failed<'a>(
+        &'a self,
+        tenant_id: &'a str,
+        owner_user_id: &'a str,
+        order_id: &'a str,
+    ) -> CommerceCheckoutFuture<'a, ()> {
+        Box::pin(async move {
+            self.mark_owner_order_inventory_failed(tenant_id, owner_user_id, order_id)
+                .await
+        })
+    }
 }
 
 pub fn app_checkout_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_app_checkout_router(Arc::new(SqliteCommerceOrderStore::new(pool)))
+    build_app_checkout_router_with_integrations(
+        Arc::new(SqliteCommerceOrderStore::new(pool)),
+        Arc::new(UnavailablePhysicalCheckoutResolverPort),
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
+    )
 }
 
 pub fn app_checkout_router_with_postgres_pool(pool: PgPool) -> Router {
-    build_app_checkout_router(Arc::new(PostgresCommerceOrderStore::new(pool)))
+    build_app_checkout_router_with_integrations(
+        Arc::new(PostgresCommerceOrderStore::new(pool)),
+        Arc::new(UnavailablePhysicalCheckoutResolverPort),
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
+    )
 }
 
 pub fn build_app_checkout_router(store: Arc<dyn CommerceCheckoutStore>) -> Router {
+    build_app_checkout_router_with_integrations(
+        store,
+        Arc::new(UnavailablePhysicalCheckoutResolverPort),
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
+    )
+}
+
+pub fn build_app_checkout_router_with_integrations(
+    store: Arc<dyn CommerceCheckoutStore>,
+    checkout_resolver: Arc<dyn PhysicalCheckoutResolverPort>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
+) -> Router {
     Router::new()
         .route(
             "/app/v3/api/checkout/sessions",
@@ -189,7 +291,11 @@ pub fn build_app_checkout_router(store: Arc<dyn CommerceCheckoutStore>) -> Route
             "/app/v3/api/checkout/sessions/{checkoutSessionId}/orders",
             post(create_checkout_order),
         )
-        .with_state(AppCheckoutState { store })
+        .with_state(AppCheckoutState {
+            store,
+            checkout_resolver,
+            inventory,
+        })
 }
 
 async fn create_checkout_session(
@@ -221,6 +327,39 @@ async fn create_checkout_session(
         .unwrap_or("CNY")
         .trim()
         .to_ascii_uppercase();
+    let shipping_address = match ShippingAddressSnapshot::new(
+        &request.shipping_address.receiver_name,
+        &request.shipping_address.receiver_phone,
+        &request.shipping_address.country_code,
+        &request.shipping_address.province,
+        &request.shipping_address.city,
+        request.shipping_address.district.as_deref(),
+        &request.shipping_address.detail_address,
+        request.shipping_address.postal_code.as_deref(),
+    ) {
+        Ok(value) => value,
+        Err(error) => return validation(ctx, error.message()),
+    };
+    let resolved_checkout = match state
+        .checkout_resolver
+        .resolve_physical_checkout(ResolvePhysicalCheckoutRequest {
+            tenant_id: subject.tenant_id.clone(),
+            owner_user_id: subject.user_id.clone(),
+            currency_code: currency_code.clone(),
+            lines: lines
+                .iter()
+                .map(|line| ResolvePhysicalCheckoutLine {
+                    sku_id: line.sku_id.clone(),
+                    quantity: line.quantity,
+                })
+                .collect(),
+            shipping_address,
+        })
+        .await
+    {
+        Ok(value) => value,
+        Err(error) => return map_service_error(ctx, error),
+    };
     let command = match CreateCheckoutSessionCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
@@ -229,7 +368,9 @@ async fn create_checkout_session(
         lines,
         &write_headers.request_no,
         &write_headers.idempotency_key,
-    ) {
+    )
+    .and_then(|command| command.with_physical_checkout(resolved_checkout))
+    {
         Ok(command) => command,
         Err(error) => return validation(ctx, error.message()),
     };
@@ -332,7 +473,71 @@ async fn create_checkout_order(
         Err(error) => return validation(ctx, error.message()),
     };
     match state.store.create_owner_order(command).await {
-        Ok(outcome) => success_created_item(ctx, map_checkout_order(outcome)),
+        Ok(mut outcome) => {
+            let merchant_organization_id = match outcome.merchant_organization_id.as_deref() {
+                Some(value) if !value.trim().is_empty() => value.to_owned(),
+                _ => {
+                    let _ = state
+                        .store
+                        .mark_owner_order_inventory_failed(
+                            &subject.tenant_id,
+                            &subject.user_id,
+                            &outcome.order_id,
+                        )
+                        .await;
+                    return validation(ctx, "physical order merchant organization is missing");
+                }
+            };
+            if outcome.inventory_lines.is_empty() {
+                let _ = state
+                    .store
+                    .mark_owner_order_inventory_failed(
+                        &subject.tenant_id,
+                        &subject.user_id,
+                        &outcome.order_id,
+                    )
+                    .await;
+                return validation(ctx, "physical order inventory lines are missing");
+            }
+            let reserve_result = state
+                .inventory
+                .reserve_physical_order_inventory(ReservePhysicalOrderInventoryRequest {
+                    tenant_id: subject.tenant_id.clone(),
+                    merchant_organization_id,
+                    order_id: outcome.order_id.clone(),
+                    request_no: write_headers.request_no.clone(),
+                    idempotency_key: physical_inventory_reserve_idempotency_key(&outcome.order_id),
+                    lines: outcome.inventory_lines.clone(),
+                })
+                .await;
+            if let Err(error) = reserve_result {
+                let close_result = state
+                    .store
+                    .mark_owner_order_inventory_failed(
+                        &subject.tenant_id,
+                        &subject.user_id,
+                        &outcome.order_id,
+                    )
+                    .await;
+                if let Err(close_error) = close_result {
+                    return map_service_error(ctx, close_error);
+                }
+                return map_service_error(ctx, error);
+            }
+            if let Err(error) = state
+                .store
+                .mark_owner_order_inventory_reserved(
+                    &subject.tenant_id,
+                    &subject.user_id,
+                    &outcome.order_id,
+                )
+                .await
+            {
+                return map_service_error(ctx, error);
+            }
+            outcome.status = "pending_payment".to_owned();
+            success_created_item(ctx, map_checkout_order(outcome))
+        }
         Err(error) => map_service_error(ctx, error),
     }
 }

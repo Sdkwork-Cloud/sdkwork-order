@@ -1,3 +1,4 @@
+use crate::ResolvedPhysicalCheckout;
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,6 +14,7 @@ pub struct CreateCheckoutSessionCommand {
     pub lines: Vec<CheckoutLineInput>,
     pub organization_id: Option<String>,
     pub owner_user_id: String,
+    pub physical_checkout: Option<ResolvedPhysicalCheckout>,
     pub request_no: String,
     pub tenant_id: String,
 }
@@ -98,9 +100,41 @@ impl CreateCheckoutSessionCommand {
             lines,
             organization_id: optional_text(organization_id),
             owner_user_id: owner_user_id.trim().to_string(),
+            physical_checkout: None,
             request_no: request_no.trim().to_string(),
             tenant_id: tenant_id.trim().to_string(),
         })
+    }
+
+    pub fn with_physical_checkout(
+        mut self,
+        physical_checkout: ResolvedPhysicalCheckout,
+    ) -> Result<Self, CommerceServiceError> {
+        if physical_checkout.lines.is_empty() {
+            return Err(CommerceServiceError::validation(
+                "physical checkout requires at least one resolved line",
+            ));
+        }
+        if physical_checkout.lines.len() != self.lines.len() {
+            return Err(CommerceServiceError::conflict(
+                "resolved physical checkout lines do not match the request",
+            ));
+        }
+        for requested in &self.lines {
+            let resolved_quantity = physical_checkout
+                .lines
+                .iter()
+                .filter(|line| line.sku_id == requested.sku_id)
+                .map(|line| line.quantity)
+                .sum::<i64>();
+            if resolved_quantity != requested.quantity {
+                return Err(CommerceServiceError::conflict(
+                    "resolved physical checkout quantity does not match the request",
+                ));
+            }
+        }
+        self.physical_checkout = Some(physical_checkout);
+        Ok(self)
     }
 }
 

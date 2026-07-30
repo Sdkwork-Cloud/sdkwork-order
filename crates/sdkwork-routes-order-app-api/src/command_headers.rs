@@ -6,6 +6,8 @@ use sdkwork_web_core::WebRequestContext;
 
 pub(crate) const IDEMPOTENCY_KEY_HEADER: &str = "Idempotency-Key";
 pub(crate) const REQUEST_NO_HEADER: &str = "Sdkwork-Request-No";
+const IDEMPOTENCY_KEY_MIN_LENGTH: usize = 1;
+const IDEMPOTENCY_KEY_MAX_LENGTH: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AppWriteCommandHeaders {
@@ -23,8 +25,7 @@ pub(crate) fn parse_required_write_command_headers(
     headers: &HeaderMap,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<AppWriteCommandHeaders, WriteCommandHeaderError> {
-    let idempotency_key = required_text_header(headers, IDEMPOTENCY_KEY_HEADER)
-        .map_err(|_| WriteCommandHeaderError::MissingHeader(IDEMPOTENCY_KEY_HEADER))?;
+    let idempotency_key = required_text_header(headers, IDEMPOTENCY_KEY_HEADER)?;
     let request_no = optional_text_header(headers, REQUEST_NO_HEADER)
         .unwrap_or_else(|| fallback_request_no(&idempotency_key));
     Ok(AppWriteCommandHeaders {
@@ -81,6 +82,13 @@ fn required_text_header(
     if value.is_empty() {
         return Err(WriteCommandHeaderError::MissingHeader(name));
     }
+    if name == IDEMPOTENCY_KEY_HEADER
+        && !(IDEMPOTENCY_KEY_MIN_LENGTH..=IDEMPOTENCY_KEY_MAX_LENGTH).contains(&value.len())
+    {
+        return Err(WriteCommandHeaderError::InvalidHeader(format!(
+            "{name} header length must be between {IDEMPOTENCY_KEY_MIN_LENGTH} and {IDEMPOTENCY_KEY_MAX_LENGTH} characters"
+        )));
+    }
     Ok(value.to_owned())
 }
 
@@ -117,14 +125,35 @@ mod tests {
     #[test]
     fn required_app_write_command_headers_requires_only_idempotency_key() {
         let mut headers = HeaderMap::new();
-        headers.insert(IDEMPOTENCY_KEY_HEADER, HeaderValue::from_static("idem-1"));
+        headers.insert(
+            IDEMPOTENCY_KEY_HEADER,
+            HeaderValue::from_static("idem-key-1"),
+        );
 
         let parsed = required_app_write_command_headers(ctx().as_ref(), &headers, |_| {
             "request-1".to_owned()
         })
         .expect("headers");
-        assert_eq!(parsed.idempotency_key, "idem-1");
+        assert_eq!(parsed.idempotency_key, "idem-key-1");
         assert_eq!(parsed.request_no, "request-1");
+    }
+
+    #[test]
+    fn idempotency_key_must_match_openapi_length_bounds() {
+        let mut shortest = HeaderMap::new();
+        shortest.insert(IDEMPOTENCY_KEY_HEADER, HeaderValue::from_static("x"));
+        assert!(
+            parse_required_write_command_headers(&shortest, |_| "request-1".to_owned()).is_ok()
+        );
+
+        let mut overlong = HeaderMap::new();
+        overlong.insert(
+            IDEMPOTENCY_KEY_HEADER,
+            HeaderValue::from_bytes("x".repeat(129).as_bytes()).expect("header value"),
+        );
+        let error = parse_required_write_command_headers(&overlong, |_| "request-1".to_owned())
+            .expect_err("overlong key must fail");
+        assert!(matches!(error, WriteCommandHeaderError::InvalidHeader(_)));
     }
 
     #[test]

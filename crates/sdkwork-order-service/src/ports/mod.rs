@@ -2,6 +2,8 @@ mod account_ledger;
 mod account_value;
 mod membership_fulfillment;
 mod owner_order_payment;
+mod physical_goods;
+mod physical_purchase;
 mod points_recharge_fulfillment;
 
 pub use account_ledger::{
@@ -37,8 +39,25 @@ pub use membership_fulfillment::{
 pub use owner_order_payment::{
     ConfirmOwnerOrderPaymentOutcome, OrderPaymentSettlementAttempt,
     OwnerOrderPaymentConfirmationFuture, OwnerOrderPaymentConfirmationPort,
-    OwnerOrderPaymentStatePort, OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
-    OWNER_ORDER_PAYMENT_STATE_PORT,
+    OwnerOrderPaymentReconciliationPort, OwnerOrderPaymentStateOutcome, OwnerOrderPaymentStatePort,
+    ReconcileOwnerOrderPaymentOutcome, ReconcileOwnerOrderPaymentRequest,
+    UnavailableOwnerOrderPaymentReconciliationPort, OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
+    OWNER_ORDER_PAYMENT_RECONCILIATION_PORT, OWNER_ORDER_PAYMENT_STATE_PORT,
+};
+pub use physical_goods::{
+    physical_goods_fulfillment_idempotency_key, FulfillPaidPhysicalOrderRequest,
+    PhysicalGoodsFulfillmentOutcome, PhysicalGoodsFulfillmentPort, PhysicalGoodsFuture,
+    UnavailablePhysicalGoodsFulfillmentPort, PHYSICAL_GOODS_FULFILLMENT_PORT,
+};
+pub use physical_purchase::{
+    physical_inventory_release_idempotency_key, physical_inventory_reserve_idempotency_key,
+    PhysicalCheckoutResolverPort, PhysicalInventoryLine, PhysicalInventoryMutationOutcome,
+    PhysicalInventoryReservationPort, PhysicalPurchaseFuture, ReleasePhysicalOrderInventoryRequest,
+    ReservePhysicalOrderInventoryRequest, ResolvePhysicalCheckoutLine,
+    ResolvePhysicalCheckoutRequest, ResolvedPhysicalCheckout, ResolvedPhysicalCheckoutLine,
+    ShippingAddressSnapshot, UnavailablePhysicalCheckoutResolverPort,
+    UnavailablePhysicalInventoryReservationPort, PHYSICAL_CHECKOUT_RESOLVER_PORT,
+    PHYSICAL_INVENTORY_RESERVATION_PORT,
 };
 pub use points_recharge_fulfillment::{
     PointsRechargeFulfillmentFuture, PointsRechargeFulfillmentStore,

@@ -27,9 +27,36 @@ pub fn resolve_backend_write_command_headers(
     headers: &HeaderMap,
     fallback_request_no: impl FnOnce(&str) -> String,
 ) -> Result<BackendWriteCommandHeaders, Box<Response>> {
+    resolve_backend_write_command_headers_inner(context, headers, fallback_request_no, false)
+}
+
+pub fn resolve_required_backend_write_command_headers(
+    context: Option<&WebRequestContext>,
+    headers: &HeaderMap,
+    fallback_request_no: impl FnOnce(&str) -> String,
+) -> Result<BackendWriteCommandHeaders, Box<Response>> {
+    resolve_backend_write_command_headers_inner(context, headers, fallback_request_no, true)
+}
+
+fn resolve_backend_write_command_headers_inner(
+    context: Option<&WebRequestContext>,
+    headers: &HeaderMap,
+    fallback_request_no: impl FnOnce(&str) -> String,
+    idempotency_key_required: bool,
+) -> Result<BackendWriteCommandHeaders, Box<Response>> {
     let idempotency_key = match optional_text_header(headers, IDEMPOTENCY_KEY_HEADER) {
-        Some(value) => validate_idempotency_key(value)
-            .map_err(|error| Box::new(write_command_header_error_to_response(context, error)))?,
+        Some(value) => {
+            validate_idempotency_key(value, if idempotency_key_required { 1 } else { 8 })
+                .map_err(|error| Box::new(write_command_header_error_to_response(context, error)))?
+        }
+        None if idempotency_key_required => {
+            return Err(Box::new(write_command_header_error_to_response(
+                context,
+                WriteCommandHeaderError::InvalidHeader(
+                    "Idempotency-Key is required for backend write commands".to_string(),
+                ),
+            )))
+        }
         None => sdkwork_utils_rust::uuid(),
     };
     let request_no = optional_text_header(headers, REQUEST_NO_HEADER)
@@ -40,8 +67,11 @@ pub fn resolve_backend_write_command_headers(
     })
 }
 
-fn validate_idempotency_key(value: String) -> Result<String, WriteCommandHeaderError> {
-    let valid_length = (8..=128).contains(&value.len());
+fn validate_idempotency_key(
+    value: String,
+    min_length: usize,
+) -> Result<String, WriteCommandHeaderError> {
+    let valid_length = (min_length..=128).contains(&value.len());
     let valid_characters = value.chars().all(|character| {
         character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | ':' | '-')
     });
@@ -49,8 +79,9 @@ fn validate_idempotency_key(value: String) -> Result<String, WriteCommandHeaderE
         Ok(value)
     } else {
         Err(WriteCommandHeaderError::InvalidHeader(
-            "Idempotency-Key must contain 8 to 128 letters, digits, dots, underscores, colons, or hyphens"
-                .to_string(),
+            format!(
+                "Idempotency-Key must contain {min_length} to 128 letters, digits, dots, underscores, colons, or hyphens"
+            ),
         ))
     }
 }
@@ -114,6 +145,29 @@ mod tests {
         assert!(
             resolve_backend_write_command_headers(None, &headers, |key| format!("cancel-{key}"),)
                 .is_err()
+        );
+    }
+
+    #[test]
+    fn required_idempotency_key_is_rejected_when_omitted() {
+        assert!(resolve_required_backend_write_command_headers(
+            None,
+            &HeaderMap::new(),
+            |key| format!("payment-confirmation-{key}"),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn required_idempotency_key_uses_the_sdkwork_v3_length_contract() {
+        let mut headers = HeaderMap::new();
+        headers.insert(IDEMPOTENCY_KEY_HEADER, HeaderValue::from_static("x"));
+
+        assert!(
+            resolve_required_backend_write_command_headers(None, &headers, |key| {
+                format!("payment-confirmation-{key}")
+            })
+            .is_ok()
         );
     }
 }

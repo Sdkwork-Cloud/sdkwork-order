@@ -4,28 +4,23 @@
 //! Multi-surface merges mount shared infrastructure routes once at the assembly layer
 //! so `/healthz`, `/livez`, `/readyz`, and `/metrics` are not duplicated per surface.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use axum::Router;
 use sdkwork_database_spi::{DefaultDatabaseModule, SpiError};
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_order_service_host::OrderServiceHost;
+pub use sdkwork_web_bootstrap::ApiAssemblyContribution;
 use sdkwork_web_bootstrap::{ContractFallbackConfig, ReadinessCheck, ReadinessFuture};
-use sdkwork_web_core::{DomainContextInjector, HttpRoute, HttpRouteManifest};
+use sdkwork_web_core::HttpRouteManifest;
 
-pub struct ApiAssembly {
+pub type ApiAssembly = ApiAssemblyContribution;
+
+pub struct BusinessRouterAssembly {
     pub router: Router,
 }
 
-pub struct ApiAssemblyContribution {
-    pub router: Router,
-    pub route_manifest: HttpRouteManifest,
-    pub openapi: serde_json::Value,
-    pub permission_catalog: Vec<&'static str>,
-    pub domain_context_injectors: Vec<Arc<dyn DomainContextInjector>>,
-    pub readiness_check: Arc<dyn ReadinessCheck>,
-}
+pub struct OrderAssemblyContract;
 
 #[derive(Clone)]
 struct OrderReadiness {
@@ -45,12 +40,10 @@ impl ReadinessCheck for OrderReadiness {
     }
 }
 
-impl ApiAssembly {
+impl OrderAssemblyContract {
     pub async fn from_database_pool(pool: DatabasePool) -> Result<Self, String> {
-        let host = Arc::new(OrderServiceHost::from_database_pool(pool).await?);
-        Ok(Self {
-            router: sdkwork_routes_order_app_api::build_order_app_business_router(host),
-        })
+        OrderServiceHost::from_database_pool(pool).await?;
+        Ok(Self)
     }
 
     pub fn database_module() -> Result<DefaultDatabaseModule, SpiError> {
@@ -71,15 +64,34 @@ impl ApiAssembly {
     }
 }
 
-pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> ApiAssembly {
-    let mut router = Router::new();
-    router = router.merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await);
-    router = router.merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
-    ApiAssembly { router }
+pub async fn assemble_api_router(host: Arc<OrderServiceHost>) -> Result<ApiAssembly, String> {
+    let router = Router::new()
+        .merge(sdkwork_routes_order_app_api::gateway_mount(host.clone()).await)
+        .merge(sdkwork_routes_order_backend_api::gateway_mount(host.clone()).await);
+    let mut routes = Vec::new();
+    routes.extend_from_slice(sdkwork_routes_order_app_api::gateway_route_manifest().routes());
+    routes.extend_from_slice(sdkwork_routes_order_backend_api::gateway_route_manifest().routes());
+    ApiAssemblyContribution::from_manifest(
+        "sdkwork-order",
+        "SDKWork Order API",
+        router,
+        HttpRouteManifest::from_owned_routes(routes),
+        Vec::new(),
+        Arc::new(OrderReadiness {
+            pool: host.database_pool().clone(),
+        }),
+    )
 }
 
-pub async fn assemble_backend_business_router(host: Arc<OrderServiceHost>) -> ApiAssembly {
-    ApiAssembly {
+pub async fn assemble_api_router_with_pool(pool: DatabasePool) -> Result<ApiAssembly, String> {
+    let host = Arc::new(OrderServiceHost::from_database_pool(pool).await?);
+    assemble_api_router(host).await
+}
+
+pub async fn assemble_backend_business_router(
+    host: Arc<OrderServiceHost>,
+) -> BusinessRouterAssembly {
+    BusinessRouterAssembly {
         router: sdkwork_routes_order_backend_api::gateway_mount(host).await,
     }
 }
@@ -87,32 +99,29 @@ pub async fn assemble_backend_business_router(host: Arc<OrderServiceHost>) -> Ap
 /// Builds the raw Order App API for a gateway-owned Web Framework layer.
 pub async fn assemble_app_api_contribution() -> Result<ApiAssemblyContribution, String> {
     let host = Arc::new(OrderServiceHost::from_env().await?);
-    let route_manifest = ApiAssembly::app_route_manifest();
-    let router = sdkwork_routes_order_app_api::build_order_app_business_router(host.clone());
-    Ok(ApiAssemblyContribution {
-        router,
-        openapi: sdkwork_web_contract::build_openapi_document(
-            "SDKWork Order App API",
-            route_manifest.routes(),
-        ),
-        permission_catalog: permission_catalog(route_manifest.routes()),
-        route_manifest,
-        domain_context_injectors: Vec::new(),
-        readiness_check: Arc::new(OrderReadiness {
-            pool: host.database_pool().clone(),
-        }),
-    })
+    assemble_app_api_contribution_with_host(host)
 }
 
-fn permission_catalog(routes: &[HttpRoute]) -> Vec<&'static str> {
-    let mut permissions = BTreeSet::new();
-    for route in routes {
-        if let Some(permission) = route.required_permission {
-            permissions.insert(permission);
-        }
-        if let Some(alternate_permissions) = route.alternate_permissions {
-            permissions.extend(alternate_permissions.iter().copied());
-        }
-    }
-    permissions.into_iter().collect()
+pub async fn assemble_app_api_contribution_with_pool(
+    pool: DatabasePool,
+) -> Result<ApiAssemblyContribution, String> {
+    let host = Arc::new(OrderServiceHost::from_database_pool(pool).await?);
+    assemble_app_api_contribution_with_host(host)
+}
+
+fn assemble_app_api_contribution_with_host(
+    host: Arc<OrderServiceHost>,
+) -> Result<ApiAssemblyContribution, String> {
+    let route_manifest = OrderAssemblyContract::app_route_manifest();
+    let router = sdkwork_routes_order_app_api::build_order_app_business_router(host.clone());
+    ApiAssemblyContribution::from_manifest(
+        "sdkwork-order",
+        "SDKWork Order App API",
+        router,
+        route_manifest,
+        Vec::new(),
+        Arc::new(OrderReadiness {
+            pool: host.database_pool().clone(),
+        }),
+    )
 }

@@ -1,7 +1,9 @@
 import type { SdkworkAppConfig } from '../types/common';
 import type { RequestOptions, QueryParams } from '@sdkwork/sdk-common';
 import type { AuthTokenManager } from '@sdkwork/sdk-common';
-import { BaseHttpClient, withRetry } from '@sdkwork/sdk-common';
+import { BaseHttpClient, buildAuthHeaders, withRetry } from '@sdkwork/sdk-common';
+
+type SdkworkV3UnwrapKind = 'item' | 'page' | 'command' | 'data' | 'void';
 
 export type HttpRequestOptions = RequestOptions & {
   method?: string;
@@ -9,6 +11,7 @@ export type HttpRequestOptions = RequestOptions & {
   headers?: Record<string, string>;
   contentType?: string;
   accessTokenOnly?: boolean;
+  sdkworkUnwrapKind?: SdkworkV3UnwrapKind;
 };
 
 export type ApiRequestOptions = Pick<HttpRequestOptions, 'signal' | 'timeout'>;
@@ -21,6 +24,10 @@ export class HttpClient extends BaseHttpClient {
 
   constructor(config: SdkworkAppConfig) {
     super(config as any);
+  }
+
+  private static normalizeCredential(value: unknown): string | undefined {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
   }
 
   private getInternalAuthConfig(): any {
@@ -368,8 +375,8 @@ export class HttpClient extends BaseHttpClient {
   private applySdkworkAuthHeaders(headers?: Record<string, string>): Record<string, string> | undefined {
     const authConfig = this.getInternalAuthConfig();
     const tokenManager = authConfig.tokenManager;
-    const accessToken = tokenManager?.getAccessToken?.();
-    const authToken = tokenManager?.getAuthToken?.();
+    const accessToken = HttpClient.normalizeCredential(tokenManager?.getAccessToken?.());
+    const authToken = HttpClient.normalizeCredential(tokenManager?.getAuthToken?.());
     if (HttpClient.REQUIRES_SDKWORK_ACCESS_TOKEN
       && (typeof accessToken !== 'string' || accessToken.trim().length === 0)) {
       throw new Error('non-open-api request requires Access-Token before request dispatch');
@@ -378,21 +385,20 @@ export class HttpClient extends BaseHttpClient {
       return headers;
     }
 
-    return {
-      ...(headers ?? {}),
-      ...(accessToken ? { [HttpClient.ACCESS_TOKEN_HEADER]: accessToken } : {}),
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    };
+    const authHeaders = buildAuthHeaders('dual-token', undefined, tokenManager);
+    return Object.keys(authHeaders).length > 0
+      ? { ...(headers ?? {}), ...authHeaders }
+      : headers;
   }
 
-  private unwrapSdkworkV3Payload<T>(payload: unknown): T {
+  private unwrapSdkworkV3Payload<T>(payload: unknown, unwrapKind: SdkworkV3UnwrapKind = 'data'): T {
     if (!HttpClient.SDKWORK_V3_UNWRAP || payload == null || typeof payload !== 'object') {
       return payload as T;
     }
 
     const record = payload as Record<string, unknown>;
     if (record.code !== 0 || !('data' in record)) {
-      return this.unwrapSdkworkV3Data<T>(record);
+      return this.unwrapSdkworkV3Data<T>(record, unwrapKind);
     }
 
     const data = record.data;
@@ -400,17 +406,14 @@ export class HttpClient extends BaseHttpClient {
       return data as T;
     }
 
-    return this.unwrapSdkworkV3Data<T>(data as Record<string, unknown>);
+    return this.unwrapSdkworkV3Data<T>(data as Record<string, unknown>, unwrapKind);
   }
 
-  private unwrapSdkworkV3Data<T>(data: Record<string, unknown>): T {
-    if ('items' in data && 'pageInfo' in data) {
-      return data as T;
+  private unwrapSdkworkV3Data<T>(data: Record<string, unknown>, unwrapKind: SdkworkV3UnwrapKind): T {
+    if (unwrapKind === 'void') {
+      return undefined as T;
     }
-    if ('accepted' in data) {
-      return data as T;
-    }
-    if ('item' in data) {
+    if (unwrapKind === 'item' && 'item' in data) {
       return data.item as T;
     }
 
@@ -429,6 +432,7 @@ export class HttpClient extends BaseHttpClient {
       method = 'GET',
       skipAuth,
       accessTokenOnly,
+      sdkworkUnwrapKind = 'data',
       ...rest
     } = options;
     const requestHeaders = accessTokenOnly
@@ -453,7 +457,7 @@ export class HttpClient extends BaseHttpClient {
       }),
       { maxRetries: 3 }
     );
-    return this.unwrapSdkworkV3Payload<T>(payload);
+    return this.unwrapSdkworkV3Payload<T>(payload, sdkworkUnwrapKind);
   }
 
   async *streamJson<T>(path: string, options: HttpRequestOptions = {}): AsyncIterable<T> {

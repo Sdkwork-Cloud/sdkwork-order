@@ -26,6 +26,7 @@ struct ResolvedCheckoutLine {
     line_total: String,
     sku_snapshot_json: String,
     fulfillment_type: String,
+    shop_id: Option<String>,
 }
 
 impl PostgresCommerceOrderStore {
@@ -360,6 +361,39 @@ async fn resolve_checkout_lines(
     tx: &mut Transaction<'_, Postgres>,
     command: &CreateCheckoutSessionCommand,
 ) -> Result<Vec<ResolvedCheckoutLine>, CommerceServiceError> {
+    if let Some(physical) = command.physical_checkout.as_ref() {
+        return physical
+            .lines
+            .iter()
+            .map(|line| {
+                if !line
+                    .currency_code
+                    .eq_ignore_ascii_case(&command.currency_code)
+                {
+                    return Err(CommerceServiceError::conflict(
+                        "checkout SKU currency does not match checkout currency",
+                    ));
+                }
+                if !line.fulfillment_type_is_physical() {
+                    return Err(CommerceServiceError::conflict(
+                        "checkout only accepts physical shipment SKUs",
+                    ));
+                }
+                let unit_price = line.unit_price.as_str().to_owned();
+                Ok(ResolvedCheckoutLine {
+                    sku_id: line.sku_id.clone(),
+                    product_id: Some(line.product_id.clone()),
+                    _title: line.title.clone(),
+                    unit_price: unit_price.clone(),
+                    quantity: line.quantity,
+                    line_total: multiply_money_amount(&unit_price, line.quantity)?,
+                    sku_snapshot_json: line.sku_snapshot_json.clone(),
+                    fulfillment_type: "physical_shipment".to_owned(),
+                    shop_id: Some(line.shop_id.clone()),
+                })
+            })
+            .collect();
+    }
     let mut resolved = Vec::with_capacity(command.lines.len());
     for line in &command.lines {
         let row = sqlx::query(
@@ -403,6 +437,7 @@ async fn resolve_checkout_lines(
             line_total,
             sku_snapshot_json: snapshot,
             fulfillment_type,
+            shop_id: None,
         });
     }
     Ok(resolved)
@@ -422,9 +457,10 @@ async fn insert_checkout_session(
         INSERT INTO commerce_checkout_session
             (id, tenant_id, organization_id, checkout_session_no, owner_user_id, source_type,
              status, currency_code, promotion_snapshot_json, request_hash, request_no,
-             idempotency_key, expires_at, created_at, updated_at)
+             idempotency_key, shop_id, merchant_organization_id, shop_snapshot_json,
+             shipping_address_snapshot_json, expires_at, created_at, updated_at)
         VALUES
-            ($1, $2, $3, $4, $5, 'cart', 'active', $6, '[]', $7, $8, $9, $10, $11, $12)
+            ($1, $2, $3, $4, $5, 'cart', 'active', $6, '[]', $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        "#,
     )
     .bind(session_id)
@@ -436,6 +472,26 @@ async fn insert_checkout_session(
     .bind(&request_hash)
     .bind(&command.request_no)
     .bind(&command.idempotency_key)
+    .bind(command.physical_checkout.as_ref().map(|value| value.shop_id.as_str()))
+    .bind(
+        command
+            .physical_checkout
+            .as_ref()
+            .map(|value| value.merchant_organization_id.as_str()),
+    )
+    .bind(
+        command
+            .physical_checkout
+            .as_ref()
+            .map(|value| value.shop_snapshot_json.as_str()),
+    )
+    .bind(
+        command
+            .physical_checkout
+            .as_ref()
+            .map(|value| value.shipping_address.snapshot_json())
+            .transpose()?,
+    )
     .bind(expires_at)
     .bind(now)
     .bind(now)
@@ -458,11 +514,11 @@ async fn insert_checkout_lines(
             r#"
             INSERT INTO commerce_checkout_line
                 (id, tenant_id, organization_id, checkout_session_id, product_id, sku_id,
-                 sku_snapshot_json, selected_options_hash, quantity, purchase_type,
+                 shop_id, sku_snapshot_json, selected_options_hash, quantity, purchase_type,
                  fulfillment_type, price_amount_snapshot, currency_code, selected, created_at,
                  updated_at)
             VALUES
-                ($1, $2, $3, $4, $5, $6, $7, 'default', $8, 'one_time', $9, $10, $11, 1, $12, $13)
+                ($1, $2, $3, $4, $5, $6, $7, $8, 'default', $9, 'one_time', $10, $11, $12, 1, $13, $14)
            "#,
         )
         .bind(&line_id)
@@ -471,6 +527,7 @@ async fn insert_checkout_lines(
         .bind(session_id)
         .bind(line.product_id.as_deref())
         .bind(&line.sku_id)
+        .bind(line.shop_id.as_deref())
         .bind(&line.sku_snapshot_json)
         .bind(line.quantity)
         .bind(&line.fulfillment_type)
@@ -554,7 +611,7 @@ async fn load_checkout_lines_for_quote(
 ) -> Result<Vec<ResolvedCheckoutLine>, CommerceServiceError> {
     let rows = sqlx::query(
         r#"
-        SELECT sku_id, product_id, sku_snapshot_json, quantity, price_amount_snapshot, fulfillment_type
+        SELECT sku_id, product_id, shop_id, sku_snapshot_json, quantity, price_amount_snapshot, fulfillment_type
         FROM commerce_checkout_line
         WHERE tenant_id = CAST($1 AS TEXT)
           AND checkout_session_id = CAST($2 AS TEXT)
@@ -584,6 +641,7 @@ async fn load_checkout_lines_for_quote(
                     line_total: multiply_money_amount(&unit_price, quantity)?,
                     sku_snapshot_json: string_cell(row, "sku_snapshot_json"),
                     fulfillment_type: string_cell(row, "fulfillment_type"),
+                    shop_id: optional_string_cell(row, "shop_id"),
                 })
             },
         )

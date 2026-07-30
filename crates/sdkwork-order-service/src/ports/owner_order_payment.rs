@@ -4,6 +4,57 @@ pub use sdkwork_payment_service::{
     OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
 };
 
+use sdkwork_contract_service::CommerceServiceError;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReconcileOwnerOrderPaymentRequest {
+    pub tenant_id: String,
+    pub organization_id: Option<String>,
+    pub owner_user_id: String,
+    pub order_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReconcileOwnerOrderPaymentOutcome {
+    pub attempt: OrderPaymentSettlementAttempt,
+    pub provider_code: String,
+    pub provider_status: String,
+    pub replayed: bool,
+}
+
+/// Resolves an exact attempt and confirms the PSP state before manual recovery.
+pub trait OwnerOrderPaymentReconciliationPort: Send + Sync {
+    fn reconcile_owner_order_payment<'a>(
+        &'a self,
+        request: ReconcileOwnerOrderPaymentRequest,
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, ReconcileOwnerOrderPaymentOutcome>;
+}
+
+#[derive(Default)]
+pub struct UnavailableOwnerOrderPaymentReconciliationPort;
+
+impl OwnerOrderPaymentReconciliationPort for UnavailableOwnerOrderPaymentReconciliationPort {
+    fn reconcile_owner_order_payment<'a>(
+        &'a self,
+        _request: ReconcileOwnerOrderPaymentRequest,
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, ReconcileOwnerOrderPaymentOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::provider_unavailable(
+                "payment provider reconciliation is not configured",
+            ))
+        })
+    }
+}
+
+pub const OWNER_ORDER_PAYMENT_RECONCILIATION_PORT: &str =
+    "payment.owner_order_payment.reconciliation";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OwnerOrderPaymentStateOutcome {
+    pub order_status: String,
+    pub terminal_order_preserved: bool,
+}
+
 /// Order-owned persistence boundary for the payment-success part of settlement.
 ///
 /// Payment confirms the provider intent/attempt, while Order remains the only
@@ -13,7 +64,7 @@ pub trait OwnerOrderPaymentStatePort: Send + Sync {
         &'a self,
         attempt: &'a OrderPaymentSettlementAttempt,
         paid_at: &'a str,
-    ) -> OwnerOrderPaymentConfirmationFuture<'a, ()>;
+    ) -> OwnerOrderPaymentConfirmationFuture<'a, OwnerOrderPaymentStateOutcome>;
 }
 
 pub const OWNER_ORDER_PAYMENT_STATE_PORT: &str = "order.owner_order_payment.state";

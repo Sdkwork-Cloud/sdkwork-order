@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-integration-payment",
+    "displayName": "SDKWork Order Payment Integration",
+    "version": "0.1.0",
+    "type": "rust-crate",
+    "root": "crates/sdkwork-order-integration-payment",
+    "domain": "commerce",
+    "capability": "order-payment-integration",
+    "surface": "backend-service",
+    "status": "stable",
+    "languages": ["rust"],
+    "generated": false,
+    "private": false,
+    "manifests": ["Cargo.toml"]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "INTEGRATION_SPEC.md",
+      "path": "../../../sdkwork-specs/INTEGRATION_SPEC.md",
+      "purpose": "Provider adapters, webhook verification, retries, and external identity rules."
+    },
+    {
+      "file": "EVENT_SPEC.md",
+      "path": "../../../sdkwork-specs/EVENT_SPEC.md",
+      "purpose": "Webhook persistence, replay, and idempotent consumer rules."
+    },
+    {
+      "file": "RUST_CODE_SPEC.md",
+      "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md",
+      "purpose": "Rust crate and integration adapter rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "Provider, transaction, and idempotency verification."
+    }
+  ],
+  "contracts": {
+    "layerRole": "backend-service",
+    "publicExports": ["src/lib.rs"],
+    "providedPorts": [
+      {
+        "name": "OwnerOrderPaymentReconciliationPort adapter",
+        "export": "src/lib.rs"
+      },
+      {
+        "name": "PaymentRefundExecutorPort adapter",
+        "export": "src/lib.rs"
+      }
+    ],
+    "requiredPorts": [],
+    "runtimeEntrypoints": [
+      "owner_order_payment_reconciliation_port_from_database_pool",
+      "payment_refund_executor_port_from_database_pool"
+    ],
+    "routeManifest": null,
+    "sdkClients": [],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": ["ORDER_PAYMENT_WEBHOOK_BASE_URL"]
+  },
+  "verification": {
+    "commands": ["cargo test -p sdkwork-order-integration-payment"]
+  },
+  "metadata": {
+    "managedBy": "sdkwork-order",
+    "standardVersion": "2026-07-30"
+  }
+}

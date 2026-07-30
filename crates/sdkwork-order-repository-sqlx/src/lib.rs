@@ -41,6 +41,9 @@ mod membership_order_postgres_tests;
 #[cfg(test)]
 mod order_payment_settlement_tests;
 
+#[cfg(test)]
+mod account_value_idempotency_tests;
+
 #[cfg(any(test, feature = "test-support"))]
 pub use test_sqlite_pool::{
     order_points_recharge_e2e_postgres_pool_from_env, order_points_recharge_e2e_sqlite_memory_pool,

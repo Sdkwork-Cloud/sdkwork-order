@@ -4985,7 +4985,8 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items"
+          "items",
+          "shippingAddress"
         ],
         "properties": {
           "items": {
@@ -5000,7 +5001,32 @@
             "minLength": 3,
             "maxLength": 3,
             "default": "CNY"
+          },
+          "shippingAddress": {
+            "$ref": "#/components/schemas/ShippingAddressRequest"
           }
+        }
+      },
+      "ShippingAddressRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "receiverName",
+          "receiverPhone",
+          "countryCode",
+          "province",
+          "city",
+          "detailAddress"
+        ],
+        "properties": {
+          "receiverName": {"type": "string", "minLength": 1, "maxLength": 100},
+          "receiverPhone": {"type": "string", "minLength": 1, "maxLength": 32},
+          "countryCode": {"type": "string", "minLength": 2, "maxLength": 3},
+          "province": {"type": "string", "minLength": 1, "maxLength": 100},
+          "city": {"type": "string", "minLength": 1, "maxLength": 100},
+          "district": {"type": "string", "maxLength": 100},
+          "detailAddress": {"type": "string", "minLength": 1, "maxLength": 500},
+          "postalCode": {"type": "string", "maxLength": 32}
         }
       },
       "CheckoutSession": {
@@ -6322,7 +6348,7 @@
         "required": true,
         "schema": {
           "type": "string",
-          "minLength": 8,
+          "minLength": 1,
           "maxLength": 128
         },
         "description": "Client retry key scoped by tenant, principal, method, and path."

@@ -7,13 +7,16 @@ use crate::openapi_contract::mount_app_openapi;
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
 use crate::{
     app_after_sales_router_with_postgres_pool, app_after_sales_router_with_sqlite_pool,
-    app_checkout_router_with_postgres_pool, app_checkout_router_with_sqlite_pool,
     app_fulfillment_router_with_postgres_pool, app_fulfillment_router_with_sqlite_pool,
     app_membership_order_router_with_postgres_pool_and_payments,
-    app_membership_order_router_with_sqlite_pool_and_payments, app_order_router_with_postgres_pool,
-    app_order_router_with_sqlite_pool, app_payment_webhook_router_with_postgres_pool_and_coupon,
-    app_payment_webhook_router_with_sqlite_pool_and_coupon, app_shipment_router_with_postgres_pool,
-    app_shipment_router_with_sqlite_pool, build_app_recharge_checkout_router_with_integrations,
+    app_membership_order_router_with_sqlite_pool_and_payments,
+    app_order_router_with_postgres_pool_and_inventory,
+    app_order_router_with_sqlite_pool_and_inventory,
+    app_payment_webhook_router_with_postgres_pool_and_integrations,
+    app_payment_webhook_router_with_sqlite_pool_and_integrations,
+    app_shipment_router_with_postgres_pool, app_shipment_router_with_sqlite_pool,
+    build_app_checkout_router_with_integrations,
+    build_app_recharge_checkout_router_with_integrations,
 };
 use sdkwork_order_repository_sqlx::{
     PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
@@ -33,6 +36,9 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let account_value_ledger_port = host.account_value_ledger_port();
     let coupon_redemption_port = host.coupon_redemption_port();
     let membership_port = host.membership_fulfillment_port();
+    let physical_checkout_resolver = host.physical_checkout_resolver_port();
+    let physical_inventory = host.physical_inventory_reservation_port();
+    let physical_goods = host.physical_goods_fulfillment_port();
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
@@ -41,12 +47,17 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
         DatabasePool::Postgres(pool, _) => {
             let pool = pool.clone();
             Router::new()
-                .merge(app_order_router_with_postgres_pool(
+                .merge(app_order_router_with_postgres_pool_and_inventory(
                     pool.clone(),
                     registry.clone(),
                     credentials.clone(),
+                    physical_inventory.clone(),
                 ))
-                .merge(app_checkout_router_with_postgres_pool(pool.clone()))
+                .merge(build_app_checkout_router_with_integrations(
+                    Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
+                    physical_checkout_resolver.clone(),
+                    physical_inventory.clone(),
+                ))
                 .merge(build_recharge_router_postgres(
                     pool.clone(),
                     registry.clone(),
@@ -63,23 +74,31 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                 .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
                 .merge(app_shipment_router_with_postgres_pool(pool.clone()))
                 .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
-                .merge(app_payment_webhook_router_with_postgres_pool_and_coupon(
-                    pool,
-                    credit_port,
-                    account_value_ledger_port,
-                    coupon_redemption_port,
-                    membership_port,
-                ))
+                .merge(
+                    app_payment_webhook_router_with_postgres_pool_and_integrations(
+                        pool,
+                        credit_port,
+                        account_value_ledger_port,
+                        coupon_redemption_port,
+                        membership_port,
+                        physical_goods,
+                    ),
+                )
         }
         DatabasePool::Sqlite(pool, _) => {
             let pool = pool.clone();
             Router::new()
-                .merge(app_order_router_with_sqlite_pool(
+                .merge(app_order_router_with_sqlite_pool_and_inventory(
                     pool.clone(),
                     registry.clone(),
                     credentials.clone(),
+                    physical_inventory.clone(),
                 ))
-                .merge(app_checkout_router_with_sqlite_pool(pool.clone()))
+                .merge(build_app_checkout_router_with_integrations(
+                    Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
+                    physical_checkout_resolver,
+                    physical_inventory,
+                ))
                 .merge(build_recharge_router_sqlite(
                     pool.clone(),
                     registry.clone(),
@@ -96,13 +115,16 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
                 .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
                 .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
                 .merge(app_after_sales_router_with_sqlite_pool(pool.clone()))
-                .merge(app_payment_webhook_router_with_sqlite_pool_and_coupon(
-                    pool,
-                    credit_port,
-                    account_value_ledger_port,
-                    coupon_redemption_port,
-                    membership_port,
-                ))
+                .merge(
+                    app_payment_webhook_router_with_sqlite_pool_and_integrations(
+                        pool,
+                        credit_port,
+                        account_value_ledger_port,
+                        coupon_redemption_port,
+                        membership_port,
+                        physical_goods,
+                    ),
+                )
         }
     };
     router

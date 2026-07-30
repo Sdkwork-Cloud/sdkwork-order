@@ -14,7 +14,8 @@ use sdkwork_order_service::{
     CancelOwnerOrderCommand, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
     OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
     OrderOwnerPaymentStatus, OrderOwnerStatistics, OrderOwnerSummary, PayOwnerOrderCommand,
-    PayOwnerOrderCommandInput, PayOwnerOrderOutcome,
+    PayOwnerOrderCommandInput, PayOwnerOrderOutcome, PhysicalInventoryReservationPort,
+    UnavailablePhysicalInventoryReservationPort,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
@@ -32,7 +33,7 @@ use crate::api_response::{
     success_created_item, success_item, success_items, unauthorized, validation,
 };
 use crate::command_headers::required_app_write_command_headers;
-use crate::owner_order_cancel::cancel_owner_order_with_payments;
+use crate::owner_order_cancel::cancel_owner_order_with_payments_and_inventory;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 /// 允许的支付方式白名单，避免硬编码单一渠道。
@@ -80,6 +81,7 @@ struct AppOrderState {
     store: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
     payment_records: Arc<dyn OrderPaymentRecordStore>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 }
 
 pub trait OrderPaymentRecordStore: Send + Sync {
@@ -298,10 +300,25 @@ pub fn app_order_router_with_sqlite_pool(
     registry: Arc<PaymentProviderRegistry>,
     credentials: ProviderCredentialBundle,
 ) -> Router {
-    build_app_order_router(
+    build_app_order_router_with_inventory(
         Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
         enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials),
         Arc::new(SqliteCommercePaymentRecordStore::new(pool)),
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
+    )
+}
+
+pub fn app_order_router_with_sqlite_pool_and_inventory(
+    pool: SqlitePool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
+) -> Router {
+    build_app_order_router_with_inventory(
+        Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
+        enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials),
+        Arc::new(SqliteCommercePaymentRecordStore::new(pool)),
+        inventory,
     )
 }
 
@@ -310,10 +327,25 @@ pub fn app_order_router_with_postgres_pool(
     registry: Arc<PaymentProviderRegistry>,
     credentials: ProviderCredentialBundle,
 ) -> Router {
-    build_app_order_router(
+    build_app_order_router_with_inventory(
         Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
         enriched_postgres_owner_order_payments(pool.clone(), registry, credentials),
         Arc::new(PostgresCommercePaymentRecordStore::new(pool)),
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
+    )
+}
+
+pub fn app_order_router_with_postgres_pool_and_inventory(
+    pool: PgPool,
+    registry: Arc<PaymentProviderRegistry>,
+    credentials: ProviderCredentialBundle,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
+) -> Router {
+    build_app_order_router_with_inventory(
+        Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
+        enriched_postgres_owner_order_payments(pool.clone(), registry, credentials),
+        Arc::new(PostgresCommercePaymentRecordStore::new(pool)),
+        inventory,
     )
 }
 
@@ -321,6 +353,20 @@ pub fn build_app_order_router(
     store: Arc<dyn CommerceOrderStore>,
     payments: Arc<dyn OwnerOrderPaymentStore>,
     payment_records: Arc<dyn OrderPaymentRecordStore>,
+) -> Router {
+    build_app_order_router_with_inventory(
+        store,
+        payments,
+        payment_records,
+        Arc::new(UnavailablePhysicalInventoryReservationPort),
+    )
+}
+
+pub fn build_app_order_router_with_inventory(
+    store: Arc<dyn CommerceOrderStore>,
+    payments: Arc<dyn OwnerOrderPaymentStore>,
+    payment_records: Arc<dyn OrderPaymentRecordStore>,
+    inventory: Arc<dyn PhysicalInventoryReservationPort>,
 ) -> Router {
     Router::new()
         .route("/app/v3/api/orders", get(list_orders))
@@ -350,6 +396,7 @@ pub fn build_app_order_router(
             store,
             payments,
             payment_records,
+            inventory,
         })
 }
 
@@ -622,13 +669,12 @@ async fn cancel_order_impl(
         cancel_reason: None,
         cancel_type: None,
     });
-    let _write_headers =
-        match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
-            format!("order-cancel-{order_id}-{idempotency_key}")
-        }) {
-            Ok(value) => value,
-            Err(response) => return *response,
-        };
+    let write_headers = match required_app_write_command_headers(ctx, &headers, |idempotency_key| {
+        format!("order-cancel-{order_id}-{idempotency_key}")
+    }) {
+        Ok(value) => value,
+        Err(response) => return *response,
+    };
     let cancel_reason = body.cancel_reason.clone();
     let cancel_type = body.cancel_type.clone();
     let command = match CancelOwnerOrderCommand::with_cancel_type(
@@ -643,7 +689,15 @@ async fn cancel_order_impl(
         Err(error) => return map_service_error(ctx, error),
     };
 
-    match cancel_owner_order_with_payments(&*state.store, &*state.payments, command).await {
+    match cancel_owner_order_with_payments_and_inventory(
+        &*state.store,
+        &*state.payments,
+        &*state.inventory,
+        command,
+        &write_headers.request_no,
+    )
+    .await
+    {
         Ok(()) => success_command(ctx, Some(order_id.clone()), Some("cancelled".to_string())),
         Err(error) => map_service_error(ctx, error),
     }

@@ -23,15 +23,21 @@ pub use backend_order_admin_router::{
 pub use payment_confirmation_router::{
     payment_confirmation_router_with_postgres_pool,
     payment_confirmation_router_with_postgres_pool_and_coupon,
+    payment_confirmation_router_with_postgres_pool_and_integrations,
     payment_confirmation_router_with_sqlite_pool,
     payment_confirmation_router_with_sqlite_pool_and_coupon,
+    payment_confirmation_router_with_sqlite_pool_and_integrations,
 };
-pub use routes::build_order_backend_router_with_framework;
+pub use routes::{build_order_backend_business_router, build_order_backend_router_with_framework};
 
 use axum::Router;
 use sdkwork_order_service_host::OrderServiceHost;
 use std::sync::Arc;
 
 pub async fn gateway_mount(host: Arc<OrderServiceHost>) -> Router {
-    build_order_backend_router_with_framework(host).await
+    build_order_backend_business_router(host)
+}
+
+pub fn gateway_route_manifest() -> sdkwork_web_core::HttpRouteManifest {
+    http_route_manifest::backend_route_manifest()
 }

@@ -26,7 +26,8 @@ pub use after_sales_router::{
 };
 pub use checkout_router::{
     app_checkout_router_with_postgres_pool, app_checkout_router_with_sqlite_pool,
-    build_app_checkout_router, CommerceCheckoutFuture, CommerceCheckoutStore,
+    build_app_checkout_router, build_app_checkout_router_with_integrations, CommerceCheckoutFuture,
+    CommerceCheckoutStore,
 };
 pub use fulfillment_router::{
     app_fulfillment_router_with_postgres_pool, app_fulfillment_router_with_sqlite_pool,
@@ -41,14 +42,18 @@ pub use membership_router::{
     CommerceMembershipOrderStore,
 };
 pub use order_router::{
-    app_order_router_with_postgres_pool, app_order_router_with_sqlite_pool, build_app_order_router,
-    CommerceOrderFuture, CommerceOrderStore, OwnerOrderPaymentStore,
+    app_order_router_with_postgres_pool, app_order_router_with_postgres_pool_and_inventory,
+    app_order_router_with_sqlite_pool, app_order_router_with_sqlite_pool_and_inventory,
+    build_app_order_router, build_app_order_router_with_inventory, CommerceOrderFuture,
+    CommerceOrderStore, OwnerOrderPaymentStore,
 };
 pub use payment_webhook_router::{
     app_payment_webhook_router_with_postgres_pool,
     app_payment_webhook_router_with_postgres_pool_and_coupon,
+    app_payment_webhook_router_with_postgres_pool_and_integrations,
     app_payment_webhook_router_with_sqlite_pool,
     app_payment_webhook_router_with_sqlite_pool_and_coupon,
+    app_payment_webhook_router_with_sqlite_pool_and_integrations,
 };
 pub use recharge_router::{
     app_recharge_checkout_router_with_postgres_pool, app_recharge_checkout_router_with_sqlite_pool,
@@ -65,5 +70,9 @@ use sdkwork_order_service_host::OrderServiceHost;
 use std::sync::Arc;
 
 pub async fn gateway_mount(host: Arc<OrderServiceHost>) -> Router {
-    build_order_app_router_with_framework(host).await
+    build_order_app_business_router(host)
+}
+
+pub fn gateway_route_manifest() -> sdkwork_web_core::HttpRouteManifest {
+    http_route_manifest::app_route_manifest()
 }

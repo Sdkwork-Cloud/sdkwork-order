@@ -3,7 +3,7 @@ use sdkwork_order_service::RechargePackageListQuery;
 use sqlx::{Row, SqlitePool};
 
 const SQLITE_BASELINE: &str =
-    include_str!("../../../database/ddl/baseline/sqlite/0001_order_baseline.sql");
+    include_str!("../../../tests/fixtures/database/sqlite/ddl/baseline/0001_order_baseline.sql");
 const POSTGRES_BASELINE: &str =
     include_str!("../../../database/ddl/baseline/postgres/0001_order_baseline.sql");
 const RECHARGE_SEED: &str = include_str!("../../../database/seeds/common/001_bootstrap.sql");

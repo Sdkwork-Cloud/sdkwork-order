@@ -18,6 +18,7 @@ sdkwork_payment_service.workspace = true
 sdkwork-database-config.workspace = true
 sdkwork-database-sqlx.workspace = true
 dotenvy = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true }
 
 [dev-dependencies]

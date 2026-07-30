@@ -100,6 +100,9 @@ pub fn order_service_contract() -> CommerceServiceContract {
             crate::ports::OWNER_ORDER_PAYMENT_CONFIRMATION_PORT,
             crate::ports::OWNER_ORDER_PAYMENT_STATE_PORT,
             crate::ports::MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
+            crate::ports::PHYSICAL_GOODS_FULFILLMENT_PORT,
+            crate::ports::PHYSICAL_CHECKOUT_RESOLVER_PORT,
+            crate::ports::PHYSICAL_INVENTORY_RESERVATION_PORT,
         ],
         true,
     )

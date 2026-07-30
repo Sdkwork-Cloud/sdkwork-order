@@ -1,7 +1,7 @@
 # Production Operations
 
 Status: active  
-Updated: 2026-07-07
+Updated: 2026-07-30
 
 ## Deployment Topology
 
@@ -22,9 +22,7 @@ Run multiple instances behind a load balancer. All instances share the same Post
 | `ORDER_API_BIND` | No | Default `0.0.0.0:18093` |
 | `ORDER_CORS_ALLOW_ORIGINS` | Production | Comma-separated browser origins; unset denies CORS |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | No | Platform recharge catalog tenant (default `100001`) |
-| `SDKWORK_ACCESS_TOKEN` | Production | Service credential for account wallet credit and membership fulfillment HTTP adapters |
-| `SDKWORK_ORDER_MEMBERSHIP_FULFILLMENT_ADAPTER` | No | `http` (default) or `noop` for membership order settlement |
-| `SDKWORK_MEMBERSHIP_BACKEND_API_ORIGIN` | Production | Membership backend for membership-subject fulfillment (default `http://127.0.0.1:18096`) |
+| `SDKWORK_ACCESS_TOKEN` | Production | Bootstrap access credential for approved SDK-backed service integrations; never used as an ad hoc bearer secret |
 | `ORDER_READ_MODEL_LENIENT` | No | **Forbidden in production.** Set `1` only for local scaffolding without commerce DDL |
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Production | Public base URL for PSP notify: `{base}/app/v3/api/orders/payments/webhooks/{providerCode}` |
 | `RUST_LOG` | No | e.g. `info,order.bootstrap=info,order.runtime=info` |
@@ -47,7 +45,7 @@ POST /backend/v3/api/orders/{orderId}/payment_confirmations
 
 Requires IAM permission `commerce.orders.fulfill`.
 
-Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the payment ingest layer (`replayed: true`) and may re-enter settlement for the exact payment attempt. Confirmation, Order state updates, and fulfillment are idempotent, so retrying the webhook does not duplicate effects. If settlement still requires operator recovery, use `payment_confirmations`; it returns a conflict when multiple payment attempts make an order-only replay ambiguous, in which case replay the exact stored webhook event instead.
+Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the payment ingest layer (`replayed: true`) and may re-enter settlement for the exact payment attempt. Confirmation, Order state updates, and fulfillment are idempotent, so retrying the webhook does not duplicate effects. If notification delivery is missing or settlement still requires operator recovery, use `payment_confirmations`. It queries the original provider account and validates successful status, merchant order number, amount, and currency before entering the same success-processing function as the webhook. Provider I/O occurs before the short database confirmation transaction; the transaction conditionally updates the exact attempt and intent, and repeated calls read back the durable success. The endpoint returns a conflict when the provider is not successful or multiple attempts make order-only recovery ambiguous.
 
 ## Health And Observability
 

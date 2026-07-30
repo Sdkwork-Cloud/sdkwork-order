@@ -4,7 +4,7 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_membership_repository_sqlx::{
     AppMembershipStore, AppMembershipSubject, FulfillPaidMembershipPurchaseCommand,
-    GrantCouponSubscriptionCommand, PostgresCommerceMembershipStore, SqliteCommerceMembershipStore,
+    GrantCouponSubscriptionCommand, PostgresCommerceMembershipStore,
 };
 use sdkwork_order_service::{
     CouponSubscriptionFulfillmentOutcome, CouponSubscriptionFulfillmentRequest,
@@ -13,27 +13,20 @@ use sdkwork_order_service::{
 };
 
 #[derive(Clone)]
-enum MembershipStore {
-    Postgres(PostgresCommerceMembershipStore),
-    Sqlite(SqliteCommerceMembershipStore),
-}
-
-#[derive(Clone)]
 pub struct StoreMembershipFulfillmentAdapter {
-    store: MembershipStore,
+    store: PostgresCommerceMembershipStore,
 }
 
 impl StoreMembershipFulfillmentAdapter {
-    pub fn from_database_pool(pool: &DatabasePool) -> Self {
-        let store = match pool {
-            DatabasePool::Postgres(pool, _) => {
-                MembershipStore::Postgres(PostgresCommerceMembershipStore::new(pool.clone()))
+    pub fn from_database_pool(pool: &DatabasePool) -> Result<Self, String> {
+        match pool {
+            DatabasePool::Postgres(pool, _) => Ok(Self {
+                store: PostgresCommerceMembershipStore::new(pool.clone()),
+            }),
+            DatabasePool::Sqlite(_, _) => {
+                Err("order membership fulfillment server requires PostgreSQL".to_owned())
             }
-            DatabasePool::Sqlite(pool, _) => {
-                MembershipStore::Sqlite(SqliteCommerceMembershipStore::new(pool.clone()))
-            }
-        };
-        Self { store }
+        }
     }
 }
 
@@ -59,10 +52,7 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
                 paid_at: request.paid_at,
                 action: request.action,
             };
-            let outcome = match &self.store {
-                MembershipStore::Postgres(store) => store.fulfill_paid_purchase(command).await?,
-                MembershipStore::Sqlite(store) => store.fulfill_paid_purchase(command).await?,
-            };
+            let outcome = self.store.fulfill_paid_purchase(command).await?;
             Ok(MembershipPurchaseFulfillmentOutcome {
                 accepted: outcome.accepted,
                 replayed: outcome.replayed,
@@ -97,12 +87,7 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
                 daily_quota: request.daily_quota,
                 total_quota: request.total_quota,
             };
-            let outcome = match &self.store {
-                MembershipStore::Postgres(store) => {
-                    store.grant_coupon_subscription(command).await?
-                }
-                MembershipStore::Sqlite(store) => store.grant_coupon_subscription(command).await?,
-            };
+            let outcome = self.store.grant_coupon_subscription(command).await?;
             Ok(CouponSubscriptionFulfillmentOutcome {
                 accepted: outcome.accepted,
                 replayed: outcome.replayed,
@@ -117,8 +102,9 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
 
 pub fn membership_purchase_fulfillment_port_from_database_pool(
     pool: &DatabasePool,
-) -> Arc<dyn MembershipPurchaseFulfillmentPort> {
-    Arc::new(StoreMembershipFulfillmentAdapter::from_database_pool(pool))
+) -> Result<Arc<dyn MembershipPurchaseFulfillmentPort>, String> {
+    StoreMembershipFulfillmentAdapter::from_database_pool(pool)
+        .map(|adapter| Arc::new(adapter) as Arc<dyn MembershipPurchaseFulfillmentPort>)
 }
 
 fn membership_subject(

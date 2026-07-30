@@ -6,6 +6,7 @@ export type { AfterSalesReturnShipment } from './after-sales-return-shipment';
 export type { AfterSalesReturnShipmentResponse } from './after-sales-return-shipment-response';
 export type { CheckoutLineRequest } from './checkout-line-request';
 export type { CreateCheckoutSessionRequest } from './create-checkout-session-request';
+export type { ShippingAddressRequest } from './shipping-address-request';
 export type { CheckoutSession } from './checkout-session';
 export type { CheckoutQuote } from './checkout-quote';
 export type { CheckoutOrder } from './checkout-order';

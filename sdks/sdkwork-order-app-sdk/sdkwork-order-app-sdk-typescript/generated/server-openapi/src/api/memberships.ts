@@ -24,7 +24,7 @@ export class MembershipsOrdersApi {
       },
       {}
     );
-    return this.client.request<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json' });
+    return this.client.request<MembershipOrderCreateResult>(appApiPath(`/memberships/orders`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 }
 

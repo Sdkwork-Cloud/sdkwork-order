@@ -1,9 +1,9 @@
-use sdkwork_api_order_assembly::ApiAssembly;
+use sdkwork_api_order_assembly::OrderAssemblyContract;
 use sdkwork_web_core::RouteAuth;
 
 #[test]
 fn application_manifest_exports_complete_recharge_surface() {
-    let manifest = ApiAssembly::app_route_manifest();
+    let manifest = OrderAssemblyContract::app_route_manifest();
     let packages = manifest
         .match_route("GET", "/app/v3/api/recharges/packages")
         .expect("recharge packages route must be exported by the assembly");

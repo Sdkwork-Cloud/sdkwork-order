@@ -68,6 +68,16 @@
     ],
     "providedPorts": [
       {
+        "name": "orderApiAssembly",
+        "export": ".",
+        "target": "sdkwork_api_order_assembly::assemble_api_router"
+      },
+      {
+        "name": "orderApiAssemblyWithPool",
+        "export": ".",
+        "target": "sdkwork_api_order_assembly::assemble_api_router_with_pool"
+      },
+      {
         "name": "orderAppApiContribution",
         "export": ".",
         "target": "sdkwork_api_order_assembly::assemble_app_api_contribution"
@@ -76,12 +86,14 @@
     "runtimeEntrypoints": [
       "sdkwork_api_order_assembly::assemble_api_router",
       "sdkwork_api_order_assembly::assemble_api_router_from_env",
+      "sdkwork_api_order_assembly::assemble_api_router_with_pool",
       "sdkwork_api_order_assembly::assemble_app_api_contribution",
+      "sdkwork_api_order_assembly::assemble_app_api_contribution_with_pool",
       "sdkwork_api_order_assembly::assemble_backend_business_router_from_env",
       "sdkwork_api_order_assembly::order_contract_fallback_config",
-      "sdkwork_api_order_assembly::ApiAssembly::from_database_pool",
-      "sdkwork_api_order_assembly::ApiAssembly::app_route_manifest",
-      "sdkwork_api_order_assembly::ApiAssembly::database_module"
+      "sdkwork_api_order_assembly::OrderAssemblyContract::from_database_pool",
+      "sdkwork_api_order_assembly::OrderAssemblyContract::app_route_manifest",
+      "sdkwork_api_order_assembly::OrderAssemblyContract::database_module"
     ],
     "routeManifest": "assembly-manifest.json",
     "sdkClients": [],
@@ -101,7 +113,7 @@
     "backendAuthority": "apis/backend-api/order/order-backend-api.openapi.json",
     "appRouteCrate": "sdkwork-routes-order-app-api",
     "backendRouteCrate": "sdkwork-routes-order-backend-api",
-    "embeddedMode": "complete-app-business-router"
+    "embeddedMode": "complete-owner-api-contribution"
   },
   "verification": {
     "commands": [

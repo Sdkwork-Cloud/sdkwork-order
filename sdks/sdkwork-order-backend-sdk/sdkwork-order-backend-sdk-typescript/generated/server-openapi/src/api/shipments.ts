@@ -1,5 +1,5 @@
 import { backendApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { CreateShipmentPackageRequest, PageInfo, ShipmentPackageSummary, ShipmentSummary, UpdateShipmentPackageRequest } from '../types';
 
@@ -18,21 +18,21 @@ export class ShipmentsPackagesManagementApi {
 
 
 /** List shipment packages */
-  async list(shipmentId: string, params?: ShipmentsPackagesManagementListParams): Promise<{ items: ShipmentPackageSummary[]; pageInfo: PageInfo; }> {
+  async list(shipmentId: string, params?: ShipmentsPackagesManagementListParams, requestOptions?: ApiRequestOptions): Promise<{ items: ShipmentPackageSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<{ items: ShipmentPackageSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages`), query));
+    return this.client.request<{ items: ShipmentPackageSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
 export interface ShipmentsPackagesCreateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface ShipmentsPackagesUpdateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class ShipmentsPackagesApi {
@@ -46,25 +46,25 @@ export class ShipmentsPackagesApi {
 
 
 /** Create shipment package */
-  async create(shipmentId: string, body: CreateShipmentPackageRequest, params?: ShipmentsPackagesCreateParams): Promise<ShipmentPackageSummary> {
+  async create(shipmentId: string, body: CreateShipmentPackageRequest, params: ShipmentsPackagesCreateParams, requestOptions?: ApiRequestOptions): Promise<ShipmentPackageSummary> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<ShipmentPackageSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<ShipmentPackageSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 
 /** Update shipment package */
-  async update(shipmentId: string, packageId: string, body: UpdateShipmentPackageRequest, params?: ShipmentsPackagesUpdateParams): Promise<ShipmentPackageSummary> {
+  async update(shipmentId: string, packageId: string, body: UpdateShipmentPackageRequest, params: ShipmentsPackagesUpdateParams, requestOptions?: ApiRequestOptions): Promise<ShipmentPackageSummary> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.patch<ShipmentPackageSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<ShipmentPackageSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}/packages/${serializePathParameter(packageId, { name: 'packageId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'PATCH' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -87,7 +87,7 @@ export class ShipmentsApi {
 
 
 /** List shipments for operator review */
-  async list(params?: ShipmentsListParams): Promise<{ items: ShipmentSummary[]; pageInfo: PageInfo; }> {
+  async list(params?: ShipmentsListParams, requestOptions?: ApiRequestOptions): Promise<{ items: ShipmentSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'order_id', value: params?.orderId, style: 'form', explode: true, allowReserved: false },
@@ -95,12 +95,12 @@ export class ShipmentsApi {
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<{ items: ShipmentSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments`), query));
+    return this.client.request<{ items: ShipmentSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/shipments`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Retrieve shipment for operator review */
-  async retrieve(shipmentId: string): Promise<ShipmentSummary> {
-    return this.client.get<ShipmentSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}`));
+  async retrieve(shipmentId: string, requestOptions?: ApiRequestOptions): Promise<ShipmentSummary> {
+    return this.client.request<ShipmentSummary>(backendApiPath(`/shipments/${serializePathParameter(shipmentId, { name: 'shipmentId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 }
 

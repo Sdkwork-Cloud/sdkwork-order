@@ -9,9 +9,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sdkwork_api_order_assembly::{assemble_api_router, ApiAssembly};
+use sdkwork_api_order_assembly::assemble_api_router;
 use sdkwork_order_service_host::OrderServiceHost;
-use sdkwork_web_bootstrap::{service_router, ReadinessCheck, ReadinessFuture, ServiceRouterConfig};
+use sdkwork_web_bootstrap::ComposedApiAssembly;
 use tower_http::trace::TraceLayer;
 
 #[tokio::main]
@@ -33,18 +33,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let business = assemble_api_router(host.clone())
+    let assembly = assemble_api_router(host.clone())
         .await
+        .map_err(std::io::Error::other)?;
+    let manifest = assembly.route_manifest.clone();
+    let resolver = sdkwork_iam_web_adapter::IamWebRequestContextResolver::from_database_pool(Some(
+        host.database_pool().clone(),
+    ));
+    let framework =
+        sdkwork_iam_web_adapter::build_web_framework_builder(resolver, manifest, Vec::new());
+    let app = ComposedApiAssembly::try_compose("SDKWork Order API", vec![assembly])
+        .map_err(std::io::Error::other)?
+        .into_hosted(framework)
         .router
         .layer(TraceLayer::new_for_http());
-
-    let readiness = Arc::new(OrderReadiness { host: host.clone() });
-    let app = service_router(
-        business,
-        ServiceRouterConfig::default()
-            .with_readiness_check(readiness.clone())
-            .with_contract_fallback(ApiAssembly::contract_fallback_config()),
-    );
 
     let addr = std::env::var("ORDER_API_BIND").unwrap_or_else(|_| "0.0.0.0:18093".to_owned());
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -66,39 +68,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|_| std::io::Error::other("database pool close timed out after 30s"))?;
     tracing::info!(target = "order.runtime", "order api server stopped");
     Ok(())
-}
-
-/// Readiness probe that checks the database can answer `SELECT 1`.
-#[derive(Clone)]
-struct OrderReadiness {
-    host: Arc<OrderServiceHost>,
-}
-
-impl ReadinessCheck for OrderReadiness {
-    fn check(&self) -> ReadinessFuture<'_> {
-        Box::pin(async move {
-            use sdkwork_database_sqlx::DatabasePool;
-            let result = match self.host.database_pool() {
-                DatabasePool::Postgres(pool, _) => {
-                    sqlx::query_scalar::<_, i64>("SELECT 1")
-                        .fetch_one(pool)
-                        .await
-                }
-                DatabasePool::Sqlite(pool, _) => {
-                    sqlx::query_scalar::<_, i64>("SELECT 1")
-                        .fetch_one(pool)
-                        .await
-                }
-            };
-            match result {
-                Ok(_) => Ok(()),
-                Err(error) => {
-                    tracing::error!(target = "order.readiness", error = %error, "database readiness probe failed");
-                    Err("database is not ready".to_owned())
-                }
-            }
-        })
-    }
 }
 
 /// Builds the CORS layer from the `ORDER_CORS_ALLOW_ORIGINS` env var.

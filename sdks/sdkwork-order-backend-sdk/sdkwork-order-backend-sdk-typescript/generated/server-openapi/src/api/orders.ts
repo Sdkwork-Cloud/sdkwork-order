@@ -1,11 +1,11 @@
 import { backendApiPath } from './paths';
-import type { HttpClient } from '../http/client';
+import type { ApiRequestOptions, HttpClient } from '../http/client';
 
 import type { CancelOrderRequest, CloseOrderRequest, ConfirmOrderPaymentRequest, OrderCancellation, OrderDetail, OrderEvent, OrderSummary, PageInfo, SdkWorkCommandData } from '../types';
 
 
 export interface OrdersPaymentConfirmationsCreateParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class OrdersPaymentConfirmationsApi {
@@ -16,15 +16,15 @@ export class OrdersPaymentConfirmationsApi {
   }
 
 
-/** Manually confirm payment and run order settlement saga */
-  async create(orderId: string, body: ConfirmOrderPaymentRequest, params?: OrdersPaymentConfirmationsCreateParams): Promise<Record<string, unknown>> {
+/** Reconcile provider payment and run the shared order settlement saga */
+  async create(orderId: string, body: ConfirmOrderPaymentRequest, params: OrdersPaymentConfirmationsCreateParams, requestOptions?: ApiRequestOptions): Promise<Record<string, unknown>> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<Record<string, unknown>>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/payment_confirmations`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'item' });
   }
 }
 
@@ -42,12 +42,12 @@ export class OrdersAdminEventsApi {
 
 
 /** List order lifecycle events */
-  async list(orderId: string, params?: OrdersAdminEventsListParams): Promise<{ items: OrderEvent[]; pageInfo: PageInfo; }> {
+  async list(orderId: string, params?: OrdersAdminEventsListParams, requestOptions?: ApiRequestOptions): Promise<{ items: OrderEvent[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<{ items: OrderEvent[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query));
+    return this.client.request<{ items: OrderEvent[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/events`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -66,13 +66,13 @@ export class OrdersAdminCancellationsApi {
 
 
 /** List order cancellation audit records */
-  async list(params?: OrdersAdminCancellationsListParams): Promise<{ items: OrderCancellation[]; pageInfo: PageInfo; }> {
+  async list(params?: OrdersAdminCancellationsListParams, requestOptions?: ApiRequestOptions): Promise<{ items: OrderCancellation[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<{ items: OrderCancellation[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/cancellations`), query));
+    return this.client.request<{ items: OrderCancellation[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders/cancellations`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 }
 
@@ -84,11 +84,11 @@ export interface OrdersAdminListParams {
 }
 
 export interface OrdersAdminCancelParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface OrdersAdminCloseParams {
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export class OrdersAdminApi {
@@ -104,51 +104,51 @@ export class OrdersAdminApi {
 
 
 /** List orders for operator review */
-  async list(params?: OrdersAdminListParams): Promise<{ items: OrderSummary[]; pageInfo: PageInfo; }> {
+  async list(params?: OrdersAdminListParams, requestOptions?: ApiRequestOptions): Promise<{ items: OrderSummary[]; pageInfo: PageInfo; }> {
     const query = buildQueryString([
       { name: 'status', value: params?.status, style: 'form', explode: true, allowReserved: false },
       { name: 'q', value: params?.q, style: 'form', explode: true, allowReserved: false },
       { name: 'page', value: params?.page, style: 'form', explode: true, allowReserved: false },
       { name: 'page_size', value: params?.pageSize, style: 'form', explode: true, allowReserved: false },
     ]);
-    return this.client.get<{ items: OrderSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders`), query));
+    return this.client.request<{ items: OrderSummary[]; pageInfo: PageInfo; }>(appendQueryString(backendApiPath(`/orders`), query), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'page' });
   }
 
 /** Retrieve order detail for operator review */
-  async retrieve(orderId: string): Promise<OrderDetail> {
-    return this.client.get<OrderDetail>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`));
+  async retrieve(orderId: string, requestOptions?: ApiRequestOptions): Promise<OrderDetail> {
+    return this.client.request<OrderDetail>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'GET' as any, sdkworkUnwrapKind: 'item' });
   }
 
 /** Cancel an order from the admin surface */
-  async cancel(orderId: string, body?: CancelOrderRequest, params?: OrdersAdminCancelParams): Promise<SdkWorkCommandData> {
+  async cancel(orderId: string, params: OrdersAdminCancelParams, body?: CancelOrderRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/cancel`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 
 /** Close an order from the admin surface */
-  async close(orderId: string, body?: CloseOrderRequest, params?: OrdersAdminCloseParams): Promise<SdkWorkCommandData> {
+  async close(orderId: string, params: OrdersAdminCloseParams, body?: CloseOrderRequest, requestOptions?: ApiRequestOptions): Promise<SdkWorkCommandData> {
     const requestHeaders = buildRequestHeaders(
       {
-        'Idempotency-Key': { value: params?.idempotencyKey, style: 'simple', explode: false },
+        'Idempotency-Key': { value: params.idempotencyKey, style: 'simple', explode: false },
       },
       {}
     );
-    return this.client.post<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/close`), body, undefined, requestHeaders, 'application/json');
+    return this.client.request<SdkWorkCommandData>(backendApiPath(`/orders/${serializePathParameter(orderId, { name: 'orderId', style: 'simple', explode: false })}/close`), { signal: requestOptions?.signal, timeout: requestOptions?.timeout, method: 'POST' as any, body, headers: requestHeaders, contentType: 'application/json', sdkworkUnwrapKind: 'command' });
   }
 }
 
 export class OrdersApi {
-
+  private client: HttpClient;
   public readonly admin: OrdersAdminApi;
   public readonly paymentConfirmations: OrdersPaymentConfirmationsApi;
 
   constructor(client: HttpClient) {
-
+    this.client = client;
     this.admin = new OrdersAdminApi(client);
     this.paymentConfirmations = new OrdersPaymentConfirmationsApi(client);
   }

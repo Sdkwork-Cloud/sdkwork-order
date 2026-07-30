@@ -100,8 +100,23 @@ test("order openapi authorities declare v3 list and command envelopes", () => {
 
   assert.equal(
     backendSpec.components.parameters.WriteCommandIdempotencyKey.required,
-    false,
-    "backend Idempotency-Key must remain optional for generated SDK consumers",
+    true,
+    "all backend write commands require a stable Idempotency-Key",
+  );
+  assert.equal(
+    backendSpec.paths[
+      "/backend/v3/api/orders/{orderId}/payment_confirmations"
+    ].post.parameters.find((parameter) => parameter.name === "Idempotency-Key")
+      ?.required,
+    true,
+    "payment reconciliation requires a stable Idempotency-Key",
+  );
+  assert.equal(
+    backendSpec.paths[
+      "/backend/v3/api/orders/{orderId}/payment_confirmations"
+    ].post.parameters.find((parameter) => parameter.name === "Idempotency-Key")
+      ?.schema?.maxLength,
+    128,
   );
 });
 
@@ -275,7 +290,7 @@ test("account value database and docs are aligned to implemented settlement path
   );
 
   const registeredTables = new Set(
-    (tableRegistry.tables ?? []).map((entry) => entry.name),
+    (tableRegistry.tables ?? []).map((entry) => entry.name ?? entry.table_name),
   );
   for (const table of requiredTables) {
     assert.ok(registeredTables.has(table), `${table} must be registered`);

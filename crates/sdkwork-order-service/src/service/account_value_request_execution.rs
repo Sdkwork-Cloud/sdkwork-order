@@ -33,6 +33,14 @@ where
     };
 
     if command.action == AccountValueRequestReviewAction::Reject {
+        if matches!(request.status.as_str(), "refunded" | "paid_out") {
+            return Err(CommerceServiceError::invalid_state(
+                "a completed account value request cannot be rejected",
+            ));
+        }
+        if let Some(hold_id) = request.account_effect_reference_id.as_deref() {
+            release_account_hold(ledger_port, &command, &request, hold_id).await?;
+        }
         return mark_request_status(store, &command, "rejected", None, None).await;
     }
 
@@ -101,7 +109,7 @@ where
         .await
     {
         Ok(outcome) => outcome,
-        Err(error) => {
+        Err(error) if provider_execution_error_is_deterministic(&error) => {
             release_account_hold(ledger_port, &command, &request, &hold_id).await?;
             mark_request_status(
                 store,
@@ -113,6 +121,7 @@ where
             .await?;
             return Err(error);
         }
+        Err(error) => return Err(error),
     };
 
     match provider_refund_outcome_class(&provider_outcome.status) {
@@ -156,33 +165,25 @@ enum ProviderRefundOutcomeClass {
     Unknown,
 }
 
+fn provider_execution_error_is_deterministic(error: &CommerceServiceError) -> bool {
+    matches!(
+        error.code(),
+        "unauthenticated"
+            | "unauthorized"
+            | "not-found"
+            | "conflict"
+            | "invalid-state"
+            | "validation"
+            | "unsupported-capability"
+    )
+}
+
 fn provider_refund_outcome_class(status: &str) -> ProviderRefundOutcomeClass {
     match status.trim().to_ascii_lowercase().as_str() {
         "submitted" | "pending" | "processing" => ProviderRefundOutcomeClass::Processing,
         "succeeded" | "success" | "refunded" => ProviderRefundOutcomeClass::Succeeded,
         "failed" | "canceled" | "cancelled" => ProviderRefundOutcomeClass::Failed,
         _ => ProviderRefundOutcomeClass::Unknown,
-    }
-}
-
-#[cfg(test)]
-mod refund_outcome_tests {
-    use super::{provider_refund_outcome_class, ProviderRefundOutcomeClass};
-
-    #[test]
-    fn provider_refund_processing_does_not_mean_funds_were_refunded() {
-        assert_eq!(
-            provider_refund_outcome_class("processing"),
-            ProviderRefundOutcomeClass::Processing
-        );
-        assert_eq!(
-            provider_refund_outcome_class("succeeded"),
-            ProviderRefundOutcomeClass::Succeeded
-        );
-        assert_eq!(
-            provider_refund_outcome_class("unexpected"),
-            ProviderRefundOutcomeClass::Unknown
-        );
     }
 }
 
@@ -233,7 +234,7 @@ where
         .await
     {
         Ok(outcome) => outcome,
-        Err(error) => {
+        Err(error) if provider_execution_error_is_deterministic(&error) => {
             release_account_hold(ledger_port, &command, &request, &hold_id).await?;
             mark_request_status(
                 store,
@@ -245,10 +246,40 @@ where
             .await?;
             return Err(error);
         }
+        Err(error) => return Err(error),
     };
 
-    settle_account_hold(ledger_port, &command, &request, &hold_id).await?;
-    mark_final_provider_status(store, &command, &provider_outcome, "paid_out", &hold_id).await
+    match provider_refund_outcome_class(&provider_outcome.status) {
+        ProviderRefundOutcomeClass::Succeeded => {
+            settle_account_hold(ledger_port, &command, &request, &hold_id).await?;
+            mark_final_provider_status(store, &command, &provider_outcome, "paid_out", &hold_id)
+                .await
+        }
+        ProviderRefundOutcomeClass::Processing => {
+            mark_final_provider_status(
+                store,
+                &command,
+                &provider_outcome,
+                "provider_payout_processing",
+                &hold_id,
+            )
+            .await
+        }
+        ProviderRefundOutcomeClass::Failed => {
+            release_account_hold(ledger_port, &command, &request, &hold_id).await?;
+            mark_final_provider_status(
+                store,
+                &command,
+                &provider_outcome,
+                "provider_payout_failed",
+                &hold_id,
+            )
+            .await
+        }
+        ProviderRefundOutcomeClass::Unknown => Err(CommerceServiceError::conflict(
+            "payment payout executor returned an unsupported status",
+        )),
+    }
 }
 
 async fn ensure_account_hold<S, L>(
@@ -263,9 +294,20 @@ where
     S: AccountValueRequestExecutionStore + ?Sized,
     L: AccountValueLedgerPort + ?Sized,
 {
-    if let Some(reference_id) = request.account_effect_reference_id.as_deref() {
-        return Ok(reference_id.to_owned());
+    let retry_after_released_hold = matches!(
+        request.status.as_str(),
+        "provider_refund_failed" | "provider_payout_failed"
+    );
+    if !retry_after_released_hold {
+        if let Some(reference_id) = request.account_effect_reference_id.as_deref() {
+            return Ok(reference_id.to_owned());
+        }
     }
+    let hold_idempotency_key = if retry_after_released_hold {
+        format!("{idempotency_key}:retry:{}", command.idempotency_key)
+    } else {
+        idempotency_key.to_owned()
+    };
     let outcome = ledger_port
         .apply_account_value_ledger_command(AccountValueLedgerCommand::hold(
             &command.tenant_id,
@@ -277,7 +319,7 @@ where
             hold_business_type(command.subject, request.target_asset),
             &request.request_id,
             &command.request_no,
-            idempotency_key,
+            &hold_idempotency_key,
         )?)
         .await?;
     let hold_id = account_effect_reference(&outcome, "account hold")?;
@@ -306,7 +348,7 @@ where
             hold_id,
             &format!("{}:settle", command.request_no),
             &format!(
-                "{}:settle",
+                "{}:{hold_id}:settle",
                 account_hold_idempotency_key(command.subject, &request.request_id)?
             ),
         )?)
@@ -334,7 +376,7 @@ where
             hold_id,
             &format!("{}:release", command.request_no),
             &format!(
-                "{}:release",
+                "{}:{hold_id}:release",
                 account_hold_idempotency_key(command.subject, &request.request_id)?
             ),
         )?)
@@ -467,4 +509,25 @@ fn require_positive_amount(
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod refund_outcome_tests {
+    use super::{provider_refund_outcome_class, ProviderRefundOutcomeClass};
+
+    #[test]
+    fn provider_refund_processing_does_not_mean_funds_were_refunded() {
+        assert_eq!(
+            provider_refund_outcome_class("processing"),
+            ProviderRefundOutcomeClass::Processing
+        );
+        assert_eq!(
+            provider_refund_outcome_class("succeeded"),
+            ProviderRefundOutcomeClass::Succeeded
+        );
+        assert_eq!(
+            provider_refund_outcome_class("unexpected"),
+            ProviderRefundOutcomeClass::Unknown
+        );
+    }
 }

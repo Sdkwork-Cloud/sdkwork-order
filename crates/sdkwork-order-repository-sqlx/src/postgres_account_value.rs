@@ -675,10 +675,11 @@ impl PostgresCommerceRechargeStore {
             )
             .await?
         {
+            self.validate_refund_request_replay(&command, &view).await?;
             return Ok(view);
         }
         let now = current_command_timestamp();
-        sqlx::query(
+        let inserted = sqlx::query(
             r#"
             INSERT INTO commerce_order_refund_request
                 (id, tenant_id, organization_id, request_no, original_order_id, owner_user_id,
@@ -688,6 +689,7 @@ impl PostgresCommerceRechargeStore {
             VALUES
                 ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, $5, CAST($6 AS TEXT), $7, $8, $9,
                  $10, $11, 'requested', $12, $13, NULL, NULL, NULL, $14, $15, $16)
+            ON CONFLICT DO NOTHING
             "#,
         )
         .bind(&command.refund_request_id)
@@ -708,7 +710,25 @@ impl PostgresCommerceRechargeStore {
         .bind(&now)
         .execute(self.pool())
         .await
-        .map_err(|error| store_error("failed to create refund request", error))?;
+        .map_err(|error| store_error("failed to create refund request", error))?
+        .rows_affected();
+        if inserted == 0 {
+            let view = self
+                .load_refund_request_by_idempotency(
+                    &command.tenant_id,
+                    command.organization_id.as_deref(),
+                    &command.owner_user_id,
+                    &command.idempotency_key,
+                )
+                .await?
+                .ok_or_else(|| {
+                    CommerceServiceError::storage(
+                        "refund request idempotency conflict has no persisted request",
+                    )
+                })?;
+            self.validate_refund_request_replay(&command, &view).await?;
+            return Ok(view);
+        }
         self.retrieve_order_refund_request(AccountValueRequestDetailQuery {
             tenant_id: command.tenant_id,
             organization_id: command.organization_id,
@@ -775,10 +795,12 @@ impl PostgresCommerceRechargeStore {
             )
             .await?
         {
+            self.validate_withdrawal_request_replay(&command, &view)
+                .await?;
             return Ok(view);
         }
         let now = current_command_timestamp();
-        sqlx::query(
+        let inserted = sqlx::query(
             r#"
             INSERT INTO commerce_order_withdrawal_request
                 (id, tenant_id, organization_id, request_no, owner_user_id, target_asset, amount,
@@ -788,6 +810,7 @@ impl PostgresCommerceRechargeStore {
             VALUES
                 ($1, CAST($2 AS TEXT), CAST($3 AS TEXT), $4, CAST($5 AS TEXT), $6, $7, $8,
                  $9, $10, 'requested', $11, $12, $13, NULL, NULL, NULL, $14, $15, $16)
+            ON CONFLICT DO NOTHING
             "#,
         )
         .bind(&command.withdrawal_request_id)
@@ -808,7 +831,26 @@ impl PostgresCommerceRechargeStore {
         .bind(&now)
         .execute(self.pool())
         .await
-        .map_err(|error| store_error("failed to create withdrawal request", error))?;
+        .map_err(|error| store_error("failed to create withdrawal request", error))?
+        .rows_affected();
+        if inserted == 0 {
+            let view = self
+                .load_withdrawal_request_by_idempotency(
+                    &command.tenant_id,
+                    command.organization_id.as_deref(),
+                    &command.owner_user_id,
+                    &command.idempotency_key,
+                )
+                .await?
+                .ok_or_else(|| {
+                    CommerceServiceError::storage(
+                        "withdrawal request idempotency conflict has no persisted request",
+                    )
+                })?;
+            self.validate_withdrawal_request_replay(&command, &view)
+                .await?;
+            return Ok(view);
+        }
         self.retrieve_cash_withdrawal_request(AccountValueRequestDetailQuery {
             tenant_id: command.tenant_id,
             organization_id: command.organization_id,
@@ -1034,6 +1076,56 @@ impl PostgresCommerceRechargeStore {
         row.as_ref().map(map_refund_request).transpose()
     }
 
+    async fn validate_refund_request_replay(
+        &self,
+        command: &CreateOrderRefundRequestCommand,
+        view: &AccountValueRequestView,
+    ) -> Result<(), CommerceServiceError> {
+        let row = sqlx::query(
+            r#"
+            SELECT reason_code, reason_detail
+            FROM commerce_order_refund_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND owner_user_id = CAST($3 AS TEXT)
+              AND id = CAST($4 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(&command.owner_user_id)
+        .bind(&view.request_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to validate refund idempotency replay", error))?
+        .ok_or_else(|| CommerceServiceError::storage("refund idempotency replay was not found"))?;
+        let matches = view.request_id == command.refund_request_id
+            && view.original_order_id.as_deref() == Some(command.original_order_id.as_str())
+            && view.owner_user_id == command.owner_user_id
+            && view.target_asset == command.target_asset
+            && view.amount == command.amount
+            && view.currency_code == command.currency_code
+            && view.provider_amount == command.provider_amount
+            && view.provider_currency_code == command.provider_currency_code
+            && row
+                .try_get::<Option<String>, _>("reason_code")
+                .ok()
+                .flatten()
+                == command.reason_code
+            && row
+                .try_get::<Option<String>, _>("reason_detail")
+                .ok()
+                .flatten()
+                == command.reason_detail;
+        if !matches {
+            return Err(CommerceServiceError::conflict(
+                "idempotency key was used with a different refund request",
+            ));
+        }
+        Ok(())
+    }
+
     async fn load_withdrawal_request_by_idempotency(
         &self,
         tenant_id: &str,
@@ -1050,6 +1142,62 @@ impl PostgresCommerceRechargeStore {
             .await
             .map_err(|error| store_error("failed to load withdrawal request idempotency", error))?;
         row.as_ref().map(map_withdrawal_request).transpose()
+    }
+
+    async fn validate_withdrawal_request_replay(
+        &self,
+        command: &CreateCashWithdrawalRequestCommand,
+        view: &AccountValueRequestView,
+    ) -> Result<(), CommerceServiceError> {
+        let row = sqlx::query(
+            r#"
+            SELECT payout_method, payout_account_ref, reason_code
+            FROM commerce_order_withdrawal_request
+            WHERE tenant_id = CAST($1 AS TEXT)
+              AND ((organization_id = CAST($2 AS TEXT)) OR (organization_id IS NULL AND $2 IS NULL))
+              AND owner_user_id = CAST($3 AS TEXT)
+              AND id = CAST($4 AS TEXT)
+            LIMIT 1
+            "#,
+        )
+        .bind(&command.tenant_id)
+        .bind(command.organization_id.as_deref())
+        .bind(&command.owner_user_id)
+        .bind(&view.request_id)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(|error| store_error("failed to validate withdrawal idempotency replay", error))?
+        .ok_or_else(|| {
+            CommerceServiceError::storage("withdrawal idempotency replay was not found")
+        })?;
+        let matches = view.request_id == command.withdrawal_request_id
+            && view.owner_user_id == command.owner_user_id
+            && view.target_asset == command.asset
+            && view.amount == command.amount
+            && view.currency_code == command.currency_code
+            && view.provider_amount == command.provider_amount
+            && view.provider_currency_code == command.provider_currency_code
+            && row
+                .try_get::<Option<String>, _>("payout_method")
+                .ok()
+                .flatten()
+                == command.payout_method
+            && row
+                .try_get::<Option<String>, _>("payout_account_ref")
+                .ok()
+                .flatten()
+                == command.payout_account_ref
+            && row
+                .try_get::<Option<String>, _>("reason_code")
+                .ok()
+                .flatten()
+                == command.reason_code;
+        if !matches {
+            return Err(CommerceServiceError::conflict(
+                "idempotency key was used with a different withdrawal request",
+            ));
+        }
+        Ok(())
     }
 
     async fn review_refund_request(

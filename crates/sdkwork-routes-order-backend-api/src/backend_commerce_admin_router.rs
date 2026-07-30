@@ -36,7 +36,7 @@ use crate::api_response::{
     success_item, success_items,
 };
 use crate::backend_acl::{require_backend_operator, BackendOperatorScope};
-use crate::backend_command_headers::resolve_backend_write_command_headers;
+use crate::backend_command_headers::resolve_required_backend_write_command_headers;
 
 mod permissions {
     pub const ACCOUNT_VALUE_MANAGE: &str = "commerce.accountValue.manage";
@@ -681,7 +681,7 @@ async fn create_account_value_package(
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("account-value-package-create-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -720,7 +720,7 @@ async fn update_account_value_package(
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("account-value-package-update-{package_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -757,7 +757,7 @@ async fn retire_account_value_package(
             Err(response) => return *response,
         };
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("account-value-package-retire-{package_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -834,7 +834,7 @@ async fn create_token_bank_plan(
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("token-bank-plan-create-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -873,7 +873,7 @@ async fn update_token_bank_plan(
         };
     let body = body.map(|Json(value)| value).unwrap_or_default();
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("token-bank-plan-update-{plan_code}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -910,7 +910,7 @@ async fn retire_token_bank_plan(
             Err(response) => return *response,
         };
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("token-bank-plan-retire-{plan_code}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -1164,7 +1164,7 @@ async fn review_account_value_request_by_action(
             Err(response) => return *response,
         };
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("{fallback_scope}-{request_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -1409,7 +1409,7 @@ async fn review_after_sales_request(
         Err(response) => return *response,
     };
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("review-{after_sales_request_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -1558,7 +1558,7 @@ async fn create_management_shipment_package(
         Err(response) => return *response,
     };
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("pkg-{shipment_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -1599,7 +1599,7 @@ async fn update_management_shipment_package(
         Err(response) => return *response,
     };
     let write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("pkg-update-{package_id}-{idempotency_key}")
         }) {
             Ok(value) => value,

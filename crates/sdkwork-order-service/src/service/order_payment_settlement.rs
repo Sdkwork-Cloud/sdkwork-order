@@ -4,12 +4,14 @@ use crate::{
     default_fulfill_account_value_order_command, default_fulfill_points_recharge_command,
     fulfill_account_value_order, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
-    points_recharge_payment_success_idempotency_key, redeem_coupon_and_fulfill_account_value_order,
-    AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
-    AccountValueOrderSubject, CouponRedemptionPort, MarkPointsRechargePaymentSucceededCommand,
-    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
-    MembershipPurchaseSettlementSnapshot, OrderPaymentSettlementAttempt,
-    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, PointsRechargeFulfillmentStore,
+    physical_goods_fulfillment_idempotency_key, points_recharge_payment_success_idempotency_key,
+    redeem_coupon_and_fulfill_account_value_order, AccountPointsCreditPort,
+    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
+    CouponRedemptionPort, FulfillPaidPhysicalOrderRequest,
+    MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
+    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
+    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort,
+    PhysicalGoodsFulfillmentPort, PointsRechargeFulfillmentStore,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -168,6 +170,7 @@ pub struct OwnerOrderSettlementPorts<'a> {
     pub account_value_ledger_port: &'a dyn AccountValueLedgerPort,
     pub coupon_redemption_port: &'a dyn CouponRedemptionPort,
     pub membership_port: &'a dyn MembershipPurchaseFulfillmentPort,
+    pub physical_goods_port: &'a dyn PhysicalGoodsFulfillmentPort,
 }
 
 pub async fn settle_owner_order_after_payment_success(
@@ -182,10 +185,28 @@ pub async fn settle_owner_order_after_payment_success(
         .confirm_owner_order_payment(attempt)
         .await?;
 
-    ports
+    let order_state_outcome = ports
         .order_state_store
         .mark_owner_order_payment_succeeded(attempt, &payment_outcome.paid_at)
         .await?;
+
+    if order_state_outcome.terminal_order_preserved {
+        tracing::warn!(
+            target = "order.settlement",
+            order_id = %attempt.order_id,
+            order_status = %order_state_outcome.order_status,
+            "payment confirmed after negative terminal order state; automated fulfillment suppressed"
+        );
+        return Ok(OwnerOrderSettlementOutcome {
+            payment_confirmed: true,
+            payment_replayed: payment_outcome.replayed,
+            fulfillment_accepted: false,
+            fulfillment_replayed: false,
+            order_id: attempt.order_id.clone(),
+            points_credited: 0,
+            fulfillment_status: "late_payment_requires_recovery".to_owned(),
+        });
+    }
 
     let subject_kind = OrderSubjectKind::parse(order_subject);
     let fulfillment = dispatch_subject_fulfillment(
@@ -274,8 +295,11 @@ async fn dispatch_subject_fulfillment(
             )
             .await
         }
-        OrderSubjectKind::Product
-        | OrderSubjectKind::VirtualGoods
+        OrderSubjectKind::Product => {
+            settle_physical_goods_subject(ports.physical_goods_port, attempt, paid_at, request_no)
+                .await
+        }
+        OrderSubjectKind::VirtualGoods
         | OrderSubjectKind::CouponPackage
         | OrderSubjectKind::External => {
             tracing::info!(
@@ -305,6 +329,35 @@ async fn dispatch_subject_fulfillment(
             })
         }
     }
+}
+
+async fn settle_physical_goods_subject<P>(
+    physical_goods_port: &P,
+    attempt: &OrderPaymentSettlementAttempt,
+    paid_at: &str,
+    request_no: &str,
+) -> Result<SubjectFulfillmentOutcome, CommerceServiceError>
+where
+    P: PhysicalGoodsFulfillmentPort + ?Sized,
+{
+    let outcome = physical_goods_port
+        .fulfill_paid_physical_order(FulfillPaidPhysicalOrderRequest {
+            tenant_id: attempt.tenant_id.clone(),
+            organization_id: attempt.organization_id.clone(),
+            owner_user_id: attempt.owner_user_id.clone(),
+            order_id: attempt.order_id.clone(),
+            paid_at: paid_at.to_owned(),
+            request_no: request_no.to_owned(),
+            idempotency_key: physical_goods_fulfillment_idempotency_key(&attempt.order_id),
+        })
+        .await?;
+
+    Ok(SubjectFulfillmentOutcome {
+        accepted: outcome.accepted,
+        replayed: outcome.replayed,
+        points_credited: 0,
+        status: outcome.fulfillment_status,
+    })
 }
 
 async fn settle_coupon_recharge_subject<A, C, L>(

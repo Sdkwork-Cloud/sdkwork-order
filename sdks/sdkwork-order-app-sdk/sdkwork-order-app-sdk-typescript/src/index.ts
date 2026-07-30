@@ -5,6 +5,12 @@ import {
 import type { SdkworkAppConfig } from '../generated/server-openapi/src/types/common';
 import { applySdkworkIdempotencyRequestFingerprint } from './idempotency-request-fingerprint';
 
+interface RequestInterceptorRegistrar {
+  addRequestInterceptor(
+    interceptor: typeof applySdkworkIdempotencyRequestFingerprint,
+  ): () => void;
+}
+
 export { createGeneratedAppClient };
 export type { SdkworkAppConfig };
 export * from '../generated/server-openapi/src/types';
@@ -15,7 +21,8 @@ export * from '../generated/server-openapi/src/auth';
 export class SdkworkAppClient extends GeneratedSdkworkAppClient {
   constructor(config: SdkworkAppConfig) {
     super(config);
-    this.http.addRequestInterceptor(applySdkworkIdempotencyRequestFingerprint);
+    (this.http as unknown as RequestInterceptorRegistrar)
+      .addRequestInterceptor(applySdkworkIdempotencyRequestFingerprint);
   }
 }
 

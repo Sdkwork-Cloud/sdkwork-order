@@ -314,6 +314,8 @@ pub struct CreateOwnerOrderCommand {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateOwnerOrderOutcome {
+    pub inventory_lines: Vec<crate::PhysicalInventoryLine>,
+    pub merchant_organization_id: Option<String>,
     pub order_id: String,
     pub order_sn: String,
     pub status: String,

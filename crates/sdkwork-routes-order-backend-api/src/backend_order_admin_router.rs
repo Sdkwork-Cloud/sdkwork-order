@@ -24,7 +24,7 @@ use crate::api_response::{
     offset_list_page_params_from_query, success_command, success_item, success_items, validation,
 };
 use crate::backend_acl::require_backend_operator;
-use crate::backend_command_headers::resolve_backend_write_command_headers;
+use crate::backend_command_headers::resolve_required_backend_write_command_headers;
 use crate::backend_management_lifecycle::{
     cancel_management_order_with_payments, close_management_order_with_payments,
     BackendManagementOrderStore, BackendManagementPaymentStore,
@@ -340,7 +340,7 @@ async fn cancel_order(
         cancel_type: None,
     });
     let _write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("admin-cancel-{order_id}-{idempotency_key}")
         }) {
             Ok(value) => value,
@@ -382,7 +382,7 @@ async fn close_order(
         close_type: None,
     });
     let _write_headers =
-        match resolve_backend_write_command_headers(ctx, &headers, |idempotency_key| {
+        match resolve_required_backend_write_command_headers(ctx, &headers, |idempotency_key| {
             format!("admin-close-{order_id}-{idempotency_key}")
         }) {
             Ok(value) => value,

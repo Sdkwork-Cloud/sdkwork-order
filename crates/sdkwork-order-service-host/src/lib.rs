@@ -4,13 +4,20 @@ use sdkwork_order_integration_account::{
     account_points_credit_port_from_env, account_value_ledger_port_from_env,
 };
 use sdkwork_order_integration_membership::membership_purchase_fulfillment_port_from_database_pool;
-use sdkwork_order_integration_payment::payment_refund_executor_port_from_database_pool;
+use sdkwork_order_integration_payment::{
+    owner_order_payment_reconciliation_port_from_database_pool,
+    payment_refund_executor_port_from_database_pool,
+};
+use sdkwork_order_integration_physical_commerce::physical_commerce_ports_from_env;
 use sdkwork_order_integration_promotion::promotion_coupon_redemption_port_from_database_pool;
 pub use sdkwork_order_service::order_service_contract;
 use sdkwork_order_service::{
     AccountPointsCreditPort, AccountValueLedgerPort, CouponRedemptionPort,
     MembershipPurchaseFulfillmentPort, NoopCouponRedemptionPort, NoopPaymentPayoutExecutorPort,
-    PaymentPayoutExecutorPort, PaymentRefundExecutorPort,
+    OwnerOrderPaymentReconciliationPort, PaymentPayoutExecutorPort, PaymentRefundExecutorPort,
+    PhysicalCheckoutResolverPort, PhysicalGoodsFulfillmentPort, PhysicalInventoryReservationPort,
+    UnavailablePhysicalCheckoutResolverPort, UnavailablePhysicalGoodsFulfillmentPort,
+    UnavailablePhysicalInventoryReservationPort,
 };
 use std::sync::Arc;
 
@@ -20,8 +27,12 @@ pub struct OrderServiceHost {
     account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
     coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
     membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
+    owner_order_payment_reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
     payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
     payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
+    physical_checkout_resolver_port: Arc<dyn PhysicalCheckoutResolverPort>,
+    physical_inventory_reservation_port: Arc<dyn PhysicalInventoryReservationPort>,
+    physical_goods_fulfillment_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
 }
 
 impl OrderServiceHost {
@@ -50,18 +61,25 @@ impl OrderServiceHost {
         let coupon_redemption_port =
             promotion_coupon_redemption_port_from_database_pool(database.pool());
         let membership_fulfillment_port =
-            membership_purchase_fulfillment_port_from_database_pool(database.pool());
+            membership_purchase_fulfillment_port_from_database_pool(database.pool())?;
+        let owner_order_payment_reconciliation_port =
+            owner_order_payment_reconciliation_port_from_database_pool(database.pool());
         let payment_refund_executor_port =
             payment_refund_executor_port_from_database_pool(database.pool());
         let payment_payout_executor_port = Arc::new(NoopPaymentPayoutExecutorPort);
+        let physical_ports = physical_commerce_ports_from_env(database.pool()).await?;
         Ok(Self {
             database,
             account_credit_port,
             account_value_ledger_port,
             coupon_redemption_port,
             membership_fulfillment_port,
+            owner_order_payment_reconciliation_port,
             payment_refund_executor_port,
             payment_payout_executor_port,
+            physical_checkout_resolver_port: physical_ports.checkout_resolver,
+            physical_inventory_reservation_port: physical_ports.inventory,
+            physical_goods_fulfillment_port: physical_ports.fulfillment,
         })
     }
 
@@ -94,14 +112,22 @@ impl OrderServiceHost {
         payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
         payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
     ) -> Self {
+        let owner_order_payment_reconciliation_port =
+            owner_order_payment_reconciliation_port_from_database_pool(database.pool());
         Self {
             database,
             account_credit_port,
             account_value_ledger_port,
             coupon_redemption_port,
             membership_fulfillment_port,
+            owner_order_payment_reconciliation_port,
             payment_refund_executor_port,
             payment_payout_executor_port,
+            physical_checkout_resolver_port: Arc::new(UnavailablePhysicalCheckoutResolverPort),
+            physical_inventory_reservation_port: Arc::new(
+                UnavailablePhysicalInventoryReservationPort,
+            ),
+            physical_goods_fulfillment_port: Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
         }
     }
 
@@ -148,11 +174,29 @@ impl OrderServiceHost {
         self.membership_fulfillment_port.clone()
     }
 
+    pub fn owner_order_payment_reconciliation_port(
+        &self,
+    ) -> Arc<dyn OwnerOrderPaymentReconciliationPort> {
+        self.owner_order_payment_reconciliation_port.clone()
+    }
+
     pub fn payment_refund_executor_port(&self) -> Arc<dyn PaymentRefundExecutorPort> {
         self.payment_refund_executor_port.clone()
     }
 
     pub fn payment_payout_executor_port(&self) -> Arc<dyn PaymentPayoutExecutorPort> {
         self.payment_payout_executor_port.clone()
+    }
+
+    pub fn physical_checkout_resolver_port(&self) -> Arc<dyn PhysicalCheckoutResolverPort> {
+        self.physical_checkout_resolver_port.clone()
+    }
+
+    pub fn physical_inventory_reservation_port(&self) -> Arc<dyn PhysicalInventoryReservationPort> {
+        self.physical_inventory_reservation_port.clone()
+    }
+
+    pub fn physical_goods_fulfillment_port(&self) -> Arc<dyn PhysicalGoodsFulfillmentPort> {
+        self.physical_goods_fulfillment_port.clone()
     }
 }

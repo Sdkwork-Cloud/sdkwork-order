@@ -81,8 +81,10 @@
       "mount_backend_openapi",
       "payment_confirmation_router_with_postgres_pool",
       "payment_confirmation_router_with_postgres_pool_and_coupon",
+      "payment_confirmation_router_with_postgres_pool_and_integrations",
       "payment_confirmation_router_with_sqlite_pool",
       "payment_confirmation_router_with_sqlite_pool_and_coupon",
+      "payment_confirmation_router_with_sqlite_pool_and_integrations",
       "wrap_router_with_web_framework",
       "wrap_router_with_web_framework_from_env"
     ],

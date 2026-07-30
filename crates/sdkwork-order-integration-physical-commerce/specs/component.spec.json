@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-order-integration-physical-commerce",
+    "displayName": "SDKWork Order Physical Commerce Integration",
+    "version": "0.1.0",
+    "type": "rust-crate",
+    "root": "crates/sdkwork-order-integration-physical-commerce",
+    "domain": "commerce",
+    "capability": "order",
+    "status": "stable",
+    "languages": ["rust"],
+    "generated": false,
+    "private": true,
+    "manifests": ["Cargo.toml"]
+  },
+  "canonicalSpecs": [
+    {"file": "RUST_CODE_SPEC.md", "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md", "purpose": "Rust layering and adapter rules."},
+    {"file": "TEST_SPEC.md", "path": "../../../sdkwork-specs/TEST_SPEC.md", "purpose": "Verification rules."}
+  ],
+  "contracts": {
+    "publicExports": ["physical_commerce_ports_from_env", "PhysicalCommerceAdapter"],
+    "runtimeEntrypoints": ["src/lib.rs"],
+    "sdkClients": [],
+    "events": [],
+    "configKeys": ["SDKWORK_MERCHANDISE_DATABASE_URL", "SDKWORK_SHOP_DATABASE_URL", "SDKWORK_INVENTORY_DATABASE_URL"],
+    "routeManifest": null
+  },
+  "integration": {
+    "authority": "Order orchestrates; Merchandise, Shop, and Inventory remain data authorities.",
+    "dependencyPolicy": "Runtime adapter consumes public repository exports through workspace dependencies.",
+    "sdkPolicy": "No generated same-authority SDK dependency.",
+    "languagePolicy": "Rust adapter follows RUST_CODE_SPEC.md."
+  },
+  "verification": {"commands": ["cargo test -p sdkwork-order-integration-physical-commerce"]}
+}
+
