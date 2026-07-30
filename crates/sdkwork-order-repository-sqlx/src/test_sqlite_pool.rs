@@ -41,7 +41,7 @@ pub async fn apply_order_e2e_migration_sqlite(pool: &SqlitePool) {
 }
 
 pub async fn order_points_recharge_e2e_postgres_pool_from_env() -> Option<sqlx::PgPool> {
-    let url = std::env::var("ORDER_TEST_POSTGRES_URL")
+    let url = std::env::var("SDKWORK_DATABASE_TEST_POSTGRES_URL")
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())?;

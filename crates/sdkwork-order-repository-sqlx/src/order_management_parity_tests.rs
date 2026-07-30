@@ -25,7 +25,7 @@ async fn sqlite_list_management_orders_returns_empty_page() {
 async fn postgres_list_management_orders_returns_empty_page() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
         eprintln!(
-            "ORDER_TEST_POSTGRES_URL is unset; skipping postgres management list parity test"
+            "SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres management list parity test"
         );
         return;
     };

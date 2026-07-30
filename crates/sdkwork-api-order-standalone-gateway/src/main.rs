@@ -70,12 +70,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Builds the CORS layer from the `ORDER_CORS_ALLOW_ORIGINS` env var.
-///
-/// - When unset or empty: deny all cross-origin requests (fail-closed).
-/// - When set to `*`: emit a warning and fall back to a permissive policy
-///   ONLY when `ORDER_CORS_PERMISSIVE_DEV=1` is also set, otherwise deny.
-/// - Otherwise: comma-separated list of allowed origins.
 /// Waits for SIGINT (Ctrl+C) or SIGTERM to trigger graceful shutdown.
 async fn shutdown_signal() {
     let ctrl_c = async {

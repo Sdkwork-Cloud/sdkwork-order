@@ -7,7 +7,7 @@ use crate::PostgresCommerceMembershipOrderStore;
 async fn postgres_concurrent_membership_purchase_intent_has_one_active_order() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
         eprintln!(
-            "ORDER_TEST_POSTGRES_URL is unset; skipping postgres membership concurrency test"
+            "SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres membership concurrency test"
         );
         return;
     };

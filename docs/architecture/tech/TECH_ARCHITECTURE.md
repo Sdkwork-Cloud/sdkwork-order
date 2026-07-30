@@ -224,7 +224,7 @@ Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK r
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | Tenant id for public recharge package catalog fallback | `100001` |
 | `SDKWORK_ACCESS_TOKEN` | Bearer token for service-to-service wallet credit and membership fulfillment during order settlement | required in production |
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Public base URL registered with PSP for order-owned webhooks | required in production |
-| `ORDER_TEST_POSTGRES_URL` | PostgreSQL URL for repository parity tests | unset |
+| `SDKWORK_DATABASE_TEST_POSTGRES_URL` | PostgreSQL URL for repository parity tests | unset |
 | `RUST_LOG` | Tracing filter (`order.bootstrap`, `order.runtime`, `order.readiness`, `order.security`) | `info` |
 
 ## 10. Observability

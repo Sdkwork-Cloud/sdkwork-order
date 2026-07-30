@@ -82,7 +82,7 @@ Set `ORDER_CORS_ALLOW_ORIGINS` for browser clients. Readiness: platform health r
 ```bash
 cargo test --workspace
 pnpm verify
-pnpm test:postgres          # optional when ORDER_TEST_POSTGRES_URL is set
+pnpm test:postgres          # optional when SDKWORK_DATABASE_TEST_POSTGRES_URL is set
 pnpm test:postgres:required # CI: fails when postgres URL is missing
 ```
 

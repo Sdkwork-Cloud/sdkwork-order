@@ -463,6 +463,21 @@ async fn submit_provider_refund(
     .await
 }
 
+fn refund_outcome(refund: RefundView) -> PaymentExecutorOutcome {
+    PaymentExecutorOutcome {
+        accepted: true,
+        replayed: false,
+        provider_reference_id: Some(refund.refund_id),
+        status: refund.status,
+    }
+}
+
+pub fn payment_refund_executor_port_from_database_pool(
+    pool: &DatabasePool,
+) -> Arc<dyn PaymentRefundExecutorPort> {
+    Arc::new(StorePaymentRefundExecutorAdapter::from_database_pool(pool))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -489,19 +504,4 @@ mod tests {
             "provider response was not observed"
         )));
     }
-}
-
-fn refund_outcome(refund: RefundView) -> PaymentExecutorOutcome {
-    PaymentExecutorOutcome {
-        accepted: true,
-        replayed: false,
-        provider_reference_id: Some(refund.refund_id),
-        status: refund.status,
-    }
-}
-
-pub fn payment_refund_executor_port_from_database_pool(
-    pool: &DatabasePool,
-) -> Arc<dyn PaymentRefundExecutorPort> {
-    Arc::new(StorePaymentRefundExecutorAdapter::from_database_pool(pool))
 }

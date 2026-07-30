@@ -2,12 +2,12 @@
 
 import { spawnSync } from "node:child_process";
 
-const postgresUrl = process.env.ORDER_TEST_POSTGRES_URL?.trim();
+const postgresUrl = process.env.SDKWORK_DATABASE_TEST_POSTGRES_URL?.trim();
 const requireDatabase = process.argv.includes("--require-database");
 
 if (!postgresUrl) {
   const message =
-    "ORDER_TEST_POSTGRES_URL is unset; skipping postgres repository parity tests";
+    "SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres repository parity tests";
   if (requireDatabase) {
     console.error(message);
     process.exit(1);
@@ -22,7 +22,7 @@ const result = spawnSync(
   {
     stdio: "inherit",
     shell: process.platform === "win32",
-    env: { ...process.env, ORDER_TEST_POSTGRES_URL: postgresUrl },
+    env: { ...process.env, SDKWORK_DATABASE_TEST_POSTGRES_URL: postgresUrl },
   },
 );
 

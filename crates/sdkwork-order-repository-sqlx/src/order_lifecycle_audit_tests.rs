@@ -27,7 +27,7 @@ async fn sqlite_close_management_order_is_idempotent_when_already_closed() {
 #[tokio::test]
 async fn postgres_close_management_order_is_idempotent_when_already_closed() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
-        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres close idempotency test");
+        eprintln!("SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres close idempotency test");
         return;
     };
     seed_pending_order_postgres(&pool).await;
@@ -63,7 +63,7 @@ async fn sqlite_close_management_order_writes_event_audit_row() {
 #[tokio::test]
 async fn postgres_close_management_order_writes_event_audit_row() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
-        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres close audit parity test");
+        eprintln!("SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres close audit parity test");
         return;
     };
     seed_pending_order_postgres(&pool).await;
@@ -99,7 +99,7 @@ async fn sqlite_cancel_owner_order_is_idempotent_when_already_cancelled() {
 #[tokio::test]
 async fn postgres_cancel_owner_order_is_idempotent_when_already_cancelled() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
-        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres cancel idempotency test");
+        eprintln!("SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres cancel idempotency test");
         return;
     };
     seed_pending_order_postgres(&pool).await;
@@ -136,7 +136,7 @@ async fn sqlite_cancel_owner_order_writes_event_and_cancellation_audit_rows() {
 #[tokio::test]
 async fn postgres_cancel_owner_order_writes_event_and_cancellation_audit_rows() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
-        eprintln!("ORDER_TEST_POSTGRES_URL is unset; skipping postgres cancel audit parity test");
+        eprintln!("SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres cancel audit parity test");
         return;
     };
     seed_pending_order_postgres(&pool).await;

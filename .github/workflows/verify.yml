@@ -24,7 +24,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      ORDER_TEST_POSTGRES_URL: postgres://order:order@localhost:5432/order_test
+      SDKWORK_DATABASE_TEST_POSTGRES_URL: postgres://order:order@localhost:5432/order_test
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -76,7 +76,7 @@ Primary API prefixes:
 
 - `cargo test --workspace` and `pnpm verify` pass.
 - Governance checks pass: API envelope, pagination, SDK consumer imports, repo composition, and documentation standard.
-- SQLite and optional PostgreSQL (`ORDER_TEST_POSTGRES_URL`) parity tests pass for critical lifecycles.
+- SQLite and optional PostgreSQL (`SDKWORK_DATABASE_TEST_POSTGRES_URL`) parity tests pass for critical lifecycles.
 - Account value order specs, OpenAPI contracts, SDK facades, domain sagas, and database table registry stay aligned.
 
 ## 7. Phases

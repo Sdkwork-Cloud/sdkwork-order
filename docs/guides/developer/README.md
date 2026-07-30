@@ -18,7 +18,7 @@ Set `ORDER_CORS_ALLOW_ORIGINS` for browser clients. Use `ORDER_READ_MODEL_LENIEN
 ```bash
 pnpm verify
 pnpm test:node      # OpenAPI ↔ router ↔ SDK authority sync
-pnpm test:postgres  # optional Postgres parity when ORDER_TEST_POSTGRES_URL is set
+pnpm test:postgres  # optional Postgres parity when SDKWORK_DATABASE_TEST_POSTGRES_URL is set
 ```
 
 ## Write Command Headers

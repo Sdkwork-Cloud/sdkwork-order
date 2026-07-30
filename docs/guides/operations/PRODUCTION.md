@@ -69,7 +69,7 @@ Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the
 
 ```bash
 pnpm verify
-pnpm test:postgres:required   # CI uses ORDER_TEST_POSTGRES_URL
+pnpm test:postgres:required   # CI uses SDKWORK_DATABASE_TEST_POSTGRES_URL
 ```
 
 Contract drift is guarded by automated tests:
