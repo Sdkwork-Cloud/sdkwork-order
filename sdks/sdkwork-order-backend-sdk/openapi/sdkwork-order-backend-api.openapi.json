@@ -16,15 +16,15 @@
   ],
   "tags": [
     {
-      "name": "orders",
+      "name": "order-admin-orders",
       "description": "Order admin read, lifecycle commands, and payment settlement replay."
     },
     {
-      "name": "afterSales",
+      "name": "order-admin-afterSales",
       "description": "After-sales management and review."
     },
     {
-      "name": "shipments",
+      "name": "order-admin-shipments",
       "description": "Shipment and package management."
     }
   ],
@@ -34,7 +34,7 @@
         "operationId": "orders.admin.list",
         "summary": "List orders for operator review",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "x-sdkwork-request-context": "WebRequestContext",
@@ -145,7 +145,7 @@
         "operationId": "orders.admin.cancellations.list",
         "summary": "List order cancellation audit records",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -247,7 +247,7 @@
         "operationId": "orders.admin.retrieve",
         "summary": "Retrieve order detail for operator review",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -322,7 +322,7 @@
         "operationId": "orders.admin.cancel",
         "summary": "Cancel an order from the admin surface",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -387,7 +387,7 @@
         "operationId": "orders.admin.close",
         "summary": "Close an order from the admin surface",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -452,7 +452,7 @@
         "operationId": "orders.admin.events.list",
         "summary": "List order lifecycle events",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -555,7 +555,7 @@
         "operationId": "orders.paymentConfirmations.create",
         "summary": "Reconcile provider payment and run the shared order settlement saga",
         "tags": [
-          "orders"
+          "order-admin-orders"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -628,7 +628,7 @@
         "operationId": "afterSales.management.list",
         "summary": "List after-sales requests for operator review",
         "tags": [
-          "afterSales"
+          "order-admin-afterSales"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -713,7 +713,7 @@
         "operationId": "afterSales.management.retrieve",
         "summary": "Retrieve after-sales request for operator review",
         "tags": [
-          "afterSales"
+          "order-admin-afterSales"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -764,7 +764,7 @@
         "operationId": "afterSales.reviews.create",
         "summary": "Review after-sales request",
         "tags": [
-          "afterSales"
+          "order-admin-afterSales"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -829,7 +829,7 @@
         "operationId": "shipments.list",
         "summary": "List shipments for operator review",
         "tags": [
-          "shipments"
+          "order-admin-shipments"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -914,7 +914,7 @@
         "operationId": "shipments.retrieve",
         "summary": "Retrieve shipment for operator review",
         "tags": [
-          "shipments"
+          "order-admin-shipments"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -965,7 +965,7 @@
         "operationId": "shipments.packages.management.list",
         "summary": "List shipment packages",
         "tags": [
-          "shipments"
+          "order-admin-shipments"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -1035,7 +1035,7 @@
         "operationId": "shipments.packages.create",
         "summary": "Create shipment package",
         "tags": [
-          "shipments"
+          "order-admin-shipments"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -1100,7 +1100,7 @@
         "operationId": "shipments.packages.update",
         "summary": "Update shipment package",
         "tags": [
-          "shipments"
+          "order-admin-shipments"
         ],
         "x-sdkwork-api-surface": "backend-api",
         "parameters": [
@@ -1171,7 +1171,7 @@
     "/backend/v3/api/account_value_packages": {
       "get": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Account value packages list.",
         "operationId": "backend.accountValuePackages.list",
@@ -1302,7 +1302,7 @@
       },
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Account value packages create.",
         "operationId": "backend.accountValuePackages.create",
@@ -1412,7 +1412,7 @@
     "/backend/v3/api/account_value_packages/{packageId}": {
       "patch": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Account value packages update.",
         "operationId": "backend.accountValuePackages.update",
@@ -1530,7 +1530,7 @@
     "/backend/v3/api/account_value_packages/{packageId}/retire": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Account value packages retire.",
         "operationId": "backend.accountValuePackages.retire",
@@ -1638,7 +1638,7 @@
     "/backend/v3/api/token_bank_plans": {
       "get": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Token Bank plans list.",
         "operationId": "backend.tokenBankPlans.list",
@@ -1761,7 +1761,7 @@
       },
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Token Bank plans create.",
         "operationId": "backend.tokenBankPlans.create",
@@ -1871,7 +1871,7 @@
     "/backend/v3/api/token_bank_plans/{planCode}": {
       "patch": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Token Bank plans update.",
         "operationId": "backend.tokenBankPlans.update",
@@ -1989,7 +1989,7 @@
     "/backend/v3/api/token_bank_plans/{planCode}/retire": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Token Bank plans retire.",
         "operationId": "backend.tokenBankPlans.retire",
@@ -2097,7 +2097,7 @@
     "/backend/v3/api/refund_requests": {
       "get": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Refund requests list.",
         "operationId": "backend.refundRequests.list",
@@ -2222,7 +2222,7 @@
     "/backend/v3/api/refund_requests/{refundRequestId}/approve": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Refund requests approve.",
         "operationId": "backend.refundRequests.approve",
@@ -2340,7 +2340,7 @@
     "/backend/v3/api/refund_requests/{refundRequestId}/reject": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Refund requests reject.",
         "operationId": "backend.refundRequests.reject",
@@ -2458,7 +2458,7 @@
     "/backend/v3/api/refund_requests/{refundRequestId}/retry": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Refund requests retry.",
         "operationId": "backend.refundRequests.retry",
@@ -2576,7 +2576,7 @@
     "/backend/v3/api/withdrawal_requests": {
       "get": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Withdrawal requests list.",
         "operationId": "backend.withdrawalRequests.list",
@@ -2701,7 +2701,7 @@
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/approve": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Withdrawal requests approve.",
         "operationId": "backend.withdrawalRequests.approve",
@@ -2819,7 +2819,7 @@
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/reject": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Withdrawal requests reject.",
         "operationId": "backend.withdrawalRequests.reject",
@@ -2937,7 +2937,7 @@
     "/backend/v3/api/withdrawal_requests/{withdrawalRequestId}/retry": {
       "post": {
         "tags": [
-          "backend"
+          "order-admin-backend"
         ],
         "summary": "Withdrawal requests retry.",
         "operationId": "backend.withdrawalRequests.retry",

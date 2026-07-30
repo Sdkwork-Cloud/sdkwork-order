@@ -17,42 +17,42 @@
   ],
   "tags": [
     {
-      "name": "afterSales",
+      "name": "order-afterSales",
       "description": "After Sales API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "checkout",
+      "name": "order-checkout",
       "description": "Checkout API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "fulfillments",
+      "name": "order-fulfillments",
       "description": "Fulfillments API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "orders",
+      "name": "order-orders",
       "description": "Orders API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "payments",
+      "name": "order-payments",
       "description": "Payments API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "recharges",
+      "name": "order-recharges",
       "description": "Recharges API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "memberships",
+      "name": "order-memberships",
       "description": "Memberships API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "shipments",
+      "name": "order-shipments",
       "description": "Shipments API resources.",
       "x-sdk-nested-resource-surface": true
     }
@@ -61,7 +61,7 @@
     "/app/v3/api/checkout/sessions": {
       "post": {
         "tags": [
-          "checkout"
+          "order-checkout"
         ],
         "summary": "Checkout sessions create.",
         "operationId": "checkout.sessions.create",
@@ -170,7 +170,7 @@
     "/app/v3/api/checkout/sessions/{checkoutSessionId}": {
       "get": {
         "tags": [
-          "checkout"
+          "order-checkout"
         ],
         "summary": "Checkout sessions retrieve.",
         "operationId": "checkout.sessions.retrieve",
@@ -273,7 +273,7 @@
     "/app/v3/api/checkout/sessions/{checkoutSessionId}/quotes": {
       "post": {
         "tags": [
-          "checkout"
+          "order-checkout"
         ],
         "summary": "Checkout sessions quotes create.",
         "operationId": "checkout.sessions.quotes.create",
@@ -380,7 +380,7 @@
     "/app/v3/api/checkout/sessions/{checkoutSessionId}/orders": {
       "post": {
         "tags": [
-          "checkout"
+          "order-checkout"
         ],
         "summary": "Checkout sessions orders create.",
         "operationId": "checkout.sessions.orders.create",
@@ -487,7 +487,7 @@
     "/app/v3/api/orders": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders list.",
         "operationId": "orders.list",
@@ -611,7 +611,7 @@
     "/app/v3/api/orders/{orderId}": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders retrieve.",
         "operationId": "orders.retrieve",
@@ -714,7 +714,7 @@
     "/app/v3/api/orders/{orderId}/payments": {
       "post": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders payments create.",
         "operationId": "orders.payments.create",
@@ -829,7 +829,7 @@
       },
       "get": {
         "tags": [
-          "payments"
+          "order-payments"
         ],
         "summary": "Payments order Payments list.",
         "operationId": "payments.orderPayments.list",
@@ -953,7 +953,7 @@
     "/app/v3/api/orders/{orderId}/events": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders events list.",
         "operationId": "orders.events.list",
@@ -1077,7 +1077,7 @@
     "/app/v3/api/orders/{orderId}/cancellations": {
       "post": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders cancellations create.",
         "operationId": "orders.cancellations.create",
@@ -1194,7 +1194,7 @@
     "/app/v3/api/orders/{orderId}/payment_success": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders payment Success retrieve.",
         "operationId": "orders.paymentSuccess.retrieve",
@@ -1297,7 +1297,7 @@
     "/app/v3/api/orders/statistics": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders statistics retrieve.",
         "operationId": "orders.statistics.retrieve",
@@ -1391,7 +1391,7 @@
     "/app/v3/api/orders/{orderId}/status": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Orders status retrieve.",
         "operationId": "orders.status.retrieve",
@@ -1494,7 +1494,7 @@
     "/app/v3/api/orders/payments/webhooks/{providerCode}": {
       "post": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Receive PSP payment webhook",
         "operationId": "orders.payments.webhooks.receive",
@@ -1551,7 +1551,7 @@
     "/app/v3/api/after_sales/requests": {
       "get": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales requests list.",
         "operationId": "afterSales.requests.list",
@@ -1682,7 +1682,7 @@
       },
       "post": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales requests create.",
         "operationId": "afterSales.requests.create",
@@ -1816,7 +1816,7 @@
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}": {
       "get": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales requests retrieve.",
         "operationId": "afterSales.requests.retrieve",
@@ -1941,7 +1941,7 @@
       },
       "patch": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales requests update.",
         "operationId": "afterSales.requests.update",
@@ -2083,7 +2083,7 @@
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments": {
       "get": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales return Shipments list.",
         "operationId": "afterSales.returnShipments.list",
@@ -2214,7 +2214,7 @@
       },
       "post": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales return Shipments create.",
         "operationId": "afterSales.returnShipments.create",
@@ -2356,7 +2356,7 @@
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}/events": {
       "get": {
         "tags": [
-          "afterSales"
+          "order-afterSales"
         ],
         "summary": "After Sales events list.",
         "operationId": "afterSales.events.list",
@@ -2481,7 +2481,7 @@
     "/app/v3/api/fulfillments": {
       "get": {
         "tags": [
-          "fulfillments"
+          "order-fulfillments"
         ],
         "summary": "Fulfillments list.",
         "operationId": "fulfillments.list",
@@ -2605,7 +2605,7 @@
     "/app/v3/api/fulfillments/{fulfillmentId}": {
       "get": {
         "tags": [
-          "fulfillments"
+          "order-fulfillments"
         ],
         "summary": "Fulfillments retrieve.",
         "operationId": "fulfillments.retrieve",
@@ -2708,7 +2708,7 @@
     "/app/v3/api/shipments/{shipmentId}": {
       "get": {
         "tags": [
-          "shipments"
+          "order-shipments"
         ],
         "summary": "Shipments retrieve.",
         "operationId": "shipments.retrieve",
@@ -2811,7 +2811,7 @@
     "/app/v3/api/shipments/{shipmentId}/packages": {
       "get": {
         "tags": [
-          "shipments"
+          "order-shipments"
         ],
         "summary": "Shipments packages list.",
         "operationId": "shipments.packages.list",
@@ -2935,7 +2935,7 @@
     "/app/v3/api/shipments/{shipmentId}/tracking_events": {
       "get": {
         "tags": [
-          "shipments"
+          "order-shipments"
         ],
         "summary": "Shipments tracking Events list.",
         "operationId": "shipments.trackingEvents.list",
@@ -3059,7 +3059,7 @@
     "/app/v3/api/recharges/packages": {
       "get": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Recharges packages list.",
         "operationId": "recharges.packages.list",
@@ -3175,7 +3175,7 @@
     "/app/v3/api/recharges/settings": {
       "get": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Recharges settings retrieve.",
         "operationId": "recharges.settings.retrieve",
@@ -3269,7 +3269,7 @@
     "/app/v3/api/recharges/orders": {
       "get": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Recharges orders list.",
         "operationId": "recharges.orders.list",
@@ -3399,7 +3399,7 @@
       },
       "post": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Recharges orders create.",
         "operationId": "recharges.orders.create",
@@ -3508,7 +3508,7 @@
     "/app/v3/api/recharges/orders/{orderId}": {
       "get": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Recharges orders retrieve.",
         "operationId": "recharges.orders.retrieve",
@@ -3611,7 +3611,7 @@
     "/app/v3/api/recharges/orders/{orderId}/cancel": {
       "post": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Recharges orders cancel.",
         "operationId": "recharges.orders.cancel",
@@ -3728,7 +3728,7 @@
     "/app/v3/api/orders/coupon_redemptions": {
       "post": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Redeem a coupon into Token Bank credit or a quota-limited subscription.",
         "operationId": "orders.couponRedemptions.create",
@@ -3817,7 +3817,7 @@
     "/app/v3/api/memberships/orders": {
       "post": {
         "tags": [
-          "memberships"
+          "order-memberships"
         ],
         "summary": "Create or reuse a membership purchase-intent order.",
         "operationId": "memberships.orders.create",
@@ -3926,7 +3926,7 @@
     "/app/v3/api/recharges/plans": {
       "get": {
         "tags": [
-          "recharges"
+          "order-recharges"
         ],
         "summary": "Token Bank plans list.",
         "operationId": "recharges.plans.list",
@@ -4050,7 +4050,7 @@
     "/app/v3/api/orders/refund_requests": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Order refund requests list.",
         "operationId": "orders.refundRequests.list",
@@ -4172,7 +4172,7 @@
       },
       "post": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Order refund requests create.",
         "operationId": "orders.refundRequests.create",
@@ -4281,7 +4281,7 @@
     "/app/v3/api/orders/refund_requests/{refundRequestId}": {
       "get": {
         "tags": [
-          "orders"
+          "order-orders"
         ],
         "summary": "Order refund requests retrieve.",
         "operationId": "orders.refundRequests.retrieve",
@@ -4384,7 +4384,7 @@
     "/app/v3/api/withdrawals/requests": {
       "post": {
         "tags": [
-          "withdrawals"
+          "order-withdrawals"
         ],
         "summary": "Withdrawal requests create.",
         "operationId": "withdrawals.requests.create",
@@ -4493,7 +4493,7 @@
     "/app/v3/api/withdrawals/requests/{withdrawalRequestId}": {
       "get": {
         "tags": [
-          "withdrawals"
+          "order-withdrawals"
         ],
         "summary": "Withdrawal requests retrieve.",
         "operationId": "withdrawals.requests.retrieve",
@@ -5019,14 +5019,44 @@
           "detailAddress"
         ],
         "properties": {
-          "receiverName": {"type": "string", "minLength": 1, "maxLength": 100},
-          "receiverPhone": {"type": "string", "minLength": 1, "maxLength": 32},
-          "countryCode": {"type": "string", "minLength": 2, "maxLength": 3},
-          "province": {"type": "string", "minLength": 1, "maxLength": 100},
-          "city": {"type": "string", "minLength": 1, "maxLength": 100},
-          "district": {"type": "string", "maxLength": 100},
-          "detailAddress": {"type": "string", "minLength": 1, "maxLength": 500},
-          "postalCode": {"type": "string", "maxLength": 32}
+          "receiverName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "receiverPhone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "countryCode": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 3
+          },
+          "province": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "district": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "detailAddress": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "postalCode": {
+            "type": "string",
+            "maxLength": 32
+          }
         }
       },
       "CheckoutSession": {
@@ -5836,7 +5866,11 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["purchase", "renew", "upgrade"],
+            "enum": [
+              "purchase",
+              "renew",
+              "upgrade"
+            ],
             "description": "Membership lifecycle action. It participates in business purchase-intent identity."
           },
           "packageId": {
@@ -5915,38 +5949,84 @@
         "properties": {
           "action": {
             "type": "string",
-            "enum": ["purchase", "renew", "upgrade"]
+            "enum": [
+              "purchase",
+              "renew",
+              "upgrade"
+            ]
           },
-          "orderId": { "type": "string" },
-          "orderNo": { "type": "string" },
-          "outTradeNo": { "type": "string" },
-          "amount": { "type": "string" },
-          "currencyCode": { "type": "string" },
-          "packageId": { "type": "string" },
-          "packageName": { "type": "string" },
-          "durationDays": { "type": "integer", "format": "int64" },
-          "expiresAt": { "type": "string", "format": "date-time" },
-          "paymentMethod": { "type": "string" },
+          "orderId": {
+            "type": "string"
+          },
+          "orderNo": {
+            "type": "string"
+          },
+          "outTradeNo": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "packageName": {
+            "type": "string"
+          },
+          "durationDays": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paymentMethod": {
+            "type": "string"
+          },
           "paymentProduct": {
             "type": "string",
-            "enum": ["mobile_cashier_h5", "wechat_native", "alipay_native"]
+            "enum": [
+              "mobile_cashier_h5",
+              "wechat_native",
+              "alipay_native"
+            ]
           },
-          "qrCode": { "type": "string" },
+          "qrCode": {
+            "type": "string"
+          },
           "qrCodeType": {
             "type": "string",
-            "enum": ["cashier_url", "provider_native"]
+            "enum": [
+              "cashier_url",
+              "provider_native"
+            ]
           },
-          "paymentId": { "type": ["string", "null"] },
+          "paymentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "paymentParams": {
             "type": "object",
-            "additionalProperties": { "type": "string" }
+            "additionalProperties": {
+              "type": "string"
+            }
           },
-          "status": { "type": "string" },
+          "status": {
+            "type": "string"
+          },
           "reused": {
             "type": "boolean",
             "description": "True when an idempotency replay or an existing active purchase intent was returned."
           },
-          "cashierUrl": { "type": "string" }
+          "cashierUrl": {
+            "type": "string"
+          }
         }
       },
       "SdkWorkApiResponse": {
