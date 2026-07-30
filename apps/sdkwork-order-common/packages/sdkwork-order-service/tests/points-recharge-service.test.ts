@@ -25,6 +25,7 @@ function createAppService(overrides: {
   });
   return {
     appService: {
+      checkout: {} as SdkworkOrderAppService["checkout"],
       memberships: {} as SdkworkOrderAppService["memberships"],
       orders: {
         couponRedemptions: { create },

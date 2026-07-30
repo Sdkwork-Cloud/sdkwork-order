@@ -14,6 +14,7 @@ export function createOrderAppServiceMock(
   overrides: DeepPartial<SdkworkOrderAppService> = {},
 ): SdkworkOrderAppService {
   const base: SdkworkOrderAppService = {
+    checkout: createMissingCheckoutTree(),
     memberships: {} as SdkworkOrderAppService["memberships"],
     orders: createMissingOrdersTree(),
     recharges: createMissingRechargesTree(),
@@ -30,6 +31,19 @@ export function configureOrderServiceMockSession(
 
 export function resetOrderServiceMockSession(): void {
   configureSdkworkOrderSessionTokenProvider(null);
+}
+
+function createMissingCheckoutTree(): SdkworkOrderAppService["checkout"] {
+  const tree: Record<string, unknown> = {};
+  for (const method of [
+    "sessions.create",
+    "sessions.retrieve",
+    "sessions.quotes.create",
+    "sessions.orders.create",
+  ]) {
+    addMissingMethod(tree, method, "checkout");
+  }
+  return tree as unknown as SdkworkOrderAppService["checkout"];
 }
 
 function createMissingOrdersTree(): SdkworkOrderAppService["orders"] {

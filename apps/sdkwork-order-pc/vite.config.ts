@@ -11,6 +11,10 @@ const orderBackendSdkEntry = path.resolve(
   repoRoot,
   "sdks/sdkwork-order-backend-sdk/sdkwork-order-backend-sdk-typescript/src/index.ts",
 );
+const sdkCommonEntry = path.resolve(
+  repoRoot,
+  "../sdkwork-sdk-commons/sdkwork-sdk-common-typescript/src/index.ts",
+);
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, "");
@@ -22,6 +26,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: [
+        { find: "@sdkwork/sdk-common", replacement: sdkCommonEntry },
         { find: "@sdkwork/order-app-sdk", replacement: orderAppSdkEntry },
         { find: "@sdkwork/order-backend-sdk", replacement: orderBackendSdkEntry },
         {
