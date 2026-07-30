@@ -66,13 +66,13 @@
       "moduleCatalogRefs": [
         {
           "moduleId": "commerce",
-          "manifestRef": "../../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json",
+          "manifestRef": "../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json",
           "inheritPermissions": true,
           "inheritRoles": true
         },
         {
           "moduleId": "iam-kernel",
-          "manifestRef": "../../../../../../sdkwork-iam/iam/modules/iam-kernel/iam.module.manifest.json",
+          "manifestRef": "../../../../../sdkwork-iam/iam/modules/iam-kernel/iam.module.manifest.json",
           "inheritPermissions": true,
           "inheritRoles": false
         }
@@ -93,7 +93,7 @@
         "allowFrontendHintsWithoutServerDuplication": true
       },
       "applicationModule": {
-        "manifestRef": "../../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json"
+        "manifestRef": "../../../../../sdkwork-iam/iam/modules/commerce/iam.module.manifest.json"
       }
     },
     "sdkClients": [
