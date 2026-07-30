@@ -17,42 +17,42 @@
   ],
   "tags": [
     {
-      "name": "order-afterSales",
+      "name": "orderAfterSales",
       "description": "After Sales API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-checkout",
+      "name": "orderCheckout",
       "description": "Checkout API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-fulfillments",
+      "name": "orderFulfillments",
       "description": "Fulfillments API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-orders",
+      "name": "orderOrders",
       "description": "Orders API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-payments",
+      "name": "orderPayments",
       "description": "Payments API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-recharges",
+      "name": "orderRecharges",
       "description": "Recharges API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-memberships",
+      "name": "orderMemberships",
       "description": "Memberships API resources.",
       "x-sdk-nested-resource-surface": true
     },
     {
-      "name": "order-shipments",
+      "name": "orderShipments",
       "description": "Shipments API resources.",
       "x-sdk-nested-resource-surface": true
     }
@@ -61,7 +61,7 @@
     "/app/v3/api/checkout/sessions": {
       "post": {
         "tags": [
-          "order-checkout"
+          "orderCheckout"
         ],
         "summary": "Checkout sessions create.",
         "operationId": "checkout.sessions.create",
@@ -170,7 +170,7 @@
     "/app/v3/api/checkout/sessions/{checkoutSessionId}": {
       "get": {
         "tags": [
-          "order-checkout"
+          "orderCheckout"
         ],
         "summary": "Checkout sessions retrieve.",
         "operationId": "checkout.sessions.retrieve",
@@ -273,7 +273,7 @@
     "/app/v3/api/checkout/sessions/{checkoutSessionId}/quotes": {
       "post": {
         "tags": [
-          "order-checkout"
+          "orderCheckout"
         ],
         "summary": "Checkout sessions quotes create.",
         "operationId": "checkout.sessions.quotes.create",
@@ -380,7 +380,7 @@
     "/app/v3/api/checkout/sessions/{checkoutSessionId}/orders": {
       "post": {
         "tags": [
-          "order-checkout"
+          "orderCheckout"
         ],
         "summary": "Checkout sessions orders create.",
         "operationId": "checkout.sessions.orders.create",
@@ -487,7 +487,7 @@
     "/app/v3/api/orders": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders list.",
         "operationId": "orders.list",
@@ -611,7 +611,7 @@
     "/app/v3/api/orders/{orderId}": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders retrieve.",
         "operationId": "orders.retrieve",
@@ -714,7 +714,7 @@
     "/app/v3/api/orders/{orderId}/payments": {
       "post": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders payments create.",
         "operationId": "orders.payments.create",
@@ -829,7 +829,7 @@
       },
       "get": {
         "tags": [
-          "order-payments"
+          "orderPayments"
         ],
         "summary": "Payments order Payments list.",
         "operationId": "payments.orderPayments.list",
@@ -953,7 +953,7 @@
     "/app/v3/api/orders/{orderId}/events": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders events list.",
         "operationId": "orders.events.list",
@@ -1077,7 +1077,7 @@
     "/app/v3/api/orders/{orderId}/cancellations": {
       "post": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders cancellations create.",
         "operationId": "orders.cancellations.create",
@@ -1194,7 +1194,7 @@
     "/app/v3/api/orders/{orderId}/payment_success": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders payment Success retrieve.",
         "operationId": "orders.paymentSuccess.retrieve",
@@ -1297,7 +1297,7 @@
     "/app/v3/api/orders/statistics": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders statistics retrieve.",
         "operationId": "orders.statistics.retrieve",
@@ -1391,7 +1391,7 @@
     "/app/v3/api/orders/{orderId}/status": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Orders status retrieve.",
         "operationId": "orders.status.retrieve",
@@ -1494,7 +1494,7 @@
     "/app/v3/api/orders/payments/webhooks/{providerCode}": {
       "post": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Receive PSP payment webhook",
         "operationId": "orders.payments.webhooks.receive",
@@ -1551,7 +1551,7 @@
     "/app/v3/api/after_sales/requests": {
       "get": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales requests list.",
         "operationId": "afterSales.requests.list",
@@ -1682,7 +1682,7 @@
       },
       "post": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales requests create.",
         "operationId": "afterSales.requests.create",
@@ -1816,7 +1816,7 @@
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}": {
       "get": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales requests retrieve.",
         "operationId": "afterSales.requests.retrieve",
@@ -1941,7 +1941,7 @@
       },
       "patch": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales requests update.",
         "operationId": "afterSales.requests.update",
@@ -2083,7 +2083,7 @@
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}/return_shipments": {
       "get": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales return Shipments list.",
         "operationId": "afterSales.returnShipments.list",
@@ -2214,7 +2214,7 @@
       },
       "post": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales return Shipments create.",
         "operationId": "afterSales.returnShipments.create",
@@ -2356,7 +2356,7 @@
     "/app/v3/api/after_sales/requests/{afterSalesRequestId}/events": {
       "get": {
         "tags": [
-          "order-afterSales"
+          "orderAfterSales"
         ],
         "summary": "After Sales events list.",
         "operationId": "afterSales.events.list",
@@ -2481,7 +2481,7 @@
     "/app/v3/api/fulfillments": {
       "get": {
         "tags": [
-          "order-fulfillments"
+          "orderFulfillments"
         ],
         "summary": "Fulfillments list.",
         "operationId": "fulfillments.list",
@@ -2605,7 +2605,7 @@
     "/app/v3/api/fulfillments/{fulfillmentId}": {
       "get": {
         "tags": [
-          "order-fulfillments"
+          "orderFulfillments"
         ],
         "summary": "Fulfillments retrieve.",
         "operationId": "fulfillments.retrieve",
@@ -2708,7 +2708,7 @@
     "/app/v3/api/shipments/{shipmentId}": {
       "get": {
         "tags": [
-          "order-shipments"
+          "orderShipments"
         ],
         "summary": "Shipments retrieve.",
         "operationId": "shipments.retrieve",
@@ -2811,7 +2811,7 @@
     "/app/v3/api/shipments/{shipmentId}/packages": {
       "get": {
         "tags": [
-          "order-shipments"
+          "orderShipments"
         ],
         "summary": "Shipments packages list.",
         "operationId": "shipments.packages.list",
@@ -2935,7 +2935,7 @@
     "/app/v3/api/shipments/{shipmentId}/tracking_events": {
       "get": {
         "tags": [
-          "order-shipments"
+          "orderShipments"
         ],
         "summary": "Shipments tracking Events list.",
         "operationId": "shipments.trackingEvents.list",
@@ -3059,7 +3059,7 @@
     "/app/v3/api/recharges/packages": {
       "get": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges packages list.",
         "operationId": "recharges.packages.list",
@@ -3175,7 +3175,7 @@
     "/app/v3/api/recharges/settings": {
       "get": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges settings retrieve.",
         "operationId": "recharges.settings.retrieve",
@@ -3269,7 +3269,7 @@
     "/app/v3/api/recharges/orders": {
       "get": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders list.",
         "operationId": "recharges.orders.list",
@@ -3399,7 +3399,7 @@
       },
       "post": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders create.",
         "operationId": "recharges.orders.create",
@@ -3508,7 +3508,7 @@
     "/app/v3/api/recharges/orders/{orderId}": {
       "get": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders retrieve.",
         "operationId": "recharges.orders.retrieve",
@@ -3611,7 +3611,7 @@
     "/app/v3/api/recharges/orders/{orderId}/cancel": {
       "post": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Recharges orders cancel.",
         "operationId": "recharges.orders.cancel",
@@ -3728,7 +3728,7 @@
     "/app/v3/api/orders/coupon_redemptions": {
       "post": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Redeem a coupon into Token Bank credit or a quota-limited subscription.",
         "operationId": "orders.couponRedemptions.create",
@@ -3817,7 +3817,7 @@
     "/app/v3/api/memberships/orders": {
       "post": {
         "tags": [
-          "order-memberships"
+          "orderMemberships"
         ],
         "summary": "Create or reuse a membership purchase-intent order.",
         "operationId": "memberships.orders.create",
@@ -3926,7 +3926,7 @@
     "/app/v3/api/recharges/plans": {
       "get": {
         "tags": [
-          "order-recharges"
+          "orderRecharges"
         ],
         "summary": "Token Bank plans list.",
         "operationId": "recharges.plans.list",
@@ -4050,7 +4050,7 @@
     "/app/v3/api/orders/refund_requests": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Order refund requests list.",
         "operationId": "orders.refundRequests.list",
@@ -4172,7 +4172,7 @@
       },
       "post": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Order refund requests create.",
         "operationId": "orders.refundRequests.create",
@@ -4281,7 +4281,7 @@
     "/app/v3/api/orders/refund_requests/{refundRequestId}": {
       "get": {
         "tags": [
-          "order-orders"
+          "orderOrders"
         ],
         "summary": "Order refund requests retrieve.",
         "operationId": "orders.refundRequests.retrieve",
@@ -4384,7 +4384,7 @@
     "/app/v3/api/withdrawals/requests": {
       "post": {
         "tags": [
-          "order-withdrawals"
+          "orderWithdrawals"
         ],
         "summary": "Withdrawal requests create.",
         "operationId": "withdrawals.requests.create",
@@ -4493,7 +4493,7 @@
     "/app/v3/api/withdrawals/requests/{withdrawalRequestId}": {
       "get": {
         "tags": [
-          "order-withdrawals"
+          "orderWithdrawals"
         ],
         "summary": "Withdrawal requests retrieve.",
         "operationId": "withdrawals.requests.retrieve",
