@@ -53,13 +53,15 @@ Full topology: `docs/architecture/commerce/COMMERCE_CHECKOUT_ARCHITECTURE.md`.
 
 | Flow | Order operations | Payment |
 | --- | --- | --- |
-| Product checkout | `checkout.sessions.create` → `checkout.sessions.orders.create` → `orders.payments.create` | `@sdkwork/payment-app-sdk`; open `paymentParams.cashierUrl` |
+| Physical product checkout | `checkout.sessions.create` → `checkout.sessions.quotes.create` → `checkout.sessions.orders.create` → `orders.payments.create` | Use the authoritative quote, then open `paymentParams.cashierUrl`; Order reserves inventory at order placement |
 | Points recharge | `recharges.orders.create` → `orders.payments.create` | Same; settlement via order webhook + in-process saga |
 | Membership purchase | `memberships.orders.create` → `orders.payments.create` | Same; settlement activates subscription via membership fulfillment port |
 
 PSP notify URL (production): `POST /app/v3/api/orders/payments/webhooks/{providerCode}` on the **order gateway**.
 
 Operator settlement replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations` (permission `commerce.orders.fulfill`).
+
+The reusable composed frontend service is `createSdkworkPhysicalPurchaseService` from `@sdkwork/order-service`. `prepareCheckout` validates client input and calls the generated checkout SDK for session plus quote; `placeOrder` submits the quoted session. Buyer identity comes from the authenticated server context, not a request-body owner field. The current physical-order contract accepts one merchant and one store per order.
 
 Webhook settlement carries the exact payment attempt identity through Payment and Order. The order-only operator replay fails with `409` when multiple attempts make the target ambiguous; replay the exact Payment webhook event for that case. A successful late payment preserves a terminal Order status and records the Order-owned late-payment audit event once.
 

@@ -27,7 +27,9 @@ async fn sqlite_close_management_order_is_idempotent_when_already_closed() {
 #[tokio::test]
 async fn postgres_close_management_order_is_idempotent_when_already_closed() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
-        eprintln!("SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres close idempotency test");
+        eprintln!(
+            "SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres close idempotency test"
+        );
         return;
     };
     seed_pending_order_postgres(&pool).await;

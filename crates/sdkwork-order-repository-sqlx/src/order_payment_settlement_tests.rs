@@ -125,7 +125,9 @@ async fn sqlite_late_payment_preserves_terminal_status_and_is_idempotent() {
 #[tokio::test]
 async fn postgres_late_payment_preserves_terminal_status_and_is_idempotent() {
     let Some(pool) = order_points_recharge_e2e_postgres_pool_from_env().await else {
-        eprintln!("SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres late-payment test");
+        eprintln!(
+            "SDKWORK_DATABASE_TEST_POSTGRES_URL is unset; skipping postgres late-payment test"
+        );
         return;
     };
 

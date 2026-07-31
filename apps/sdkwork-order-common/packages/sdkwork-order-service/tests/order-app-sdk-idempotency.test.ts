@@ -2,6 +2,7 @@ import { createHash, webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createClient, SdkworkAppClient } from '@sdkwork/order-app-sdk';
+import { SdkworkOrderBackendClient } from '@sdkwork/order-backend-sdk';
 
 const originalFetch = globalThis.fetch;
 const originalCrypto = globalThis.crypto;
@@ -23,6 +24,21 @@ afterEach(() => {
 });
 
 describe('@sdkwork/order-app-sdk idempotent request fingerprints', () => {
+  it('keeps composed resource aliases on the generated API instances', () => {
+    const appClient = new SdkworkAppClient({ baseUrl: 'https://orders.example.test' });
+    const backendClient = new SdkworkOrderBackendClient({ baseUrl: 'https://orders.example.test' });
+
+    expect(appClient.checkout).toBe(appClient.orderCheckout.checkout);
+    expect(appClient.memberships).toBe(appClient.orderMemberships.memberships);
+    expect(appClient.orders).toBe(appClient.orderOrders.orders);
+    expect(appClient.recharges).toBe(appClient.orderRecharges.recharges);
+    expect(appClient.withdrawals).toBe(appClient.orderWithdrawals.withdrawals);
+    expect(backendClient.afterSales).toBe(backendClient.orderAdminAfterSales.afterSales);
+    expect(backendClient.backend).toBe(backendClient.orderAdminBackend.backend);
+    expect(backendClient.orders).toBe(backendClient.orderAdminOrders.orders);
+    expect(backendClient.shipments).toBe(backendClient.orderAdminShipments.shipments);
+  });
+
   it('hashes the exact membership order request body sent over the wire', async () => {
     const requests: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

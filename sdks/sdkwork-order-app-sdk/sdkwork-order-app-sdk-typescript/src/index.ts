@@ -19,8 +19,27 @@ export * from '../generated/server-openapi/src/http';
 export * from '../generated/server-openapi/src/auth';
 
 export class SdkworkAppClient extends GeneratedSdkworkAppClient {
+  public readonly afterSales: GeneratedSdkworkAppClient["orderAfterSales"]["afterSales"];
+  public readonly checkout: GeneratedSdkworkAppClient["orderCheckout"]["checkout"];
+  public readonly fulfillments: GeneratedSdkworkAppClient["orderFulfillments"]["fulfillments"];
+  public readonly memberships: GeneratedSdkworkAppClient["orderMemberships"]["memberships"];
+  public readonly orders: GeneratedSdkworkAppClient["orderOrders"]["orders"];
+  public readonly payments: GeneratedSdkworkAppClient["orderPayments"]["payments"];
+  public readonly recharges: GeneratedSdkworkAppClient["orderRecharges"]["recharges"];
+  public readonly shipments: GeneratedSdkworkAppClient["orderShipments"]["shipments"];
+  public readonly withdrawals: GeneratedSdkworkAppClient["orderWithdrawals"]["withdrawals"];
+
   constructor(config: SdkworkAppConfig) {
     super(config);
+    this.afterSales = this.orderAfterSales.afterSales;
+    this.checkout = this.orderCheckout.checkout;
+    this.fulfillments = this.orderFulfillments.fulfillments;
+    this.memberships = this.orderMemberships.memberships;
+    this.orders = this.orderOrders.orders;
+    this.payments = this.orderPayments.payments;
+    this.recharges = this.orderRecharges.recharges;
+    this.shipments = this.orderShipments.shipments;
+    this.withdrawals = this.orderWithdrawals.withdrawals;
     (this.http as unknown as RequestInterceptorRegistrar)
       .addRequestInterceptor(applySdkworkIdempotencyRequestFingerprint);
   }

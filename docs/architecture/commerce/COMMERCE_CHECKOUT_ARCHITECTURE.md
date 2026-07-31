@@ -2,7 +2,7 @@
 
 Status: active  
 Owner: SDKWork maintainers  
-Updated: 2026-07-12
+Updated: 2026-07-30
 Machine contracts: `specs/commerce-checkout-topology.spec.json`, `specs/commerce-payment-webhook.spec.json`
 
 ## 1. Capability Boundaries
@@ -11,8 +11,13 @@ Machine contracts: `specs/commerce-checkout-topology.spec.json`, `specs/commerce
 | --- | --- | --- |
 | **Order** | `sdkwork-order` | Unified order center: checkout, pay orchestration, **PSP webhook ingestion**, payment settlement, fulfillment sagas |
 | **Payment** | `sdkwork-payment` | Payment executor: intents, attempts, provider channels, refunds; **webhook event persistence via port only** |
+| **Merchandise** | `sdkwork-merchandise` | Authoritative SKU/SPU, sale state, and price lookup |
+| **Shop** | `sdkwork-shop` | Store, merchant, review, operating-state, and ownership validation |
+| **IAM** | `sdkwork-iam` | Authenticated buyer identity; client-supplied owner identity is never trusted |
+| **Inventory** | `sdkwork-inventory` | Physical stock reservation, consumption, and release through the inventory port |
+| **Fulfillment** | `sdkwork-logistics` / host adapter | Shipment-order creation after confirmed payment |
 
-**Dependency direction:** `sdkwork-order` → `sdkwork-payment` (in-process stores and `sdkwork-payment-providers`). **Payment MUST NOT depend on Order** (no HTTP callbacks, no order service imports in route crates).
+**Dependency direction:** Order orchestrates one-way ports to the domain owners. Payment MUST NOT depend on Order (no HTTP callbacks and no order service imports in payment route crates). Account does not participate in an ordinary PSP-funded physical-goods purchase unless a future flow explicitly adds balance payment, points deduction, or an account hold.
 
 ## 2. End-to-End Flows
 
@@ -21,22 +26,38 @@ Machine contracts: `specs/commerce-checkout-topology.spec.json`, `specs/commerce
 ```mermaid
 sequenceDiagram
     participant Client
+    participant IAM
     participant Order as order-app-api
+    participant Merchandise
+    participant Shop
+    participant Inventory
     participant Payment as payment (in-process port)
     participant Cashier as Cashier UI
     participant Fulfill as fulfillment/shipment
 
     Client->>Order: checkout.sessions.create
+    Order->>IAM: use trusted authenticated subject
+    Order->>Merchandise: resolve SKU/SPU, sale state, price
+    Order->>Shop: validate merchant, store, review, operating state
+    Order->>Order: persist immutable item/store/address snapshot
+    Client->>Order: checkout.sessions.quotes.create
+    Order-->>Client: authoritative quote
     Client->>Order: checkout.sessions.orders.create
+    Order->>Inventory: reserve stock (physical-goods:reserve:{orderId})
+    Order->>Order: persist pending_payment order
     Client->>Order: orders.payments.create
     Order->>Payment: pay_owner_order
     Payment-->>Client: paymentParams.cashierUrl
     Client->>Cashier: open cashierUrl
     Cashier->>Order: PSP webhook POST .../orders/payments/webhooks/{provider}
     Order->>Payment: ingest webhook (port)
-    Order->>Order: settle + fulfill (subject=product)
-    Order->>Fulfill: shipment / virtual entitlement
+    Order->>Order: settle_owner_order_after_payment_success
+    Order->>Inventory: consume reservation idempotently
+    Order->>Fulfill: create fulfillment (physical-goods:fulfill:{orderId})
+    Order->>Order: status awaiting_shipment
 ```
+
+The first production slice intentionally accepts one merchant and one store per order. Duplicate SKU lines are rejected before persistence. Order stores immutable buyer-visible and settlement-critical snapshots (address, SKU/SPU, unit price, store, and merchant); later catalog or store edits do not rewrite an existing order.
 
 ### 2.2 Points recharge
 
@@ -72,7 +93,7 @@ sequenceDiagram
     Order->>Order: in-process settlement saga
 ```
 
-Manual operator replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations`.
+Manual operator replay: `POST /backend/v3/api/orders/{orderId}/payment_confirmations`. It queries the original provider account, validates provider success, merchant order number, amount, and currency, and then enters the same `settle_owner_order_after_payment_success` function as the webhook. Provider I/O happens before the short payment confirmation transaction. Order-only replay returns conflict when multiple attempts make the target ambiguous.
 
 ### 2.4 Membership purchase
 
@@ -163,9 +184,31 @@ PSP notify URLs MUST target the **order gateway**, not payment:
 
 ## 6. Idempotency and Pagination
 
-- Pay, webhook settlement, and fulfillment commands require `requestNo` + `idempotencyKey` headers per OpenAPI where applicable.
+- App write commands require `Idempotency-Key`. The server binds the key to a canonical request fingerprint; same-key/same-command replays return the durable result, while same-key/different-command replays fail with conflict.
+- Provider webhook events are deduplicated by the provider event identity and remain correlated to the exact persisted payment attempt. Webhook and active-query recovery converge on the same payment-success settlement function.
+- Inventory uses stable order-scoped identities: `physical-goods:reserve:{orderId}` and `physical-goods:release:{orderId}`. Fulfillment uses `physical-goods:fulfill:{orderId}`. Consumption is replay-safe against the reservation identity.
+- Inventory replay verifies every merchant, SKU, quantity, key, and reservation state; it does not treat a matching row count as equivalence. Duplicate consume increments sales once, duplicate release restores stock once, and consumed stock cannot be released.
+- PostgreSQL serializes reservation for the same tenant and order with a transaction advisory lock. Inventory mutations match tenant, organization, SKU, warehouse, and fulfillment node so a replay cannot update another stock record.
 - List endpoints use `SdkWorkListQuery` (`page`, `page_size`; default 20, max 200).
 - Success envelope: `SdkWorkApiResponse` with `code: 0`, `data`, `traceId`.
+
+### 6.1 Transaction and compensation boundaries
+
+There is no global transaction across Merchandise, Shop, Inventory, Order, and Payment. Commercial consistency is achieved with module-local database transactions, stable idempotency identities, explicit state machines, compensation, and retry:
+
+1. Merchandise and Shop are authoritative validations; Order persists their immutable snapshot in its own transaction.
+2. Inventory reservation is idempotent and is released with `physical-goods:release:{orderId}` when a pending physical order is cancelled.
+3. Payment confirmation conditionally updates the exact attempt and intent in a short payment transaction; Order settlement is independently idempotent.
+4. Payment success consumes reserved inventory and creates fulfillment. If fulfillment submission fails after payment, the order remains recoverable: a duplicate webhook or active query safely re-enters settlement, observes already-consumed inventory, and retries the missing fulfillment.
+5. A successful payment arriving after the order became terminal records the payment and one late-payment audit event but does not consume inventory, recreate stock, or create fulfillment. It enters `late_payment_requires_recovery` for controlled operator handling.
+
+### 6.2 Fail-closed rules
+
+- Physical checkout fails when Merchandise or Shop cannot prove sale eligibility and ownership.
+- Physical settlement fails closed when the production inventory or fulfillment port is not configured.
+- Provider status, provider account, merchant order number, amount, or currency mismatch never advances the order.
+- Cancellation closes active payment work and uses the unified order/payment/inventory cancellation flow; repeated cancellation and release are safe.
+- A PSP success response is not inferred from an HTTP 2xx alone. Only an explicitly recognized provider success status is eligible for settlement.
 
 ## 7. Related Specs
 
