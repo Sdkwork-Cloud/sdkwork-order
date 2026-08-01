@@ -370,7 +370,7 @@ async fn load_membership_package(
 ) -> Result<MembershipPackageCatalog, CommerceServiceError> {
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(&catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC))
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)))
             .bind(&command.package_id)
             .fetch_optional(&mut **tx)
             .await
@@ -385,7 +385,7 @@ async fn load_membership_package(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(&catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC))
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_MEMBERSHIP_PACKAGE_BY_EXTERNAL_ID_PUBLIC)))
                 .bind(&command.package_id)
                 .fetch_optional(&mut **tx)
                 .await

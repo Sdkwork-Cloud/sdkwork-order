@@ -1,6 +1,10 @@
 import { useTranslation } from "react-i18next";
 import React from "react";
-import type { Order } from "../services/OrderService";
+import { showToast } from "@sdkwork/ui-mobile-react";
+import {
+  formatAmountCny,
+  type Order,
+} from "../services/OrderService";
 
 interface OrderInfoCardsProps {
   order: Order;
@@ -8,52 +12,104 @@ interface OrderInfoCardsProps {
 
 export const OrderInfoCards: React.FC<OrderInfoCardsProps> = ({ order }) => {
   const { t } = useTranslation();
-return (
+  const payable = order.paidAmount ?? order.totalAmount;
+
+  const copyOrderId = async () => {
+    try {
+      await navigator.clipboard.writeText(order.orderSn);
+      showToast(t("orders.copy_success", "复制成功"));
+    } catch {
+      showToast(t("orders.copy_failed", "复制失败"));
+    }
+  };
+
+  return (
     <>
       <div className="bg-white dark:bg-[#1E1E1E] rounded-xl p-4 shadow-sm flex flex-col gap-3">
-        <h3 className="text-[14px] font-bold text-text-main mb-1">{t('orders.auto_40bc17e1', '订单信息')}</h3>
+        <h3 className="text-[14px] font-bold text-text-main mb-1">
+          {t("orders.order_info", "订单信息")}
+        </h3>
         <div className="flex items-center justify-between">
-          <span className="text-[13px] text-text-sub">{t('orders.auto_40c1c2d4', '订单编号')}</span>
+          <span className="text-[13px] text-text-sub">
+            {t("orders.order_no", "订单编号")}
+          </span>
           <div className="flex items-center gap-2">
-            <span className="text-[13px] text-text-main">{order.id}</span>
-            <span className="text-[11px] text-primary-blue border border-primary-blue/30 px-1.5 py-0.5 rounded cursor-pointer active:bg-primary-blue/10">{t('orders.auto_b1ac9', '复制')}</span>
+            <span className="text-[13px] text-text-main">{order.orderSn}</span>
+            <button
+              onClick={copyOrderId}
+              className="text-[11px] text-primary-blue border border-primary-blue/30 px-1.5 py-0.5 rounded cursor-pointer active:bg-primary-blue/10"
+            >
+              {t("orders.copy", "复制")}
+            </button>
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-[13px] text-text-sub">{t('orders.auto_26c42b3d', '创建时间')}</span>
-          <span className="text-[13px] text-text-main">{order.createTime}</span>
+          <span className="text-[13px] text-text-sub">
+            {t("orders.create_time", "创建时间")}
+          </span>
+          <span className="text-[13px] text-text-main">{order.createdAt}</span>
         </div>
         {order.payTime && (
           <div className="flex items-center justify-between">
-            <span className="text-[13px] text-text-sub">{t('orders.auto_2576a4a4', '付款时间')}</span>
+            <span className="text-[13px] text-text-sub">
+              {t("orders.pay_time", "付款时间")}
+            </span>
             <span className="text-[13px] text-text-main">{order.payTime}</span>
           </div>
         )}
-        {order.shipTime && (
+        {order.expireTime && (
           <div className="flex items-center justify-between">
-            <span className="text-[13px] text-text-sub">{t('orders.auto_28389cb4', '发货时间')}</span>
-            <span className="text-[13px] text-text-main">{order.shipTime}</span>
+            <span className="text-[13px] text-text-sub">
+              {t("orders.expire_time", "关闭时间")}
+            </span>
+            <span className="text-[13px] text-text-main">{order.expireTime}</span>
+          </div>
+        )}
+        {order.outTradeNo && (
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-text-sub">
+              {t("orders.out_trade_no", "商户单号")}
+            </span>
+            <span className="text-[13px] text-text-main">{order.outTradeNo}</span>
+          </div>
+        )}
+        {order.paymentMethod && (
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-text-sub">
+              {t("orders.payment_method", "支付方式")}
+            </span>
+            <span className="text-[13px] text-text-main">
+              {t(`orders.payment_method_${order.paymentMethod}`, order.paymentMethod)}
+            </span>
           </div>
         )}
       </div>
 
       <div className="bg-white dark:bg-[#1E1E1E] rounded-xl p-4 shadow-sm flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-[13px] text-text-sub">{t('orders.auto_280d7b97', '商品总价')}</span>
+          <span className="text-[13px] text-text-sub">
+            {t("orders.goods_total", "商品总价")}
+          </span>
           <span className="text-[13px] text-text-main">
-            ¥{order.totalAmount.toFixed(2)}
+            {formatAmountCny(order.totalAmount, order.currencyCode)}
           </span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] text-text-sub">{t('orders.auto_11f769', '运费')}</span>
-          <span className="text-[13px] text-text-main">
-            ¥{order.shippingFee.toFixed(2)}
-          </span>
-        </div>
+        {order.discountAmount && Number(order.discountAmount) > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-text-sub">
+              {t("orders.discount", "优惠金额")}
+            </span>
+            <span className="text-[13px] text-text-main text-[#FA5151]">
+              -{formatAmountCny(order.discountAmount, order.currencyCode)}
+            </span>
+          </div>
+        )}
         <div className="pt-3 border-t border-border-color/50 flex items-center justify-between">
-          <span className="text-[14px] font-bold text-text-main">{t('orders.auto_161e384', '实付款')}</span>
+          <span className="text-[14px] font-bold text-text-main">
+            {t("orders.payable", "实付款")}
+          </span>
           <span className="text-[18px] font-bold text-[#FA5151]">
-            ¥{(order.totalAmount + order.shippingFee).toFixed(2)}
+            {formatAmountCny(payable, order.currencyCode)}
           </span>
         </div>
       </div>

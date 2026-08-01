@@ -28,15 +28,29 @@
   "contracts": {
     "layerRole": "frontend-feature",
     "publicExports": ["."],
-    "providedPorts": [{ "name": "orderMobileReactOrders", "export": "." }],
-    "requiredPorts": [{ "name": "mobileReactUi", "package": "@sdkwork/ui-mobile-react", "export": "." }],
-    "runtimeEntrypoints": [],
-    "routeManifest": null,
-    "sdkClients": [],
-    "sdkDependencies": [],
+    "providedPorts": [
+      { "name": "orderMobileReactOrders", "export": "." }
+    ],
+    "requiredPorts": [
+      { "name": "mobileReactUi", "package": "@sdkwork/ui-mobile-react", "export": "." },
+      { "name": "orderAppSdk", "package": "@sdkwork/order-app-sdk", "export": "." },
+      { "name": "sdkworkUtils", "package": "@sdkwork/utils", "export": "." }
+    ],
+    "runtimeEntrypoints": [
+      "OrderCenter",
+      "OrderDetail",
+      "CashierPage",
+      "VoucherCodePage",
+      "configureOrderMobileRuntime"
+    ],
+    "routeManifest": "src/routes.ts",
+    "sdkClients": ["SdkworkAppClient"],
+    "sdkDependencies": [
+      { "workspace": "sdkwork-order-app-sdk", "role": "order-app-capability", "required": true }
+    ],
     "dependencyApiExports": [],
     "events": [],
-    "configKeys": []
+    "configKeys": ["SDKWORK_ORDER_APP_API_BASE_URL"]
   },
   "verification": { "commands": ["pnpm --filter @sdkwork/im-h5 typecheck"] }
 }

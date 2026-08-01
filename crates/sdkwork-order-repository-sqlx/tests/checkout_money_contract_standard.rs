@@ -235,7 +235,7 @@ fn assert_checkout_amounts(original: &str, discount: &str, payable: &str) {
 async fn checkout_test_pool() -> SqlitePool {
     let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
     for statement in CHECKOUT_TEST_SCHEMA {
-        sqlx::query(statement)
+        sqlx::query(sqlx::AssertSqlSafe(statement))
             .execute(&pool)
             .await
             .unwrap_or_else(|error| {

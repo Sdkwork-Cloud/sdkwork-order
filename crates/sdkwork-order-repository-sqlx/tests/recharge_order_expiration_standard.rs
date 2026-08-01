@@ -104,7 +104,7 @@ async fn seed_recharge_package(pool: &SqlitePool) {
         "ALTER TABLE commerce_payment_attempt ADD COLUMN out_trade_no TEXT",
         "ALTER TABLE commerce_payment_attempt ADD COLUMN provider_code TEXT",
     ] {
-        sqlx::query(statement)
+        sqlx::query(sqlx::AssertSqlSafe(statement))
             .execute(pool)
             .await
             .unwrap_or_else(|error| panic!("recharge payment test column failed: {error}"));

@@ -1,19 +1,24 @@
-import { ReceiptText } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
+import { PageLayout } from "@sdkwork/ui-mobile-react";
 
-import { CapabilityUnavailablePage } from "@sdkwork/ui-mobile-react";
+import { VoucherRedeemModal } from "../components/VoucherRedeemModal";
 
 export function VoucherCodePage() {
   const { t } = useTranslation("orders");
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(true);
 
   return (
-    <CapabilityUnavailablePage
-      icon={ReceiptText}
-      message={t("unavailable")}
-      onBack={() => navigate(-1)}
-      title={t("title")}
-    />
+    <PageLayout title={t("voucher_title", "券码核销")}>
+      <VoucherRedeemModal
+        isOpen={isOpen}
+        onClose={() => {
+          setIsOpen(false);
+          navigate(-1);
+        }}
+      />
+    </PageLayout>
   );
 }

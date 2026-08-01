@@ -835,7 +835,7 @@ mod tests {
             )
             "#,
         ] {
-            sqlx::query(statement)
+            sqlx::query(sqlx::AssertSqlSafe(statement))
                 .execute(&pool)
                 .await
                 .expect("create webhook scope test table");

@@ -460,7 +460,7 @@ async fn mutate_stock_sqlite(
     };
     let warehouse = optional_text_sqlite(row, "warehouse_id");
     let fulfillment_node = optional_text_sqlite(row, "fulfillment_node_id");
-    let result = sqlx::query(sql)
+    let result = sqlx::query(sqlx::AssertSqlSafe(sql))
         .bind(quantity)
         .bind(quantity)
         .bind(now_string())
@@ -505,7 +505,7 @@ async fn mutate_stock_postgres(
     } else {
         "UPDATE commerce_inventory_stock SET reserved_quantity = reserved_quantity - $1, sold_quantity = sold_quantity + $1, version = version + 1, updated_at = $2 WHERE tenant_id = $3 AND organization_id = $4 AND sku_id = $5 AND ((warehouse_id = $6) OR (warehouse_id IS NULL AND $6 IS NULL)) AND ((fulfillment_node_id = $7) OR (fulfillment_node_id IS NULL AND $7 IS NULL)) AND reserved_quantity >= $1"
     };
-    let result = sqlx::query(sql)
+    let result = sqlx::query(sqlx::AssertSqlSafe(sql))
         .bind(quantity)
         .bind(now_string())
         .bind(text_postgres(row, "tenant_id"))

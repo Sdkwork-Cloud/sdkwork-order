@@ -25,18 +25,14 @@ const [code, setCode] = useState("");
       return;
     }
     
-    // Simulate API call
-    try {
-      const res = await OrderService.redeemVoucher(code.trim().toUpperCase());
-      if (res.success) {
-        showToast(t('orders.auto_fn_319b9457', '核销成功'));
-        onClose();
-        setCode("");
-      } else {
-        showToast(res.message || "券码无效");
-      }
-    } catch (e) {
-      showToast(t('orders.auto_fn_n5e0eded1', '核销失败，请重试'));
+    // Redeem through the canonical Order App SDK coupon redemption port.
+    const res = await OrderService.redeemVoucher(code.trim().toUpperCase());
+    if (res.success) {
+      showToast(t('orders.auto_fn_319b9457', '核销成功'));
+      onClose();
+      setCode("");
+    } else {
+      showToast(res.message || "券码无效");
     }
   };
 

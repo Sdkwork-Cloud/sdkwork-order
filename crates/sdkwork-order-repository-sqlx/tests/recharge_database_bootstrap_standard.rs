@@ -226,7 +226,7 @@ async fn apply_sql(pool: &SqlitePool, source: &str) {
         .map(str::trim)
         .filter(|statement| !statement.is_empty())
     {
-        sqlx::query(statement)
+        sqlx::query(sqlx::AssertSqlSafe(statement))
             .execute(pool)
             .await
             .unwrap_or_else(|error| panic!("failed to execute `{statement}`: {error}"));

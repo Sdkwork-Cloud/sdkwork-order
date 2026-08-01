@@ -574,7 +574,7 @@ impl SqliteCommerceRechargeStore {
             )
             .await?;
         let organization_id = normalize_organization_scope(query.organization_id.as_deref());
-        let rows = sqlx::query(&catalog_sql(LIST_RECHARGE_PACKAGES_PAGINATED))
+        let rows = sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LIST_RECHARGE_PACKAGES_PAGINATED)))
             .bind(&query.tenant_id)
             .bind(&organization_id)
             .bind(current_query_timestamp())
@@ -1381,7 +1381,7 @@ async fn load_recharge_settings_from_pool(
     }
 
     let row = if tenant_id.trim().is_empty() {
-        sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
             .bind(RECHARGE_RULE_NO)
             .fetch_optional(pool)
             .await
@@ -1397,7 +1397,7 @@ async fn load_recharge_settings_from_pool(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
                 .bind(RECHARGE_RULE_NO)
                 .fetch_optional(pool)
                 .await
@@ -1418,7 +1418,7 @@ async fn load_recharge_settings_for_transaction(
     }
 
     let row = if tenant_id.trim().is_empty() {
-        sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
             .bind(RECHARGE_RULE_NO)
             .fetch_optional(&mut **tx)
             .await
@@ -1434,7 +1434,7 @@ async fn load_recharge_settings_for_transaction(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(&catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC))
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_SETTINGS_PUBLIC)))
                 .bind(RECHARGE_RULE_NO)
                 .fetch_optional(&mut **tx)
                 .await
@@ -1570,7 +1570,7 @@ async fn load_recharge_method(
 ) -> Result<RechargeMethod, CommerceServiceError> {
     let requested_method = normalize_method_key(&command.method);
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
-    let row = sqlx::query(&catalog_sql(LOAD_RECHARGE_METHOD))
+    let row = sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_METHOD)))
         .bind(&command.tenant_id)
         .bind(&organization_id)
         .bind(&requested_method)
@@ -1602,7 +1602,7 @@ async fn load_recharge_pack(
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     if let Some(package_id) = command.package_id.as_deref() {
         let row = if command.tenant_id.trim().is_empty() {
-            sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC))
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC)))
                 .bind(package_id)
                 .bind(&command.requested_at)
                 .fetch_optional(&mut **tx)
@@ -1619,7 +1619,7 @@ async fn load_recharge_pack(
             if scoped_row.is_some() {
                 Ok(scoped_row)
             } else {
-                sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC))
+                sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_BY_ID_PUBLIC)))
                     .bind(package_id)
                     .bind(&command.requested_at)
                     .fetch_optional(&mut **tx)
@@ -1639,7 +1639,7 @@ async fn load_recharge_pack(
 
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC))
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC)))
             .bind(&command.currency_code)
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
@@ -1662,7 +1662,7 @@ async fn load_recharge_pack(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(&catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC))
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PACK_FOR_AMOUNT_PUBLIC)))
                 .bind(&command.currency_code)
                 .bind(command.amount.as_str())
                 .bind(&amount_match.compact)
@@ -1729,7 +1729,7 @@ async fn load_recharge_product_sku(
     let amount_match = decimal_sql_match_keys(command.amount.as_str());
     let organization_id = normalize_organization_scope(command.organization_id.as_deref());
     let row = if command.tenant_id.trim().is_empty() {
-        sqlx::query(&catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC))
+        sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC)))
             .bind(&command.currency_code)
             .bind(command.amount.as_str())
             .bind(&amount_match.compact)
@@ -1750,7 +1750,7 @@ async fn load_recharge_product_sku(
         if scoped_row.is_some() {
             Ok(scoped_row)
         } else {
-            sqlx::query(&catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC))
+            sqlx::query(sqlx::AssertSqlSafe(catalog_sql(LOAD_RECHARGE_PRODUCT_SKU_FOR_AMOUNT_PUBLIC)))
                 .bind(&command.currency_code)
                 .bind(command.amount.as_str())
                 .bind(&amount_match.compact)

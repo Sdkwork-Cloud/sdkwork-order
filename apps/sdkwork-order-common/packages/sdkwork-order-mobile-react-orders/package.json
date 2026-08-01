@@ -13,7 +13,13 @@
     }
   },
   "dependencies": {
-    "@sdkwork/ui-mobile-react": "workspace:*"
+    "@sdkwork/order-app-sdk": "workspace:*",
+    "@sdkwork/ui-mobile-react": "workspace:*",
+    "@sdkwork/utils": "workspace:*",
+    "qrcode": "catalog:"
+  },
+  "devDependencies": {
+    "@types/qrcode": "catalog:"
   },
   "peerDependencies": {
     "lucide-react": ">=1.0.0",
