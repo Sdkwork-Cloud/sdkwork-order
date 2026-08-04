@@ -1,4 +1,5 @@
-import { fromMinorUnits, formatCurrency, uuid } from "@sdkwork/utils";
+import { uuid } from "@sdkwork/utils";
+import { formatMoneyMinorUnits } from "@sdkwork/utils/money";
 import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
 
 /**
@@ -239,11 +240,7 @@ export function formatAmountCny(
   if (!Number.isFinite(minor)) {
     return String(minorAmount);
   }
-  const major = fromMinorUnits(minor, currencyCode);
-  if (major === null) {
-    return String(minorAmount);
-  }
-  return formatCurrency(major, currencyCode, locale) ?? String(minorAmount);
+  return formatMoneyMinorUnits(minor, currencyCode, locale, "symbol") ?? String(minorAmount);
 }
 
 function mapOrderItem(value: Record<string, unknown>): OrderItem {

@@ -1,5 +1,5 @@
 import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
-import { formatCurrency as formatSdkworkCurrency } from "@sdkwork/utils";
+import { formatMoney } from "@sdkwork/utils/money";
 import {
   createOrderAppTransportClient,
   type BootstrapSdkworkOrderAppServiceInput,
@@ -612,10 +612,7 @@ export function toSdkworkOrderNumber(value: unknown, fallback = 0): number {
 }
 
 export function formatSdkworkOrderCurrencyCny(value: number | null | undefined, language = "en-US"): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return "--";
-  }
-  return formatSdkworkCurrency(value, "CNY", language) ?? "--";
+  return formatMoney(value, { currency: "CNY", locale: language, mode: "symbol" }) ?? "--";
 }
 
 export function readSdkworkMediaResource(value: unknown): SdkworkMediaResource | undefined {
