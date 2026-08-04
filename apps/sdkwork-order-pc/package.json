@@ -11,7 +11,9 @@
     "lint": "pnpm run typecheck"
   },
   "dependencies": {
+    "@sdkwork/order-pc-admin-orders": "workspace:*",
     "@sdkwork/order-pc-core": "workspace:*",
+    "@sdkwork/order-pc-order": "workspace:*",
     "@sdkwork/order-pc-shell": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
     "react": "catalog:",

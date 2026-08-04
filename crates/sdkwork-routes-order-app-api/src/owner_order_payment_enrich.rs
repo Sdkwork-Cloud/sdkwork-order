@@ -22,7 +22,7 @@ const RUNTIME_ENVIRONMENT_KEYS: &[&str] = &[
     "ORDER_ENVIRONMENT",
     "SDKWORK_ENVIRONMENT",
     "SDKWORK_ENV",
-    "SDKWORK_CLAW_ROUTER_ENVIRONMENT",
+    "SDKWORK_CLOUDROUTER_ENVIRONMENT",
 ];
 
 pub struct ProviderEnrichedSqliteOwnerOrderPayments {
@@ -233,9 +233,9 @@ mod tests {
     use super::{runtime_environment_from, should_use_development_cashier_fallback};
 
     #[test]
-    fn runtime_environment_accepts_claw_router_host_environment() {
+    fn runtime_environment_accepts_cloud_router_host_environment() {
         let environment = runtime_environment_from(|key| match key {
-            "SDKWORK_CLAW_ROUTER_ENVIRONMENT" => Some(" Development ".to_owned()),
+            "SDKWORK_CLOUDROUTER_ENVIRONMENT" => Some(" Development ".to_owned()),
             _ => None,
         });
 
@@ -246,7 +246,7 @@ mod tests {
     fn runtime_environment_prefers_order_environment_over_host_environment() {
         let environment = runtime_environment_from(|key| match key {
             "SDKWORK_ORDER_ENVIRONMENT" => Some("production".to_owned()),
-            "SDKWORK_CLAW_ROUTER_ENVIRONMENT" => Some("development".to_owned()),
+            "SDKWORK_CLOUDROUTER_ENVIRONMENT" => Some("development".to_owned()),
             _ => None,
         });
 

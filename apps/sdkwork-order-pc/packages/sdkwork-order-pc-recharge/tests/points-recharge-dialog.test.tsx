@@ -37,7 +37,7 @@ describe("SDKWork points recharge surfaces", () => {
     const view = render(
       <SdkworkThemeProvider defaultTheme="light">
         <SdkworkPointsRechargeDialog
-          copy={{ account: "Claw Router", title: "Buy Compute Credits" }}
+          copy={{ account: "Cloud Router", title: "Buy Compute Credits" }}
           isOpen
           onClose={vi.fn()}
           service={service}

@@ -21,6 +21,7 @@
   "dependencies": {
     "@sdkwork/appbase-pc-react": "workspace:*",
     "@sdkwork/order-pc-checkout": "workspace:*",
+    "@sdkwork/order-pc-core": "workspace:*",
     "@sdkwork/order-service": "workspace:*",
     "lucide-react": "catalog:"
   },
