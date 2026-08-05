@@ -2,6 +2,9 @@ import { uuid } from "@sdkwork/utils";
 import { formatMoneyMinorUnits } from "@sdkwork/utils/money";
 import type { SdkworkAppClient } from "@sdkwork/order-app-sdk";
 
+import type { PaymentEnvironment } from "./PaymentEnvironment";
+import type { WechatPaymentOAuthChannel } from "./WechatPaymentOAuth";
+
 /**
  * Canonical mobile order service backed by the generated Order App SDK.
  *
@@ -21,14 +24,52 @@ export type OrderStatus =
   | "refunding"
   | "refunded";
 
-export type OrderPaymentMethod = "wechat_pay" | "alipay" | "balance";
+export type OrderPaymentMethod =
+  | "wechat_pay"
+  | "wechat_jsapi"
+  | "alipay"
+  | "alipay_wap"
+  | "balance";
 
-/** Wire values accepted by `POST /app/v3/api/orders/{orderId}/payments`. */
+/**
+ * Methods offered on the cashier UI (shown to the user). Environment-aware
+ * cashiers narrow this list via `paymentMethodsForEnvironment`.
+ */
 export const ORDER_PAYMENT_METHODS: readonly OrderPaymentMethod[] = [
   "wechat_pay",
   "alipay",
   "balance",
 ];
+
+/**
+ * Wire methods accepted by `POST /app/v3/api/orders/{orderId}/payments`.
+ * `wechat_jsapi` (needs openid) and `alipay_wap` are environment-specific
+ * launch methods, not user-facing choices.
+ */
+export const ORDER_PAYMENT_WIRE_METHODS: readonly OrderPaymentMethod[] = [
+  ...ORDER_PAYMENT_METHODS,
+  "wechat_jsapi",
+  "alipay_wap",
+];
+
+/**
+ * Narrow the cashier method list to the current payment environment:
+ * - Alipay app webview: Alipay only (WAP redirect in-app).
+ * - WeChat app webview: WeChat only (JSAPI via OAuth).
+ * - Browser: the full list (WeChat/Alipay scan, balance).
+ */
+export function paymentMethodsForEnvironment(
+  environment: PaymentEnvironment,
+): readonly OrderPaymentMethod[] {
+  switch (environment) {
+    case "alipay":
+      return ["alipay"];
+    case "wechat":
+      return ["wechat_pay"];
+    default:
+      return ORDER_PAYMENT_METHODS;
+  }
+}
 
 export type OrderTabId =
   | "all"
@@ -138,6 +179,11 @@ export interface VoucherRedemptionResult {
 
 export interface OrderRuntime {
   readonly client: SdkworkAppClient;
+  /**
+   * Optional WeChat payment OAuth channel composed by the host. When absent,
+   * WeChat JSAPI payment is unavailable inside the WeChat app.
+   */
+  readonly wechatPaymentOAuth?: WechatPaymentOAuthChannel;
 }
 
 export class OrderCapabilityUnavailableError extends Error {
@@ -328,14 +374,24 @@ export class OrderService {
     };
   }
 
-  static async payOrder(orderId: string, paymentMethod: OrderPaymentMethod = "wechat_pay"): Promise<PaymentSession> {
-    if (!ORDER_PAYMENT_METHODS.includes(paymentMethod)) {
+  static async payOrder(
+    orderId: string,
+    paymentMethod: OrderPaymentMethod = "wechat_pay",
+    options: { readonly openid?: string } = {},
+  ): Promise<PaymentSession> {
+    if (!ORDER_PAYMENT_WIRE_METHODS.includes(paymentMethod)) {
       throw new Error(`Unsupported payment method ${paymentMethod}.`);
     }
     const { client } = requireOrderRuntime();
+    const body: Record<string, unknown> = { paymentMethod };
+    const openid = options.openid?.trim();
+    if (openid) {
+      // wechat_jsapi adapter requires the payer openid in metadata.
+      body.openid = openid;
+    }
     const value = (await client.orderOrders.orders.payments.create(
       orderId,
-      { paymentMethod },
+      body,
       { idempotencyKey: uuid() },
     )) as Record<string, unknown>;
     const paymentId = toOptionalString(value.paymentId);
@@ -350,6 +406,24 @@ export class OrderService {
       paymentMethod: toOptionalString(value.paymentMethod) ?? paymentMethod,
       paymentParams: (value.paymentParams as Record<string, string> | undefined) ?? {},
     };
+  }
+
+  /**
+   * Fetches the WeChat authorize URL for the cashier redirect path through
+   * the host-composed OAuth channel (backed by the IAM payment OAuth
+   * endpoint). The cashier redirects the payer there to obtain the openid
+   * needed by `wechat_jsapi`.
+   */
+  static async fetchWechatOAuthAuthorizeUrl(redirect: string): Promise<string> {
+    const { wechatPaymentOAuth } = requireOrderRuntime();
+    if (!wechatPaymentOAuth) {
+      throw new Error("WeChat payment OAuth is not composed in the runtime.");
+    }
+    const authorizeUrl = await wechatPaymentOAuth.fetchAuthorizeUrl(redirect);
+    if (!authorizeUrl.trim()) {
+      throw new Error("WeChat payment OAuth did not return an authorize URL.");
+    }
+    return authorizeUrl;
   }
 
   static async getPaymentStatus(orderId: string): Promise<PaymentStatus> {

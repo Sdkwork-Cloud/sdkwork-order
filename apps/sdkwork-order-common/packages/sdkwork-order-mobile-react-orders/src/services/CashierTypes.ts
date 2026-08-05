@@ -7,6 +7,8 @@ import type { Order, PaymentStatus } from "./OrderService";
 export type CashierPhase =
   | "loading"
   | "creating"
+  /** WeChat OAuth authorization in flight (payer sent to WeChat). */
+  | "oauth_waiting"
   | "pending"
   | "paid"
   | "cancelled"

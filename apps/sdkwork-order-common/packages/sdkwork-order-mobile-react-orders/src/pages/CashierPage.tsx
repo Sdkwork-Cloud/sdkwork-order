@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   AlertCircle,
   CheckCircle2,
@@ -17,7 +17,7 @@ import { PageLayout, showToast } from "@sdkwork/ui-mobile-react";
 import {
   formatAmountCny,
   OrderService,
-  ORDER_PAYMENT_METHODS,
+  paymentMethodsForEnvironment,
   type Order,
   type OrderPaymentMethod,
   type PaymentSession,
@@ -27,8 +27,23 @@ import {
   computeCashierRemainingSeconds,
   formatCashierCountdown,
   resolveCashierPhaseFromPaymentStatus,
+  resolveCashierWireMethod,
 } from "../services/CashierLogic";
 import type { CashierPhase } from "../services/CashierTypes";
+import {
+  detectPaymentEnvironment,
+  type PaymentEnvironment,
+} from "../services/PaymentEnvironment";
+import {
+  buildCashierOAuthRedirect,
+  parseWechatOAuthCallbackParams,
+  stripWechatOAuthCallbackParams,
+} from "../services/WechatPaymentOAuth";
+import {
+  invokeWechatJsapiPayment,
+  isWechatJsapiResultCancelled,
+  isWechatJsapiResultOk,
+} from "../services/WechatJsapiInvoker";
 import {
   ORDER_MOBILE_ROUTE_DEFINITIONS,
   resolveOrderRoutePath,
@@ -42,14 +57,37 @@ export function CashierPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation("orders");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  /** Payment environment is stable for the page lifetime (UA-based). */
+  const environment = useMemo<PaymentEnvironment>(() => detectPaymentEnvironment(), []);
+  const availableMethods = useMemo(
+    () => paymentMethodsForEnvironment(environment),
+    [environment],
+  );
+  const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>(
+    () => availableMethods[0] ?? "wechat_pay",
+  );
+  /** Payer openid recovered from the WeChat OAuth callback (URL query). */
+  const [openid, setOpenid] = useState<string | null>(() => {
+    const params = parseWechatOAuthCallbackParams(searchParams);
+    return params.openid ?? null;
+  });
+  const openidRef = useRef<string | null>(openid);
+  useEffect(() => {
+    openidRef.current = openid;
+  }, [openid]);
 
   const [phase, setPhase] = useState<CashierPhase>("loading");
   const [order, setOrder] = useState<Order | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<OrderPaymentMethod>("wechat_pay");
   const [paymentSession, setPaymentSession] = useState<PaymentSession | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  /** Alipay in-app QR link (qr.alipay.com) that opens the payer page. */
+  const [qrLaunchUrl, setQrLaunchUrl] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [errorMessageText, setErrorMessageText] = useState<string | null>(null);
+  /** Non-fatal launch feedback (e.g. JSAPI cancelled / bridge unavailable). */
+  const [launchNotice, setLaunchNotice] = useState<string | null>(null);
 
   const paymentCreatedAtRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -57,6 +95,14 @@ export function CashierPage() {
   const phaseRef = useRef<CashierPhase>("loading");
   phaseRef.current = phase;
   const orderRef = useRef<Order | null>(null);
+
+  /** Cleans the WeChat OAuth callback parameters once, after they are read. */
+  useEffect(() => {
+    const params = parseWechatOAuthCallbackParams(searchParams);
+    if (params.openid || params.error) {
+      setSearchParams(stripWechatOAuthCallbackParams(searchParams), { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) {
@@ -120,32 +166,107 @@ export function CashierPage() {
     }, 1000);
   }, [clearTimers, pollPaymentStatus, stopCashier]);
 
-  const createPayment = useCallback(async (targetOrderId: string, method: OrderPaymentMethod) => {
-    setPhase("creating");
-    setErrorMessageText(null);
-    try {
-      const session = await OrderService.payOrder(targetOrderId, method);
+  /** Renders the payment QR from the session payload, if any. */
+  const renderQrCode = useCallback(
+    async (params: Readonly<Record<string, string>>): Promise<string | null> => {
+      const payload = params.qrCodePayload ?? params.qrCodeUrl ?? params.cashierUrl;
+      if (!payload) {
+        return null;
+      }
+      return QRCode.toDataURL(payload, { width: 220, margin: 1 });
+    },
+    [],
+  );
+
+  /** Reacts to a payment session: JSAPI invoke, WAP redirect or QR render. */
+  const handlePaymentSession = useCallback(
+    async (targetOrderId: string, session: PaymentSession) => {
       setPaymentSession(session);
+      setLaunchNotice(null);
       paymentCreatedAtRef.current = Date.now();
       setRemainingSeconds(computeCashierRemainingSeconds(
         orderRef.current?.expireTime,
         paymentCreatedAtRef.current,
         Date.now(),
       ));
-      const payload = session.paymentParams.qrCodePayload
-        ?? session.paymentParams.cashierUrl;
-      if (payload) {
-        setQrDataUrl(await QRCode.toDataURL(payload, { width: 220, margin: 1 }));
-      } else {
-        setQrDataUrl(null);
+      const params = session.paymentParams;
+
+      // WeChat app: JSAPI payload → invoke the WeChat bridge. On cancel or
+      // bridge failure fall back to the native QR (press-and-hold in-app).
+      if (environment === "wechat" && params.jsapiPayload) {
+        setPhase("pending");
+        startPolling(targetOrderId);
+        try {
+          const jsapiPayload = JSON.parse(params.jsapiPayload) as Record<string, unknown>;
+          const result = await invokeWechatJsapiPayment(jsapiPayload);
+          if (isWechatJsapiResultCancelled(result)) {
+            setLaunchNotice(t("cashier_jsapi_cancelled", "已取消支付"));
+          } else if (!isWechatJsapiResultOk(result)) {
+            setLaunchNotice(t("cashier_jsapi_failed", "唤起微信支付失败，请重试"));
+          }
+        } catch {
+          setLaunchNotice(t("cashier_jsapi_failed", "唤起微信支付失败，请重试"));
+        }
+        setQrDataUrl(await renderQrCode(params));
+        return;
       }
+
+      // Alipay app: WAP redirect jumps to the Alipay H5 cashier in place
+      // (the Alipay webview requires in-page navigation for WAP payments).
+      if (environment === "alipay" && params.payUrl) {
+        setPhase("pending");
+        setQrDataUrl(await renderQrCode(params));
+        window.location.assign(params.payUrl);
+        return;
+      }
+
+      // Alipay app without a WAP link: the qr.alipay.com URL opens the
+      // payer page directly inside the Alipay app.
+      if (environment === "alipay" && params.qrCodeUrl) {
+        setPhase("pending");
+        setQrLaunchUrl(params.qrCodeUrl);
+        setQrDataUrl(await renderQrCode(params));
+        startPolling(targetOrderId);
+        return;
+      }
+
+      // Browser (and fallback): render the QR code for scanning.
       setPhase("pending");
+      setQrLaunchUrl(null);
+      setQrDataUrl(await renderQrCode(params));
       startPolling(targetOrderId);
+    },
+    [environment, renderQrCode, startPolling, t],
+  );
+
+  const createPayment = useCallback(async (targetOrderId: string, method: OrderPaymentMethod) => {
+    setPhase("creating");
+    setErrorMessageText(null);
+    setLaunchNotice(null);
+    try {
+      // WeChat app without a payer openid: acquire it through the IAM
+      // payment OAuth flow; the callback returns to this cashier URL.
+      if (environment === "wechat" && method === "wechat_pay" && !openidRef.current) {
+        setPhase("oauth_waiting");
+        const redirect = buildCashierOAuthRedirect(window.location);
+        const authorizeUrl = await OrderService.fetchWechatOAuthAuthorizeUrl(redirect);
+        window.location.assign(authorizeUrl);
+        return;
+      }
+      const wireMethod = resolveCashierWireMethod(
+        environment,
+        method,
+        Boolean(openidRef.current),
+      );
+      const session = await OrderService.payOrder(targetOrderId, wireMethod, {
+        openid: openidRef.current ?? undefined,
+      });
+      await handlePaymentSession(targetOrderId, session);
     } catch (error) {
       setErrorMessageText(errorMessage(error));
       stopCashier("failed");
     }
-  }, [startPolling, stopCashier]);
+  }, [environment, handlePaymentSession, stopCashier]);
 
   useEffect(() => {
     if (!orderId) {
@@ -166,7 +287,7 @@ export function CashierPage() {
         orderRef.current = loaded;
         setOrder(loaded);
         if (loaded.status === "pending_payment") {
-          await createPayment(orderId, "wechat_pay");
+          await createPayment(orderId, availableMethods[0] ?? "wechat_pay");
         } else if (
           ["paid", "fulfilled", "completed", "refunding", "refunded"].includes(String(loaded.status))
         ) {
@@ -189,13 +310,15 @@ export function CashierPage() {
       cancelled = true;
       clearTimers();
     };
-  }, [orderId, clearTimers, createPayment]);
+  }, [orderId, clearTimers, createPayment, availableMethods]);
 
   const changePaymentMethod = (method: OrderPaymentMethod) => {
     if (phase !== "pending" || !orderId) {
       return;
     }
     setPaymentMethod(method);
+    setQrDataUrl(null);
+    setQrLaunchUrl(null);
     void createPayment(orderId, method);
   };
 
@@ -222,6 +345,12 @@ export function CashierPage() {
     const url = paymentSession?.paymentParams.cashierUrl;
     if (url) {
       window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const launchQrPayment = () => {
+    if (qrLaunchUrl) {
+      window.location.assign(qrLaunchUrl);
     }
   };
 
@@ -263,14 +392,33 @@ export function CashierPage() {
     </div>
   );
 
+  const renderPayTip = () => {
+    if (environment === "wechat") {
+      if (launchNotice) {
+        return launchNotice;
+      }
+      return qrDataUrl
+        ? t("cashier_pay_tip_wechat_qr", "请长按识别二维码完成支付")
+        : t("cashier_pay_tip_wechat_jsapi", "正在唤起微信支付，请在微信中完成支付");
+    }
+    if (environment === "alipay") {
+      return t("cashier_pay_tip_alipay", "点击下方按钮跳转支付宝完成支付");
+    }
+    return t("cashier_scan_pay", "请使用微信或支付宝扫一扫完成支付");
+  };
+
   return (
     <PageLayout title={t("cashier_title", "收银台")}>
       <div className="flex flex-col h-full bg-[#f5f6f8] dark:bg-[#1a1b1c]">
-        {phase === "loading" || phase === "creating" ? (
+        {phase === "loading" || phase === "creating" || phase === "oauth_waiting" ? (
           <div className="flex flex-col items-center justify-center flex-1 text-text-sub">
             <Loader2 className="w-8 h-8 animate-spin mb-3" />
             <p className="text-[14px]">
-              {phase === "loading" ? t("loading", "加载中...") : t("cashier_creating", "正在创建支付...")}
+              {phase === "oauth_waiting"
+                ? t("cashier_oauth_waiting", "正在获取微信支付授权…")
+                : phase === "loading"
+                  ? t("loading", "加载中...")
+                  : t("cashier_creating", "正在创建支付...")}
             </p>
           </div>
         ) : phase === "pending" && order && paymentSession ? (
@@ -301,9 +449,16 @@ export function CashierPage() {
                 </div>
               )}
 
-              <p className="text-[13px] text-text-sub mt-4">
-                {t("cashier_scan_pay", "请使用微信或支付宝扫一扫完成支付")}
-              </p>
+              {environment === "alipay" && qrLaunchUrl && (
+                <button
+                  onClick={launchQrPayment}
+                  className="mt-4 w-full max-w-[220px] bg-[#1677FF] active:opacity-80 text-white font-medium text-[14px] py-2.5 rounded-lg transition-opacity"
+                >
+                  {t("cashier_go_pay", "去支付")}
+                </button>
+              )}
+
+              <p className="text-[13px] text-text-sub mt-4">{renderPayTip()}</p>
 
               <div className="flex items-center gap-1 mt-3 text-[#FA5151]">
                 <Clock className="w-4 h-4" />
@@ -320,7 +475,7 @@ export function CashierPage() {
                 {t("cashier_pay_method", "支付方式")}
               </h3>
               <div className="flex flex-col gap-2">
-                {ORDER_PAYMENT_METHODS.map((method) => (
+                {availableMethods.map((method) => (
                   <label
                     key={method}
                     className="flex items-center justify-between px-3 py-3 rounded-lg border border-border-color cursor-pointer active:bg-active-bg"

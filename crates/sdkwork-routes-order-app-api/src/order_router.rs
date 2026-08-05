@@ -37,7 +37,17 @@ use crate::owner_order_cancel::cancel_owner_order_with_payments_and_inventory;
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
 /// 允许的支付方式白名单，避免硬编码单一渠道。
-const ALLOWED_PAYMENT_METHODS: &[&str] = &["wechat_pay", "alipay", "balance"];
+///
+/// `wechat_pay`/`alipay` 是收银台展示层方法（落到 native 扫码），
+/// `wechat_jsapi`（微信 App 内拉起，需 openid）与 `alipay_wap`（H5/WAP 跳转）
+/// 是环境差异化的渠道方法。
+const ALLOWED_PAYMENT_METHODS: &[&str] = &[
+    "wechat_pay",
+    "wechat_jsapi",
+    "alipay",
+    "alipay_wap",
+    "balance",
+];
 
 pub type CommerceOrderFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, CommerceServiceError>> + Send + 'a>>;
@@ -233,6 +243,9 @@ struct PayOrderRequest {
     payment_method: Option<String>,
     #[serde(rename = "paymentPassword", alias = "payment_password")]
     payment_password: Option<String>,
+    /// 微信 JSAPI 支付所需的 payer openid（微信 App 内经 OAuth 授权获得）。
+    #[serde(rename = "openid", alias = "openId", alias = "payerOpenId")]
+    openid: Option<String>,
 }
 
 impl PayOrderRequest {
@@ -245,6 +258,13 @@ impl PayOrderRequest {
 
     fn payment_password(&self) -> Option<&str> {
         self.payment_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+    }
+
+    fn openid(&self) -> Option<&str> {
+        self.openid
             .as_deref()
             .map(str::trim)
             .filter(|v| !v.is_empty())
@@ -766,6 +786,7 @@ async fn pay_order(
     let body = body.map(|Json(value)| value).unwrap_or(PayOrderRequest {
         payment_method: None,
         payment_password: None,
+        openid: None,
     });
     let payment_method = match validate_payment_method(body.payment_method()) {
         Ok(value) => value,
@@ -780,6 +801,11 @@ async fn pay_order(
     let callback_payload = body
         .payment_password()
         .map(|password| serde_json::json!({ "paymentPassword": password }).to_string());
+    // wechat_jsapi 适配器要求 metadata.openid；其余方法不需要额外元数据。
+    let payment_metadata = match body.openid() {
+        Some(openid) => serde_json::json!({ "openid": openid }),
+        None => serde_json::json!({}),
+    };
     let command = match PayOwnerOrderCommand::new(PayOwnerOrderCommandInput {
         tenant_id: subject.tenant_id.clone(),
         organization_id: subject.organization_id.clone(),
@@ -788,7 +814,7 @@ async fn pay_order(
         payment_method,
         payment_scene: None,
         payment_attempt_callback_payload: callback_payload,
-        payment_metadata: serde_json::json!({}),
+        payment_metadata,
         request_no: write_headers.request_no.clone(),
         idempotency_key: write_headers.idempotency_key.clone(),
     }) {

@@ -5,4 +5,7 @@ export * from "./pages/VoucherCodePage";
 export * from "./services/OrderService";
 export * from "./services/CashierLogic";
 export * from "./services/CashierTypes";
+export * from "./services/PaymentEnvironment";
+export * from "./services/WechatPaymentOAuth";
+export * from "./services/WechatJsapiInvoker";
 export * from "./routes";

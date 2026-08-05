@@ -3,6 +3,8 @@ import type {
   Order,
   PaymentStatus,
 } from "./CashierTypes";
+import type { PaymentEnvironment } from "./PaymentEnvironment";
+import type { OrderPaymentMethod } from "./OrderService";
 
 /**
  * Pure cashier state-machine helpers shared by the cashier page and its
@@ -73,4 +75,25 @@ export function cashierPaymentMethodLabelKey(method: string): string {
 
 export function isCashierRetryablePhase(phase: CashierPhase): boolean {
   return phase === "failed" || phase === "expired";
+}
+
+/**
+ * Maps the user-facing method to the wire method for the current payment
+ * environment:
+ * - WeChat app with a payer openid → `wechat_jsapi` (bridge invoke).
+ * - Alipay app → `alipay_wap` (in-app redirect to the Alipay cashier).
+ * - Everything else keeps the selected method (`wechat_pay`/`alipay`/`balance`).
+ */
+export function resolveCashierWireMethod(
+  environment: PaymentEnvironment,
+  method: OrderPaymentMethod,
+  hasOpenid: boolean,
+): OrderPaymentMethod {
+  if (environment === "wechat" && method === "wechat_pay" && hasOpenid) {
+    return "wechat_jsapi";
+  }
+  if (environment === "alipay" && method === "alipay") {
+    return "alipay_wap";
+  }
+  return method;
 }

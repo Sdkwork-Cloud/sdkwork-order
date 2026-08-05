@@ -7,6 +7,7 @@ import {
   formatAmountCny,
   OrderCapabilityUnavailableError,
   OrderService,
+  paymentMethodsForEnvironment,
   resetOrderMobileRuntime,
   toOrderListStatusWire,
   toOrderStatusWire,
@@ -251,6 +252,51 @@ describe("cashier payment flow", () => {
     expect(client.orderOrders.orders.payments.create).not.toHaveBeenCalled();
   });
 
+  it("passes the payer openid through for wechat_jsapi", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.payments.create.mockResolvedValue({
+      amount: "6990",
+      orderId: "order-1",
+      outTradeNo: "202608010001",
+      paymentId: "pay-1",
+      paymentMethod: "wechat_jsapi",
+      paymentParams: {
+        jsapiPayload: JSON.stringify({ appId: "wxappid", timeStamp: "1" }),
+        nextAction: "jsapi",
+      },
+    });
+
+    const session = await OrderService.payOrder("order-1", "wechat_jsapi", {
+      openid: "o_payer",
+    });
+    expect(client.orderOrders.orders.payments.create).toHaveBeenCalledWith(
+      "order-1",
+      { paymentMethod: "wechat_jsapi", openid: "o_payer" },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+    expect(session.paymentMethod).toBe("wechat_jsapi");
+  });
+
+  it("omits the openid field when not provided", async () => {
+    const client = createMockClient();
+    configureMockClient(client);
+    client.orderOrders.orders.payments.create.mockResolvedValue({
+      amount: "6990",
+      orderId: "order-1",
+      outTradeNo: "202608010001",
+      paymentId: "pay-1",
+      paymentMethod: "alipay_wap",
+      paymentParams: { payUrl: "https://cashier.alipay.com/example", nextAction: "redirect" },
+    });
+    await OrderService.payOrder("order-1", "alipay_wap");
+    expect(client.orderOrders.orders.payments.create).toHaveBeenCalledWith(
+      "order-1",
+      { paymentMethod: "alipay_wap" },
+      expect.objectContaining({ idempotencyKey: expect.any(String) }),
+    );
+  });
+
   it("reads the payment success status", async () => {
     const client = createMockClient();
     configureMockClient(client);
@@ -417,5 +463,23 @@ describe("wire mapping helpers", () => {
     expect(formatAmountCny(undefined)).toBe("--");
     expect(formatAmountCny("not-an-amount")).toBe("not-an-amount");
     expect(formatAmountCny("5000", "JPY")).toBe("¥5,000");
+  });
+});
+
+describe("paymentMethodsForEnvironment", () => {
+  it("narrows to alipay inside the Alipay app", () => {
+    expect(paymentMethodsForEnvironment("alipay")).toEqual(["alipay"]);
+  });
+
+  it("narrows to wechat inside the WeChat app", () => {
+    expect(paymentMethodsForEnvironment("wechat")).toEqual(["wechat_pay"]);
+  });
+
+  it("offers the full list in a browser", () => {
+    expect(paymentMethodsForEnvironment("browser")).toEqual([
+      "wechat_pay",
+      "alipay",
+      "balance",
+    ]);
   });
 });

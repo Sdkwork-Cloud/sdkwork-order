@@ -5,6 +5,7 @@ import {
   computeCashierRemainingSeconds,
   formatCashierCountdown,
   resolveCashierPhaseFromPaymentStatus,
+  resolveCashierWireMethod,
 } from "./CashierLogic";
 
 const paidStatus = { paid: true, status: "paid", statusName: "Paid" };
@@ -66,5 +67,28 @@ describe("formatCashierCountdown", () => {
     expect(formatCashierCountdown(899)).toBe("14:59");
     expect(formatCashierCountdown(0)).toBe("00:00");
     expect(formatCashierCountdown(61)).toBe("01:01");
+  });
+});
+
+describe("resolveCashierWireMethod", () => {
+  it("keeps the selected method in a plain browser", () => {
+    expect(resolveCashierWireMethod("browser", "wechat_pay", false)).toBe("wechat_pay");
+    expect(resolveCashierWireMethod("browser", "alipay", false)).toBe("alipay");
+    expect(resolveCashierWireMethod("browser", "balance", false)).toBe("balance");
+  });
+
+  it("uses wechat_jsapi inside WeChat once the payer openid is known", () => {
+    expect(resolveCashierWireMethod("wechat", "wechat_pay", true)).toBe("wechat_jsapi");
+    expect(resolveCashierWireMethod("wechat", "wechat_pay", false)).toBe("wechat_pay");
+  });
+
+  it("uses alipay_wap inside the Alipay app", () => {
+    expect(resolveCashierWireMethod("alipay", "alipay", false)).toBe("alipay_wap");
+    expect(resolveCashierWireMethod("alipay", "alipay", true)).toBe("alipay_wap");
+  });
+
+  it("passes non-app methods through untouched", () => {
+    expect(resolveCashierWireMethod("wechat", "balance", true)).toBe("balance");
+    expect(resolveCashierWireMethod("alipay", "balance", true)).toBe("balance");
   });
 });
