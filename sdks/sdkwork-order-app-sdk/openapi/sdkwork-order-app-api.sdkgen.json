@@ -4985,8 +4985,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "items",
-          "shippingAddress"
+          "items"
         ],
         "properties": {
           "items": {
@@ -5003,7 +5002,8 @@
             "default": "CNY"
           },
           "shippingAddress": {
-            "$ref": "#/components/schemas/ShippingAddressRequest"
+            "$ref": "#/components/schemas/ShippingAddressRequest",
+            "description": "实物商品必填；数字商品（如兑换码、虚拟权益）可省略。"
           }
         }
       },

@@ -87,7 +87,7 @@ struct CheckoutLineRequest {
 struct CreateCheckoutSessionRequest {
     items: Vec<CheckoutLineRequest>,
     currency_code: Option<String>,
-    shipping_address: ShippingAddressRequest,
+    shipping_address: Option<ShippingAddressRequest>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -327,40 +327,44 @@ async fn create_checkout_session(
         .unwrap_or("CNY")
         .trim()
         .to_ascii_uppercase();
-    let shipping_address = match ShippingAddressSnapshot::new(
-        &request.shipping_address.receiver_name,
-        &request.shipping_address.receiver_phone,
-        &request.shipping_address.country_code,
-        &request.shipping_address.province,
-        &request.shipping_address.city,
-        request.shipping_address.district.as_deref(),
-        &request.shipping_address.detail_address,
-        request.shipping_address.postal_code.as_deref(),
-    ) {
-        Ok(value) => value,
-        Err(error) => return validation(ctx, error.message()),
+    let resolved_checkout = if let Some(shipping_address) = request.shipping_address {
+        let shipping_address = match ShippingAddressSnapshot::new(
+            &shipping_address.receiver_name,
+            &shipping_address.receiver_phone,
+            &shipping_address.country_code,
+            &shipping_address.province,
+            &shipping_address.city,
+            shipping_address.district.as_deref(),
+            &shipping_address.detail_address,
+            shipping_address.postal_code.as_deref(),
+        ) {
+            Ok(value) => value,
+            Err(error) => return validation(ctx, error.message()),
+        };
+        match state
+            .checkout_resolver
+            .resolve_physical_checkout(ResolvePhysicalCheckoutRequest {
+                tenant_id: subject.tenant_id.clone(),
+                owner_user_id: subject.user_id.clone(),
+                currency_code: currency_code.clone(),
+                lines: lines
+                    .iter()
+                    .map(|line| ResolvePhysicalCheckoutLine {
+                        sku_id: line.sku_id.clone(),
+                        quantity: line.quantity,
+                    })
+                    .collect(),
+                shipping_address,
+            })
+            .await
+        {
+            Ok(value) => Some(value),
+            Err(error) => return map_service_error(ctx, error),
+        }
+    } else {
+        None
     };
-    let resolved_checkout = match state
-        .checkout_resolver
-        .resolve_physical_checkout(ResolvePhysicalCheckoutRequest {
-            tenant_id: subject.tenant_id.clone(),
-            owner_user_id: subject.user_id.clone(),
-            currency_code: currency_code.clone(),
-            lines: lines
-                .iter()
-                .map(|line| ResolvePhysicalCheckoutLine {
-                    sku_id: line.sku_id.clone(),
-                    quantity: line.quantity,
-                })
-                .collect(),
-            shipping_address,
-        })
-        .await
-    {
-        Ok(value) => value,
-        Err(error) => return map_service_error(ctx, error),
-    };
-    let command = match CreateCheckoutSessionCommand::new(
+    let mut command = match CreateCheckoutSessionCommand::new(
         &subject.tenant_id,
         subject.organization_id.as_deref(),
         &subject.user_id,
@@ -368,12 +372,16 @@ async fn create_checkout_session(
         lines,
         &write_headers.request_no,
         &write_headers.idempotency_key,
-    )
-    .and_then(|command| command.with_physical_checkout(resolved_checkout))
-    {
+    ) {
         Ok(command) => command,
         Err(error) => return validation(ctx, error.message()),
     };
+    if let Some(resolved_checkout) = resolved_checkout {
+        command = match command.with_physical_checkout(resolved_checkout) {
+            Ok(command) => command,
+            Err(error) => return validation(ctx, error.message()),
+        };
+    }
     match state.store.create_checkout_session(command).await {
         Ok(session) => success_created_item(ctx, map_checkout_session(session)),
         Err(error) => map_service_error(ctx, error),
