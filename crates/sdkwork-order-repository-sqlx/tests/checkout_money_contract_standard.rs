@@ -235,7 +235,7 @@ fn assert_checkout_amounts(original: &str, discount: &str, payable: &str) {
 async fn checkout_test_pool() -> SqlitePool {
     let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
     for statement in CHECKOUT_TEST_SCHEMA {
-        sqlx::query(sqlx::AssertSqlSafe(statement))
+        sqlx::query(sqlx::AssertSqlSafe(*statement))
             .execute(&pool)
             .await
             .unwrap_or_else(|error| {
@@ -294,10 +294,12 @@ async fn assert_checkout_tables_are_empty(pool: &SqlitePool) {
         "commerce_checkout_line",
         "commerce_checkout_quote",
     ] {
-        let count = sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM {table}"))
-            .fetch_one(pool)
-            .await
-            .expect("count rolled-back checkout rows");
+        let count = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(format!(
+            "SELECT COUNT(*) FROM {table}"
+        )))
+        .fetch_one(pool)
+        .await
+        .expect("count rolled-back checkout rows");
         assert_eq!(count, 0, "failed checkout must roll back {table}");
     }
 }

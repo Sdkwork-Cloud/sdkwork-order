@@ -31,7 +31,7 @@ pub async fn order_points_recharge_e2e_sqlite_memory_pool() -> SqlitePool {
 
 pub async fn apply_order_e2e_migration_sqlite(pool: &SqlitePool) {
     for statement in split_order_e2e_sql_statements(order_points_recharge_e2e_migration_sql()) {
-        sqlx::query(&statement)
+        sqlx::query(sqlx::AssertSqlSafe(statement.as_str()))
             .execute(pool)
             .await
             .unwrap_or_else(|error| {
@@ -48,7 +48,10 @@ pub async fn order_points_recharge_e2e_postgres_pool_from_env() -> Option<sqlx::
     let pool = sqlx::PgPool::connect(&url).await.ok()?;
     for statement in split_order_e2e_sql_statements(order_points_recharge_e2e_migration_sql()) {
         let statement = postgres_e2e_statement(&statement);
-        if let Err(error) = sqlx::query(&statement).execute(&pool).await {
+        if let Err(error) = sqlx::query(sqlx::AssertSqlSafe(statement.as_str()))
+            .execute(&pool)
+            .await
+        {
             eprintln!("postgres e2e migration skipped ({error}); statement: {statement}");
             return None;
         }

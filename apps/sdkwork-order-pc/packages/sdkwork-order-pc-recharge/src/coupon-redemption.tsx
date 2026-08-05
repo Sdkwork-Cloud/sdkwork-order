@@ -23,10 +23,12 @@ export interface SdkworkCouponRedemptionCopy {
   close: string;
   codeLabel: string;
   codePlaceholder: string;
+  cashCredited: string;
   dailyQuota: string;
   description: string;
   expiresAt: string;
   invalidCode: string;
+  pointsCredited: string;
   redeem: string;
   redeeming: string;
   subscriptionActivated: string;
@@ -52,6 +54,7 @@ export interface SdkworkCouponRedemptionInlineProps extends SdkworkCouponRedempt
 }
 
 const DEFAULT_COPY: SdkworkCouponRedemptionCopy = {
+  cashCredited: "Cash balance credited",
   close: "Close",
   codeLabel: "Coupon code",
   codePlaceholder: "Enter your coupon code",
@@ -59,6 +62,7 @@ const DEFAULT_COPY: SdkworkCouponRedemptionCopy = {
   description: "Redeem Token Bank credit or activate a quota-limited subscription.",
   expiresAt: "Valid until",
   invalidCode: "Enter a valid coupon code.",
+  pointsCredited: "Points credited",
   redeem: "Redeem",
   redeeming: "Redeeming...",
   subscriptionActivated: "Subscription activated",
@@ -66,6 +70,13 @@ const DEFAULT_COPY: SdkworkCouponRedemptionCopy = {
   tokenBankCredited: "Token Bank credited",
   totalQuota: "Total quota",
 };
+
+/** 现金券最小单位（分）→ 元金额字符串（最多两位小数）。 */
+function minorUnitsToYuan(value: number): string {
+  const padded = String(value).padStart(3, "0");
+  const whole = padded.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
+  return `${whole}.${padded.slice(-2)}`;
+}
 
 interface CouponRedemptionExperienceProps extends SdkworkCouponRedemptionProps {
   active: boolean;
@@ -222,6 +233,28 @@ function CouponRedemptionResult({
         <div>
           <strong>{copy.tokenBankCredited}</strong>
           <span>{result.grantAmount.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  }
+  if (result.benefitKind === "points_credit") {
+    return (
+      <div className="sdkwork-coupon-redemption__result" role="status">
+        <CheckCircle2 aria-hidden="true" />
+        <div>
+          <strong>{copy.pointsCredited}</strong>
+          <span>{result.grantPoints.toLocaleString()}</span>
+        </div>
+      </div>
+    );
+  }
+  if (result.benefitKind === "cash_credit") {
+    return (
+      <div className="sdkwork-coupon-redemption__result" role="status">
+        <CheckCircle2 aria-hidden="true" />
+        <div>
+          <strong>{copy.cashCredited}</strong>
+          <span>{minorUnitsToYuan(result.grantAmount)}</span>
         </div>
       </div>
     );

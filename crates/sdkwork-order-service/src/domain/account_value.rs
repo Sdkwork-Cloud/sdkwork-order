@@ -168,6 +168,9 @@ impl AccountValueOrderSubject {
                 Self::TokenBankPlanPurchase | Self::TokenBankPlanRenewal | Self::CouponRecharge,
                 AccountValueAssetCode::TokenBank,
             ) => CommerceLedgerBusinessType::TOKEN_BANK_GRANT,
+            (Self::CouponRecharge, AccountValueAssetCode::Points) => {
+                CommerceLedgerBusinessType::POINTS_EARN
+            }
             (_, AccountValueAssetCode::TokenBank) => {
                 CommerceLedgerBusinessType::TOKEN_BANK_PURCHASE_CREDIT
             }

@@ -306,6 +306,43 @@ impl CreateCouponRechargeOrderCommand {
         idempotency_key: &str,
         payment_required: bool,
     ) -> Result<Self, CommerceServiceError> {
+        Self::new_with_benefit(
+            tenant_id,
+            organization_id,
+            owner_user_id,
+            target_asset,
+            amount.clone(),
+            currency_code,
+            order_id,
+            order_item_id,
+            order_no,
+            out_trade_no,
+            coupon_code,
+            idempotency_key,
+            payment_required,
+            CouponRedemptionBenefit::TokenBankCredit {
+                grant_amount: amount,
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_benefit(
+        tenant_id: &str,
+        organization_id: Option<&str>,
+        owner_user_id: &str,
+        target_asset: AccountValueAssetCode,
+        amount: CommerceMoney,
+        currency_code: &str,
+        order_id: &str,
+        order_item_id: &str,
+        order_no: &str,
+        out_trade_no: &str,
+        coupon_code: &str,
+        idempotency_key: &str,
+        payment_required: bool,
+        benefit: CouponRedemptionBenefit,
+    ) -> Result<Self, CommerceServiceError> {
         crate::validation::require_non_empty("tenant_id", tenant_id)?;
         crate::validation::require_non_empty("owner_user_id", owner_user_id)?;
         crate::validation::require_non_empty("currency_code", currency_code)?;
@@ -315,11 +352,14 @@ impl CreateCouponRechargeOrderCommand {
         crate::validation::require_non_empty("out_trade_no", out_trade_no)?;
         crate::validation::require_non_empty("coupon_code", coupon_code)?;
         crate::validation::require_non_empty("idempotency_key", idempotency_key)?;
+        if benefit.target_asset() != target_asset {
+            return Err(CommerceServiceError::validation(
+                "coupon recharge order benefit target asset must match its order target asset",
+            ));
+        }
 
         Ok(Self {
-            benefit: CouponRedemptionBenefit::TokenBankCredit {
-                grant_amount: amount.clone(),
-            },
+            benefit,
             grant_amount: amount.clone(),
             amount,
             coupon_code: coupon_code.trim().to_string(),

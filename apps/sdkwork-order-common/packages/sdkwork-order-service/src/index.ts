@@ -157,6 +157,25 @@ export interface SdkworkCouponTokenBankRedemptionResult {
   targetAsset: "token_bank";
 }
 
+export interface SdkworkCouponPointsRedemptionResult {
+  benefitKind: "points_credit";
+  grantPoints: number;
+  orderId: string;
+  orderNo?: string;
+  replayed: boolean;
+  status: "completed" | "pending";
+}
+
+export interface SdkworkCouponCashRedemptionResult {
+  benefitKind: "cash_credit";
+  /** 现金发放金额（最小单位）。 */
+  grantAmount: number;
+  orderId: string;
+  orderNo?: string;
+  replayed: boolean;
+  status: "completed" | "pending";
+}
+
 export type SdkworkCouponSubscriptionPeriod = "day" | "week" | "month" | "year";
 
 export interface SdkworkCouponSubscriptionRedemptionResult {
@@ -179,6 +198,8 @@ export interface SdkworkCouponSubscriptionRedemptionResult {
 
 export type SdkworkCouponRedemptionResult =
   | SdkworkCouponTokenBankRedemptionResult
+  | SdkworkCouponPointsRedemptionResult
+  | SdkworkCouponCashRedemptionResult
   | SdkworkCouponSubscriptionRedemptionResult;
 
 export type SdkworkCouponRechargeResult = SdkworkCouponRedemptionResult;
@@ -699,6 +720,28 @@ function normalizeCouponRechargeResult(value: unknown): SdkworkCouponRedemptionR
       benefitKind: "token_bank_credit",
       grantAmount,
       targetAsset: "token_bank",
+    };
+  }
+  if (benefit.kind === "points_credit") {
+    const grantPoints = toSdkworkOrderNumber(benefit.grantPoints);
+    if (grantPoints <= 0) {
+      throw new Error("Coupon redemption did not return a points grant.");
+    }
+    return {
+      ...common,
+      benefitKind: "points_credit",
+      grantPoints,
+    };
+  }
+  if (benefit.kind === "cash_credit") {
+    const grantAmount = toSdkworkOrderNumber(benefit.grantAmount);
+    if (grantAmount <= 0) {
+      throw new Error("Coupon redemption did not return a cash grant.");
+    }
+    return {
+      ...common,
+      benefitKind: "cash_credit",
+      grantAmount,
     };
   }
   if (benefit.kind === "subscription") {

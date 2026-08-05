@@ -2539,6 +2539,14 @@ fn parse_coupon_benefit_snapshot(
             grant_amount: CommerceMoney::new(&required_json_text(benefit, "grantAmount")?)
                 .map_err(CommerceServiceError::storage)?,
         })),
+        "points_credit" => Ok(Some(CouponRedemptionBenefit::PointsCredit {
+            grant_amount: CommerceMoney::new(&required_json_text(benefit, "grantPoints")?)
+                .map_err(CommerceServiceError::storage)?,
+        })),
+        "cash_credit" => Ok(Some(CouponRedemptionBenefit::CashCredit {
+            grant_amount: CommerceMoney::new(&required_json_text(benefit, "grantAmount")?)
+                .map_err(CommerceServiceError::storage)?,
+        })),
         "subscription" => Ok(Some(CouponRedemptionBenefit::Subscription {
             product_id: required_json_text(benefit, "productId")?,
             sku_id: required_json_text(benefit, "skuId")?,

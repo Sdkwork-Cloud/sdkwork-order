@@ -131,6 +131,12 @@ pub enum CouponRedemptionBenefit {
     TokenBankCredit {
         grant_amount: CommerceMoney,
     },
+    PointsCredit {
+        grant_amount: CommerceMoney,
+    },
+    CashCredit {
+        grant_amount: CommerceMoney,
+    },
     Subscription {
         product_id: String,
         sku_id: String,
@@ -176,13 +182,17 @@ impl CouponRedemptionBenefit {
     pub fn target_asset(&self) -> AccountValueAssetCode {
         match self {
             Self::TokenBankCredit { .. } => AccountValueAssetCode::TokenBank,
+            Self::PointsCredit { .. } => AccountValueAssetCode::Points,
+            Self::CashCredit { .. } => AccountValueAssetCode::Cash,
             Self::Subscription { .. } => AccountValueAssetCode::Subscription,
         }
     }
 
     pub fn grant_amount(&self) -> CommerceMoney {
         match self {
-            Self::TokenBankCredit { grant_amount } => grant_amount.clone(),
+            Self::TokenBankCredit { grant_amount }
+            | Self::PointsCredit { grant_amount }
+            | Self::CashCredit { grant_amount } => grant_amount.clone(),
             Self::Subscription { total_quota, .. } => CommerceMoney::new(&total_quota.to_string())
                 .expect("validated subscription quota must be valid commerce money"),
         }

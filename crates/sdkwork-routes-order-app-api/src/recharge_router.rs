@@ -1366,7 +1366,9 @@ async fn submit_recharge(
                 .await;
             match preview {
                 Ok(value) if value.accepted => match value.benefit {
-                    benefit @ CouponRedemptionBenefit::TokenBankCredit { .. } => {
+                    benefit @ CouponRedemptionBenefit::TokenBankCredit { .. }
+                    | benefit @ CouponRedemptionBenefit::PointsCredit { .. }
+                    | benefit @ CouponRedemptionBenefit::CashCredit { .. } => {
                         (benefit.grant_amount(), Some(benefit))
                     }
                     CouponRedemptionBenefit::Subscription { .. } => {
@@ -1382,7 +1384,7 @@ async fn submit_recharge(
                     return map_service_error(
                         ctx,
                         CommerceServiceError::conflict(
-                            "coupon does not grant a supported Token Bank benefit",
+                            "coupon does not grant a supported asset benefit",
                         ),
                     )
                 }
@@ -1719,6 +1721,18 @@ fn map_coupon_fulfilled_benefit(
             serde_json::json!({
                 "kind": "token_bank_credit",
                 "targetAsset": "token_bank",
+                "grantAmount": grant_amount.as_str(),
+            })
+        }
+        sdkwork_order_service::CouponFulfilledBenefit::PointsCredit { grant_amount } => {
+            serde_json::json!({
+                "kind": "points_credit",
+                "grantPoints": grant_amount.as_str(),
+            })
+        }
+        sdkwork_order_service::CouponFulfilledBenefit::CashCredit { grant_amount } => {
+            serde_json::json!({
+                "kind": "cash_credit",
                 "grantAmount": grant_amount.as_str(),
             })
         }
@@ -2252,7 +2266,7 @@ fn build_create_coupon_recharge_command(
     let order_no = format!("CP{}", token);
     let out_trade_no = format!("COUPON{}", token);
     let payment_required = input.amount.as_str() != "0" || input.method.is_some();
-    let mut command = CreateCouponRechargeOrderCommand::new(
+    let mut command = CreateCouponRechargeOrderCommand::new_with_benefit(
         &input.subject.tenant_id,
         input.subject.organization_id.as_deref(),
         &input.subject.user_id,
@@ -2266,9 +2280,9 @@ fn build_create_coupon_recharge_command(
         coupon_code,
         input.idempotency_key,
         payment_required,
+        benefit,
     )?;
     command.grant_amount = input.grant_amount;
-    command.benefit = benefit;
     Ok(command)
 }
 

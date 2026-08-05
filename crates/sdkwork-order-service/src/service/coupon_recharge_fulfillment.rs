@@ -2,15 +2,21 @@ use sdkwork_contract_service::CommerceServiceError;
 
 use crate::{
     coupon_recharge_redemption_idempotency_key, fulfill_account_value_order, AccountValueAssetCode,
-    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
-    CouponRedemptionBenefit, CouponRedemptionPort, CouponRedemptionRequest,
-    CouponSubscriptionFulfillmentRequest, FulfillAccountValueOrderCommand,
+    AccountValueFulfillmentContext, AccountValueFulfillmentStore, AccountValueLedgerPort,
+    AccountValueOrderSubject, CouponRedemptionBenefit, CouponRedemptionPort,
+    CouponRedemptionRequest, CouponSubscriptionFulfillmentRequest, FulfillAccountValueOrderCommand,
     FulfillAccountValueOrderOutcome, MembershipPurchaseFulfillmentPort,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CouponFulfilledBenefit {
     TokenBankCredit {
+        grant_amount: sdkwork_contract_service::CommerceMoney,
+    },
+    PointsCredit {
+        grant_amount: sdkwork_contract_service::CommerceMoney,
+    },
+    CashCredit {
         grant_amount: sdkwork_contract_service::CommerceMoney,
     },
     Subscription {
@@ -93,20 +99,57 @@ where
 
     match expected_benefit {
         CouponRedemptionBenefit::TokenBankCredit { grant_amount } => {
-            if context.target_asset != AccountValueAssetCode::TokenBank
-                || context.grant_amount != grant_amount
-            {
-                return Err(CommerceServiceError::conflict(
-                    "coupon order Token Bank snapshot does not match its benefit",
-                ));
-            }
-            let fulfilled = fulfill_account_value_order(store, ledger_port, command).await?;
+            let fulfilled = fulfill_coupon_asset_grant(
+                store,
+                ledger_port,
+                command,
+                &context,
+                AccountValueAssetCode::TokenBank,
+                &grant_amount,
+            )
+            .await?;
             Ok(CouponFulfillmentOutcome {
                 order_id: fulfilled.order_id,
                 order_no: fulfilled.order_no,
                 replayed: fulfilled.replayed || redemption.replayed,
                 fulfillment_status: fulfilled.fulfillment_status,
                 benefit: CouponFulfilledBenefit::TokenBankCredit { grant_amount },
+            })
+        }
+        CouponRedemptionBenefit::PointsCredit { grant_amount } => {
+            let fulfilled = fulfill_coupon_asset_grant(
+                store,
+                ledger_port,
+                command,
+                &context,
+                AccountValueAssetCode::Points,
+                &grant_amount,
+            )
+            .await?;
+            Ok(CouponFulfillmentOutcome {
+                order_id: fulfilled.order_id,
+                order_no: fulfilled.order_no,
+                replayed: fulfilled.replayed || redemption.replayed,
+                fulfillment_status: fulfilled.fulfillment_status,
+                benefit: CouponFulfilledBenefit::PointsCredit { grant_amount },
+            })
+        }
+        CouponRedemptionBenefit::CashCredit { grant_amount } => {
+            let fulfilled = fulfill_coupon_asset_grant(
+                store,
+                ledger_port,
+                command,
+                &context,
+                AccountValueAssetCode::Cash,
+                &grant_amount,
+            )
+            .await?;
+            Ok(CouponFulfillmentOutcome {
+                order_id: fulfilled.order_id,
+                order_no: fulfilled.order_no,
+                replayed: fulfilled.replayed || redemption.replayed,
+                fulfillment_status: fulfilled.fulfillment_status,
+                benefit: CouponFulfilledBenefit::CashCredit { grant_amount },
             })
         }
         CouponRedemptionBenefit::Subscription {
@@ -194,6 +237,27 @@ where
     }
 }
 
+/// 发放型资产券（Token Bank 额度 / 积分 / 现金）通用履约：校验订单快照与权益一致后入账。
+async fn fulfill_coupon_asset_grant<S, L>(
+    store: &S,
+    ledger_port: &L,
+    command: FulfillAccountValueOrderCommand,
+    context: &AccountValueFulfillmentContext,
+    expected_asset: AccountValueAssetCode,
+    grant_amount: &sdkwork_contract_service::CommerceMoney,
+) -> Result<FulfillAccountValueOrderOutcome, CommerceServiceError>
+where
+    S: AccountValueFulfillmentStore + ?Sized,
+    L: AccountValueLedgerPort + ?Sized,
+{
+    if context.target_asset != expected_asset || context.grant_amount != *grant_amount {
+        return Err(CommerceServiceError::conflict(
+            "coupon order asset snapshot does not match its benefit",
+        ));
+    }
+    fulfill_account_value_order(store, ledger_port, command).await
+}
+
 pub async fn redeem_coupon_and_fulfill_account_value_order<S, C, L>(
     store: &S,
     coupon_port: &C,
@@ -214,11 +278,19 @@ where
         ));
     };
 
-    if context.subject != AccountValueOrderSubject::CouponRecharge
-        || context.target_asset != AccountValueAssetCode::TokenBank
-    {
+    if context.subject != AccountValueOrderSubject::CouponRecharge {
         return Err(CommerceServiceError::validation(
-            "coupon recharge fulfillment requires a Token Bank coupon order",
+            "coupon recharge fulfillment requires a coupon order",
+        ));
+    }
+    if !matches!(
+        context.target_asset,
+        AccountValueAssetCode::TokenBank
+            | AccountValueAssetCode::Points
+            | AccountValueAssetCode::Cash
+    ) {
+        return Err(CommerceServiceError::validation(
+            "coupon recharge fulfillment requires an asset grant coupon order",
         ));
     }
     if context.already_fulfilled() {
@@ -245,15 +317,11 @@ where
         })
         .await?;
 
-    let benefit_matches = matches!(
-        &redemption.benefit,
-        CouponRedemptionBenefit::TokenBankCredit { grant_amount }
-            if context.target_asset == AccountValueAssetCode::TokenBank
-                && grant_amount == &context.grant_amount
-    );
+    let benefit_matches = redemption.benefit.target_asset() == context.target_asset
+        && redemption.benefit.grant_amount() == context.grant_amount;
     if !redemption.accepted || !benefit_matches {
         return Err(CommerceServiceError::conflict(
-            "coupon benefit changed before Token Bank fulfillment",
+            "coupon benefit changed before asset fulfillment",
         ));
     }
 

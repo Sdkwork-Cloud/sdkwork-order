@@ -149,6 +149,64 @@ describe("createSdkworkCouponRechargeService", () => {
     configureSdkworkOrderSessionTokenProvider(null);
   });
 
+  it("maps a points credit redemption", async () => {
+    const { appService } = createAppService({
+      create: {
+        item: {
+          benefit: {
+            kind: "points_credit",
+            grantPoints: "1000",
+          },
+          orderId: "order-coupon-3",
+          orderNo: "CP1003",
+          status: "fulfilled",
+          replayed: false,
+        },
+      },
+    });
+    configureSdkworkOrderSessionTokenProvider(() => ({ accessToken: "session-token" }));
+    const service = createSdkworkCouponRechargeService({ appService });
+
+    await expect(service.redeem("POINTS-1000")).resolves.toEqual({
+      benefitKind: "points_credit",
+      grantPoints: 1000,
+      orderId: "order-coupon-3",
+      orderNo: "CP1003",
+      replayed: false,
+      status: "completed",
+    });
+    configureSdkworkOrderSessionTokenProvider(null);
+  });
+
+  it("maps a cash credit redemption in minor units", async () => {
+    const { appService } = createAppService({
+      create: {
+        item: {
+          benefit: {
+            kind: "cash_credit",
+            grantAmount: "10050",
+          },
+          orderId: "order-coupon-4",
+          orderNo: "CP1004",
+          status: "fulfilled",
+          replayed: true,
+        },
+      },
+    });
+    configureSdkworkOrderSessionTokenProvider(() => ({ accessToken: "session-token" }));
+    const service = createSdkworkCouponRechargeService({ appService });
+
+    await expect(service.redeem("CASH-100")).resolves.toEqual({
+      benefitKind: "cash_credit",
+      grantAmount: 10050,
+      orderId: "order-coupon-4",
+      orderNo: "CP1004",
+      replayed: true,
+      status: "completed",
+    });
+    configureSdkworkOrderSessionTokenProvider(null);
+  });
+
   it("maps a quota-limited subscription redemption", async () => {
     const { appService } = createAppService({
       create: {

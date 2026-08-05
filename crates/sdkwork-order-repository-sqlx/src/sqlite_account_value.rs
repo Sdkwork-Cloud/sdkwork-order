@@ -1677,6 +1677,14 @@ fn coupon_benefit_snapshot(benefit: &CouponRedemptionBenefit) -> serde_json::Val
             "targetAsset": "token_bank",
             "grantAmount": grant_amount.as_str(),
         }),
+        CouponRedemptionBenefit::PointsCredit { grant_amount } => serde_json::json!({
+            "kind": "points_credit",
+            "grantPoints": grant_amount.as_str(),
+        }),
+        CouponRedemptionBenefit::CashCredit { grant_amount } => serde_json::json!({
+            "kind": "cash_credit",
+            "grantAmount": grant_amount.as_str(),
+        }),
         CouponRedemptionBenefit::Subscription {
             product_id,
             sku_id,

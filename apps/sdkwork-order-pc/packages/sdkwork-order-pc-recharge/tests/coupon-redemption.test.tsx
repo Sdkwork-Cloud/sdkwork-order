@@ -86,6 +86,52 @@ describe("SDKWork coupon redemption surfaces", () => {
     await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(result));
   });
 
+  it("renders a points credit redemption", async () => {
+    const redeem = vi.fn().mockResolvedValue({
+      benefitKind: "points_credit" as const,
+      grantPoints: 1000,
+      orderId: "order-points",
+      replayed: false,
+      status: "completed" as const,
+    });
+
+    renderWithTheme(
+      <SdkworkCouponRedemptionInline
+        copy={{ pointsCredited: "Points credited" }}
+        initialCode="POINTS-1000"
+        service={{ redeem }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+
+    expect(await screen.findByText("Points credited")).toBeInTheDocument();
+    expect(screen.getByText("1,000")).toBeInTheDocument();
+  });
+
+  it("renders a cash credit redemption in yuan", async () => {
+    const redeem = vi.fn().mockResolvedValue({
+      benefitKind: "cash_credit" as const,
+      grantAmount: 10050,
+      orderId: "order-cash",
+      replayed: false,
+      status: "completed" as const,
+    });
+
+    renderWithTheme(
+      <SdkworkCouponRedemptionInline
+        copy={{ cashCredited: "Cash balance credited" }}
+        initialCode="CASH-100"
+        service={{ redeem }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+
+    expect(await screen.findByText("Cash balance credited")).toBeInTheDocument();
+    expect(screen.getByText("100.50")).toBeInTheDocument();
+  });
+
   it("renders service errors and clears them when the code changes", async () => {
     const service: SdkworkCouponRedemptionService = {
       redeem: vi.fn().mockRejectedValue(new Error("Coupon has expired")),

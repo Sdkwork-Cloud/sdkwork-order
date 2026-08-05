@@ -114,6 +114,18 @@ fn map_benefit(
                     .map_err(CommerceServiceError::validation)?,
             }
         }
+        PromotionOrderCouponBenefitKind::PointsCredit { grant_points } => {
+            CouponRedemptionBenefit::PointsCredit {
+                grant_amount: CommerceMoney::new(&grant_points.to_string())
+                    .map_err(CommerceServiceError::validation)?,
+            }
+        }
+        PromotionOrderCouponBenefitKind::CashCredit { grant_units, .. } => {
+            CouponRedemptionBenefit::CashCredit {
+                grant_amount: CommerceMoney::new(&grant_units.to_string())
+                    .map_err(CommerceServiceError::validation)?,
+            }
+        }
         PromotionOrderCouponBenefitKind::Subscription {
             product_id,
             sku_id,
