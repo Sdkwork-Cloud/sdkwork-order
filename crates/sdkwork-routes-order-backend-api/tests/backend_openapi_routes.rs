@@ -3,7 +3,7 @@ use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::{AuthLevel, DeploymentMode, Environment, IamAppContext};
-use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
+use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, AccountValueFuture,
     AccountValueLedgerCommand, AccountValueLedgerOperation, AccountValueLedgerOutcome,
@@ -13,9 +13,12 @@ use sdkwork_order_service::{
     PointsRechargeCreditRequest,
 };
 use sdkwork_order_service_host::OrderServiceHost;
+use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
+use sdkwork_database_sqlx::{DatabasePool, PoolContext};
 use sdkwork_routes_order_backend_api::{
-    backend_commerce_admin_router_with_sqlite_pool, backend_order_admin_router_with_sqlite_pool,
-    openapi_contract::mount_backend_openapi, payment_confirmation_router_with_sqlite_pool,
+    backend_commerce_admin_router_with_postgres_pool,
+    backend_order_admin_router_with_postgres_pool, openapi_contract::mount_backend_openapi,
+    payment_confirmation_router_with_postgres_pool,
 };
 use serde_json::Value;
 use std::sync::Arc;
@@ -50,19 +53,23 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
     }
 }
 
-fn build_test_backend_router(pool: sqlx::SqlitePool) -> Router {
+fn build_test_backend_router(pool: sqlx::PgPool) -> Router {
     let credit = Arc::new(NoopAccountPointsCreditPort);
     mount_backend_openapi(
         Router::new()
-            .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(backend_commerce_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(payment_confirmation_router_with_sqlite_pool(
+            .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
+            .merge(backend_commerce_admin_router_with_postgres_pool(pool.clone()))
+            .merge(payment_confirmation_router_with_postgres_pool(
                 pool,
                 credit,
                 Arc::new(NoopAccountValueLedgerPort),
                 Arc::new(NoopMembershipPurchaseFulfillmentPort),
             )),
     )
+}
+
+async fn test_pool() -> Option<sqlx::PgPool> {
+    order_points_recharge_e2e_postgres_pool_from_env().await
 }
 
 fn backend_iam_context() -> IamAppContext {
@@ -165,7 +172,10 @@ impl PaymentPayoutExecutorPort for FailingPayoutExecutorPort {
 
 #[tokio::test]
 async fn backend_openapi_document_is_served() {
-    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = build_test_backend_router(pool);
     let response = app
         .oneshot(
@@ -186,7 +196,10 @@ async fn backend_router_mounts_every_openapi_operation_path() {
         "../../../apis/backend-api/order/order-backend-api.openapi.json"
     ))
     .unwrap();
-    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = build_test_backend_router(pool);
     let paths = spec["paths"].as_object().unwrap();
 
@@ -215,7 +228,10 @@ async fn backend_router_mounts_every_openapi_operation_path() {
 
 #[tokio::test]
 async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_settlement() {
-    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     sqlx::query(
         r#"
         INSERT INTO commerce_order_refund_request
@@ -235,16 +251,16 @@ async fn approving_refund_request_executes_account_hold_payment_refund_and_hold_
 
     let ledger = Arc::new(RecordingAccountValueLedgerPort::default());
     let refunds = Arc::new(RecordingRefundExecutorPort::default());
+    let config = DatabaseConfig {
+        engine: DatabaseEngine::Postgres,
+        url: "postgres://ignored".to_owned(),
+        ..Default::default()
+    };
+    let database_pool = DatabasePool::Postgres(pool.clone(), PoolContext { config });
     let host = Arc::new(
-        OrderServiceHost::from_sqlite_pool(
-            pool.clone(),
-            Arc::new(NoopAccountPointsCreditPort),
-            ledger.clone(),
-            Arc::new(NoopMembershipPurchaseFulfillmentPort),
-            refunds.clone(),
-            Arc::new(FailingPayoutExecutorPort),
-        )
-        .expect("test order service host"),
+        OrderServiceHost::from_database_pool(database_pool)
+            .await
+            .expect("test order service host"),
     );
     let app = sdkwork_routes_order_backend_api::routes::build_order_backend_router(host);
     let body = serde_json::json!({

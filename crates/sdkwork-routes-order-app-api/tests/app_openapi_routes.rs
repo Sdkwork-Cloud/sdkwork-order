@@ -1,18 +1,18 @@
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
-use sdkwork_order_repository_sqlx::order_points_recharge_e2e_sqlite_memory_pool;
+use sdkwork_order_repository_sqlx::order_points_recharge_e2e_postgres_pool_from_env;
 use sdkwork_order_service::{
     AccountPointsCreditFuture, AccountPointsCreditPort, NoopAccountValueLedgerPort,
-    NoopMembershipPurchaseFulfillmentPort, PointsRechargeCreditOutcome,
-    PointsRechargeCreditRequest,
+    NoopCouponRedemptionPort, NoopMembershipPurchaseFulfillmentPort,
+    PointsRechargeCreditOutcome, PointsRechargeCreditRequest,
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_routes_order_app_api::{
-    app_after_sales_router_with_sqlite_pool, app_checkout_router_with_sqlite_pool,
-    app_fulfillment_router_with_sqlite_pool, app_membership_order_router_with_sqlite_pool,
-    app_order_router_with_sqlite_pool, app_payment_webhook_router_with_sqlite_pool,
-    app_recharge_checkout_router_with_sqlite_pool, app_shipment_router_with_sqlite_pool,
+    app_after_sales_router_with_postgres_pool, app_checkout_router_with_postgres_pool,
+    app_fulfillment_router_with_postgres_pool, app_membership_order_router_with_postgres_pool,
+    app_order_router_with_postgres_pool, app_payment_webhook_router_with_postgres_pool,
+    app_recharge_checkout_router_with_postgres_pool, app_shipment_router_with_postgres_pool,
     openapi_contract::mount_app_openapi,
 };
 use serde_json::Value;
@@ -47,29 +47,29 @@ impl AccountPointsCreditPort for NoopAccountPointsCreditPort {
     }
 }
 
-fn build_test_app_router(pool: sqlx::SqlitePool) -> Router {
+fn build_test_app_router(pool: sqlx::PgPool) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
     mount_app_openapi(
         Router::new()
-            .merge(app_order_router_with_sqlite_pool(
+            .merge(app_order_router_with_postgres_pool(
                 pool.clone(),
                 registry.clone(),
                 credentials.clone(),
             ))
-            .merge(app_checkout_router_with_sqlite_pool(pool.clone()))
-            .merge(app_recharge_checkout_router_with_sqlite_pool(
+            .merge(app_checkout_router_with_postgres_pool(pool.clone()))
+            .merge(app_recharge_checkout_router_with_postgres_pool(
                 pool.clone(),
                 registry,
                 credentials,
             ))
-            .merge(app_membership_order_router_with_sqlite_pool(pool.clone()))
-            .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
-            .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
-            .merge(app_after_sales_router_with_sqlite_pool(pool.clone()))
-            .merge(app_payment_webhook_router_with_sqlite_pool(
+            .merge(app_membership_order_router_with_postgres_pool(pool.clone()))
+            .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
+            .merge(app_shipment_router_with_postgres_pool(pool.clone()))
+            .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
+            .merge(app_payment_webhook_router_with_postgres_pool(
                 pool,
                 Arc::new(NoopAccountPointsCreditPort),
                 Arc::new(NoopAccountValueLedgerPort),
@@ -78,9 +78,16 @@ fn build_test_app_router(pool: sqlx::SqlitePool) -> Router {
     )
 }
 
+async fn test_pool() -> Option<sqlx::PgPool> {
+    order_points_recharge_e2e_postgres_pool_from_env().await
+}
+
 #[tokio::test]
 async fn app_openapi_document_is_served() {
-    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = build_test_app_router(pool);
     let response = app
         .oneshot(
@@ -97,11 +104,14 @@ async fn app_openapi_document_is_served() {
 
 #[tokio::test]
 async fn app_router_mounts_every_openapi_operation_path() {
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let spec: Value = serde_json::from_str(include_str!(
         "../../../apis/app-api/order/order-app-api.openapi.json"
     ))
     .unwrap();
-    let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
     let app = build_test_app_router(pool);
     let paths = spec["paths"].as_object().unwrap();
 

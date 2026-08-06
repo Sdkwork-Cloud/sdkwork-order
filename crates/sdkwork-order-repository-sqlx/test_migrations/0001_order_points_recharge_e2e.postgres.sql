@@ -1,6 +1,6 @@
 -- sdkwork:migration
 -- id: 0001_order_points_recharge_e2e
--- engine: sqlite
+-- engine: postgres
 -- module: order
 -- purpose: Minimal commerce order + payment tables for points-recharge store E2E tests
 -- reversible: true
@@ -500,36 +500,36 @@ CREATE TABLE IF NOT EXISTS commerce_payment_method (
     deleted_at TEXT
 );
 
-INSERT OR IGNORE INTO commerce_product_spu (
+INSERT INTO commerce_product_spu (
     id, tenant_id, organization_id, spu_no, name, title, sales_status, status, created_at, updated_at
 ) VALUES (
-    'seed-product-membership', '100001', '0', 'membership-catalog', 'Membership Catalog', 'Membership Catalog', 'active', 'active', datetime('now'), datetime('now')
-);
+    'seed-product-membership', '100001', '0', 'membership-catalog', 'Membership Catalog', 'Membership Catalog', 'active', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT DO NOTHING;
 
-INSERT OR IGNORE INTO commerce_product_sku (
+INSERT INTO commerce_product_sku (
     id, tenant_id, organization_id, spu_id, sku_no, name, title, price_amount, currency_code, sales_status, status, created_at, updated_at
 ) VALUES (
-    'sku-basic-monthly', '100001', '0', 'seed-product-membership', 'basic-monthly', 'Basic Monthly', 'Basic Monthly', '68.00', 'CNY', 'active', 'active', datetime('now'), datetime('now')
-);
+    'sku-basic-monthly', '100001', '0', 'seed-product-membership', 'basic-monthly', 'Basic Monthly', 'Basic Monthly', '68.00', 'CNY', 'active', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT DO NOTHING;
 
-INSERT OR IGNORE INTO membership_package_group (
+INSERT INTO membership_package_group (
     id, tenant_id, organization_id, external_id, group_no, name, status, sort_weight, created_at, updated_at
 ) VALUES (
-    'package-group-monthly', '100001', '0', 2, 'monthly', '连续包月', 'active', 1, datetime('now'), datetime('now')
-);
+    'package-group-monthly', '100001', '0', 2, 'monthly', '连续包月', 'active', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT DO NOTHING;
 
-INSERT OR IGNORE INTO membership_package (
+INSERT INTO membership_package (
     id, tenant_id, organization_id, external_id, package_no, package_group_id, sku_id, name, price_amount, currency_code, duration_days, sort_weight, status, created_at, updated_at
 ) VALUES (
-    'package-basic-monthly', '100001', '0', 201, 'basic-monthly', 'package-group-monthly', 'sku-basic-monthly', '基础会员·月卡', '68.00', 'CNY', 30, 1, 'active', datetime('now'), datetime('now')
-);
+    'package-basic-monthly', '100001', '0', 201, 'basic-monthly', 'package-group-monthly', 'sku-basic-monthly', '基础会员·月卡', '68.00', 'CNY', 30, 1, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT DO NOTHING;
 
-INSERT OR IGNORE INTO commerce_payment_method (
+INSERT INTO commerce_payment_method (
     id, tenant_id, organization_id, method_key, display_name, provider_code, status,
     sort_order, scope, currency_code, metadata, request_no, idempotency_key, version,
     created_at, updated_at
 ) VALUES (
     'pm-wechat', '100001', '0', 'wechat_pay', 'WeChat Pay', 'wechat_pay', 'active',
     1, 'tenant', 'CNY', '{}', 'seed-payment-method-wechat-pay',
-    'seed-payment-method-wechat-pay', 0, datetime('now'), datetime('now')
-);
+    'seed-payment-method-wechat-pay', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+) ON CONFLICT DO NOTHING;

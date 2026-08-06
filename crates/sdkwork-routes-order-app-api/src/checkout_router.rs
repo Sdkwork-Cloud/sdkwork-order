@@ -9,7 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     physical_inventory_reserve_idempotency_key, CheckoutLineInput, CheckoutQuoteView,
     CheckoutSessionDetailQuery, CheckoutSessionView, CreateCheckoutQuoteCommand,
@@ -21,7 +21,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, success_created_item, success_item, unauthorized, validation,
@@ -137,60 +137,6 @@ struct CheckoutOrderResponse {
     total_amount: String,
 }
 
-impl CommerceCheckoutStore for SqliteCommerceOrderStore {
-    fn create_checkout_session<'a>(
-        &'a self,
-        command: CreateCheckoutSessionCommand,
-    ) -> CommerceCheckoutFuture<'a, CheckoutSessionView> {
-        Box::pin(async move { self.create_checkout_session(command).await })
-    }
-
-    fn retrieve_checkout_session<'a>(
-        &'a self,
-        query: CheckoutSessionDetailQuery,
-    ) -> CommerceCheckoutFuture<'a, Option<CheckoutSessionView>> {
-        Box::pin(async move { self.retrieve_checkout_session(query).await })
-    }
-
-    fn create_checkout_quote<'a>(
-        &'a self,
-        command: CreateCheckoutQuoteCommand,
-    ) -> CommerceCheckoutFuture<'a, CheckoutQuoteView> {
-        Box::pin(async move { self.create_checkout_quote(command).await })
-    }
-
-    fn create_owner_order<'a>(
-        &'a self,
-        command: CreateOwnerOrderCommand,
-    ) -> CommerceCheckoutFuture<'a, CreateOwnerOrderOutcome> {
-        Box::pin(async move { self.create_owner_order(command).await })
-    }
-
-    fn mark_owner_order_inventory_reserved<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        owner_user_id: &'a str,
-        order_id: &'a str,
-    ) -> CommerceCheckoutFuture<'a, ()> {
-        Box::pin(async move {
-            self.mark_owner_order_inventory_reserved(tenant_id, owner_user_id, order_id)
-                .await
-        })
-    }
-
-    fn mark_owner_order_inventory_failed<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        owner_user_id: &'a str,
-        order_id: &'a str,
-    ) -> CommerceCheckoutFuture<'a, ()> {
-        Box::pin(async move {
-            self.mark_owner_order_inventory_failed(tenant_id, owner_user_id, order_id)
-                .await
-        })
-    }
-}
-
 impl CommerceCheckoutStore for PostgresCommerceOrderStore {
     fn create_checkout_session<'a>(
         &'a self,
@@ -243,14 +189,6 @@ impl CommerceCheckoutStore for PostgresCommerceOrderStore {
                 .await
         })
     }
-}
-
-pub fn app_checkout_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_app_checkout_router_with_integrations(
-        Arc::new(SqliteCommerceOrderStore::new(pool)),
-        Arc::new(UnavailablePhysicalCheckoutResolverPort),
-        Arc::new(UnavailablePhysicalInventoryReservationPort),
-    )
 }
 
 pub fn app_checkout_router_with_postgres_pool(pool: PgPool) -> Router {

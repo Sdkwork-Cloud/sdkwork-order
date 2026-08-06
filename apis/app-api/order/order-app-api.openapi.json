@@ -5869,12 +5869,14 @@
             "enum": [
               "purchase",
               "renew",
-              "upgrade"
+              "upgrade",
+              "recharge"
             ],
-            "description": "Membership lifecycle action. It participates in business purchase-intent identity."
+            "description": "Membership lifecycle action. Recharge adds quota to the current active subscription's entitlement account; it participates in business purchase-intent identity."
           },
           "packageId": {
-            "type": "string"
+            "type": "string",
+            "description": "Catalog package external id (purchase/renew/upgrade). Recharge uses the synthetic 'membership-quota-recharge' package id and ignores the catalog."
           },
           "paymentMethod": {
             "type": "string"
@@ -5894,6 +5896,15 @@
           },
           "source": {
             "type": "string"
+          },
+          "grantQuantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Quota units to add to the membership entitlement account (required for action=recharge)."
+          },
+          "amount": {
+            "type": "string",
+            "description": "Recharge price in currency amount (required for action=recharge)."
           }
         }
       },
@@ -5944,7 +5955,8 @@
           "paymentParams",
           "status",
           "reused",
-          "cashierUrl"
+          "cashierUrl",
+          "grantQuantity"
         ],
         "properties": {
           "action": {
@@ -5952,7 +5964,8 @@
             "enum": [
               "purchase",
               "renew",
-              "upgrade"
+              "upgrade",
+              "recharge"
             ]
           },
           "orderId": {
@@ -6026,6 +6039,11 @@
           },
           "cashierUrl": {
             "type": "string"
+          },
+          "grantQuantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Quota units granted by a membership quota recharge order (present when action=recharge)."
           }
         }
       },

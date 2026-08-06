@@ -9,7 +9,7 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
     OrderPaymentSettlementContext, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-    SqliteCommerceOrderStore, SqliteCommerceRechargeStore,
+
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
@@ -19,11 +19,11 @@ use sdkwork_order_service::{
     UnavailablePhysicalGoodsFulfillmentPort,
 };
 use sdkwork_payment_repository_sqlx::{
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+    PostgresCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     forbidden, map_service_error, not_found, success_created_item, unauthorized, validation,
@@ -38,11 +38,6 @@ mod permissions {
 
 #[derive(Clone)]
 enum PaymentConfirmationStoreKind {
-    Sqlite {
-        payments: Arc<SqliteCommerceOwnerOrderPaymentStore>,
-        recharge: Arc<SqliteCommerceRechargeStore>,
-        orders: Arc<SqliteCommerceOrderStore>,
-    },
     Postgres {
         payments: Arc<PostgresCommerceOwnerOrderPaymentStore>,
         recharge: Arc<PostgresCommerceRechargeStore>,
@@ -77,63 +72,6 @@ struct ConfirmOrderPaymentResponse {
     order_id: String,
     points_credited: i64,
     fulfillment_status: String,
-}
-
-pub fn payment_confirmation_router_with_sqlite_pool(
-    pool: SqlitePool,
-    credit_port: Arc<dyn AccountPointsCreditPort>,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-) -> Router {
-    payment_confirmation_router_with_sqlite_pool_and_coupon(
-        pool,
-        credit_port,
-        account_value_ledger_port,
-        Arc::new(NoopCouponRedemptionPort),
-        membership_port,
-    )
-}
-
-pub fn payment_confirmation_router_with_sqlite_pool_and_coupon(
-    pool: SqlitePool,
-    credit_port: Arc<dyn AccountPointsCreditPort>,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
-    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-) -> Router {
-    payment_confirmation_router_with_sqlite_pool_and_integrations(
-        pool,
-        credit_port,
-        account_value_ledger_port,
-        coupon_redemption_port,
-        membership_port,
-        Arc::new(UnavailableOwnerOrderPaymentReconciliationPort),
-        Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
-    )
-}
-
-pub fn payment_confirmation_router_with_sqlite_pool_and_integrations(
-    pool: SqlitePool,
-    credit_port: Arc<dyn AccountPointsCreditPort>,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
-    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-    reconciliation_port: Arc<dyn OwnerOrderPaymentReconciliationPort>,
-    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
-) -> Router {
-    build_payment_confirmation_router(PaymentConfirmationState {
-        store: PaymentConfirmationStoreKind::Sqlite {
-            payments: Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
-            recharge: Arc::new(SqliteCommerceRechargeStore::new(pool.clone())),
-            orders: Arc::new(SqliteCommerceOrderStore::new(pool)),
-        },
-        credit_port,
-        account_value_ledger_port,
-        coupon_redemption_port,
-        membership_port,
-        reconciliation_port,
-        physical_goods_port,
-    })
 }
 
 pub fn payment_confirmation_router_with_postgres_pool(
@@ -237,32 +175,6 @@ async fn confirm_order_payment(
     let reconciliation_port = state.reconciliation_port.clone();
     let physical_goods_port = state.physical_goods_port.clone();
     match state.store {
-        PaymentConfirmationStoreKind::Sqlite {
-            ref payments,
-            ref recharge,
-            ref orders,
-        } => {
-            confirm_order_payment_inner(
-                ctx,
-                &subject,
-                &order_id,
-                &settlement_request_no,
-                orders.as_ref(),
-                reconciliation_port.as_ref(),
-                OwnerOrderSettlementPorts {
-                    payment_store: payments.as_ref(),
-                    order_state_store: orders.as_ref(),
-                    recharge_store: recharge.as_ref(),
-                    account_value_store: recharge.as_ref(),
-                    credit_port: credit_port.as_ref(),
-                    account_value_ledger_port: account_value_ledger_port.as_ref(),
-                    coupon_redemption_port: coupon_redemption_port.as_ref(),
-                    membership_port: membership_port.as_ref(),
-                    physical_goods_port: physical_goods_port.as_ref(),
-                },
-            )
-            .await
-        }
         PaymentConfirmationStoreKind::Postgres {
             ref payments,
             ref recharge,
@@ -403,27 +315,6 @@ pub(crate) trait OrderSettlementContextLoader: Send + Sync {
                 + 'a,
         >,
     >;
-}
-
-impl OrderSettlementContextLoader for SqliteCommerceOrderStore {
-    fn load_order_payment_settlement_context<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        organization_id: Option<&'a str>,
-        order_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
-                .await
-        })
-    }
 }
 
 impl OrderSettlementContextLoader for PostgresCommerceOrderStore {

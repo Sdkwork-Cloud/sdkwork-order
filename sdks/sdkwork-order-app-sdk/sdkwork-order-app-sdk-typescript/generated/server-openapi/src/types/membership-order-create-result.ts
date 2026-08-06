@@ -1,5 +1,5 @@
 export interface MembershipOrderCreateResult {
-  action: 'purchase' | 'renew' | 'upgrade';
+  action: 'purchase' | 'renew' | 'upgrade' | 'recharge';
   orderId: string;
   orderNo: string;
   outTradeNo: string;
@@ -19,4 +19,6 @@ export interface MembershipOrderCreateResult {
   /** True when an idempotency replay or an existing active purchase intent was returned. */
   reused: boolean;
   cashierUrl: string;
+  /** Quota units granted by a membership quota recharge order (present when action=recharge). */
+  grantQuantity: string;
 }

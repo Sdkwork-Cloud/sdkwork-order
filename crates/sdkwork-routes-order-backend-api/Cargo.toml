@@ -30,6 +30,8 @@ sdkwork-utils-rust.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+sdkwork-database-config.workspace = true
+
 tokio = { workspace = true }
 tower = { workspace = true }
 sdkwork_order_repository_sqlx = { workspace = true, features = ["test-support"] }

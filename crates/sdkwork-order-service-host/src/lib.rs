@@ -131,25 +131,6 @@ impl OrderServiceHost {
         }
     }
 
-    pub fn from_sqlite_pool(
-        pool: sqlx::SqlitePool,
-        account_credit_port: Arc<dyn AccountPointsCreditPort>,
-        account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-        membership_fulfillment_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-        payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
-        payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
-    ) -> Result<Self, String> {
-        let database = OrderDatabaseHost::from_sqlite_pool(pool)?;
-        Ok(Self::from_parts(
-            database,
-            account_credit_port,
-            account_value_ledger_port,
-            membership_fulfillment_port,
-            payment_refund_executor_port,
-            payment_payout_executor_port,
-        ))
-    }
-
     pub fn database_pool(&self) -> &DatabasePool {
         self.database.pool()
     }

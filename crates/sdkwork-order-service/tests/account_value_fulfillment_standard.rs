@@ -17,6 +17,7 @@ use sdkwork_order_service::{
     MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentFuture,
     MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
     MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
+    MembershipQuotaRechargeFulfillmentOutcome, MembershipQuotaRechargeFulfillmentRequest,
     NoopCouponRedemptionPort, OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationFuture,
     OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStateOutcome, OwnerOrderPaymentStatePort,
     OwnerOrderSettlementPorts, PhysicalGoodsFulfillmentOutcome, PhysicalGoodsFulfillmentPort,
@@ -361,6 +362,7 @@ async fn membership_settlement_forwards_the_paid_order_snapshot_exactly_once() {
         action: "upgrade".to_owned(),
         order_no: "MB-UPGRADE-1".to_owned(),
         package_id: 202,
+        grant_quantity: None,
     };
 
     let outcome = settle_owner_order_after_payment_success(
@@ -779,6 +781,17 @@ impl MembershipPurchaseFulfillmentPort for CapturingMembershipPurchaseFulfillmen
             ))
         })
     }
+
+    fn fulfill_membership_quota_recharge<'a>(
+        &'a self,
+        _request: MembershipQuotaRechargeFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipQuotaRechargeFulfillmentOutcome> {
+        Box::pin(async {
+            Err(CommerceServiceError::unsupported_capability(
+                "quota recharge should not be called for membership purchase",
+            ))
+        })
+    }
 }
 
 impl MembershipPurchaseFulfillmentPort for UnsupportedMembershipPurchaseFulfillmentPort {
@@ -800,6 +813,17 @@ impl MembershipPurchaseFulfillmentPort for UnsupportedMembershipPurchaseFulfillm
         Box::pin(async {
             Err(CommerceServiceError::unsupported_capability(
                 "membership coupon port should not be called for token_bank_recharge",
+            ))
+        })
+    }
+
+    fn fulfill_membership_quota_recharge<'a>(
+        &'a self,
+        _request: MembershipQuotaRechargeFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipQuotaRechargeFulfillmentOutcome> {
+        Box::pin(async {
+            Err(CommerceServiceError::unsupported_capability(
+                "membership quota recharge port should not be called for token_bank_recharge",
             ))
         })
     }

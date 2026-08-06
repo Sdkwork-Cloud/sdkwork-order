@@ -6,7 +6,7 @@ use sdkwork_order_service::{
     PhysicalInventoryMutationOutcome, PhysicalInventoryReservationPort, PhysicalPurchaseFuture,
     ReleasePhysicalOrderInventoryRequest, ReservePhysicalOrderInventoryRequest,
 };
-use sqlx::{Postgres, Row, Sqlite, Transaction};
+use sqlx::{Postgres, Row, Transaction};
 
 #[derive(Clone)]
 pub struct PhysicalInventoryAdapter {
@@ -25,10 +25,11 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
         request: ReservePhysicalOrderInventoryRequest,
     ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
         Box::pin(async move {
-            match &self.pool {
-                DatabasePool::Sqlite(pool, _) => reserve_sqlite(pool, &request).await,
-                DatabasePool::Postgres(pool, _) => reserve_postgres(pool, &request).await,
-            }
+            // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+            let DatabasePool::Postgres(pool, _) = &self.pool else {
+                panic!("physical inventory reservation requires a PostgreSQL pool");
+            };
+            reserve_postgres(pool, &request).await
         })
     }
 
@@ -37,10 +38,11 @@ impl PhysicalInventoryReservationPort for PhysicalInventoryAdapter {
         request: ReleasePhysicalOrderInventoryRequest,
     ) -> PhysicalPurchaseFuture<'a, PhysicalInventoryMutationOutcome> {
         Box::pin(async move {
-            match &self.pool {
-                DatabasePool::Sqlite(pool, _) => release_sqlite(pool, &request).await,
-                DatabasePool::Postgres(pool, _) => release_postgres(pool, &request).await,
-            }
+            // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+            let DatabasePool::Postgres(pool, _) = &self.pool else {
+                panic!("physical inventory release requires a PostgreSQL pool");
+            };
+            release_postgres(pool, &request).await
         })
     }
 }
@@ -51,153 +53,54 @@ pub(crate) async fn consume_order_inventory(
     order_id: &str,
     idempotency_key: &str,
 ) -> Result<PhysicalInventoryMutationOutcome, CommerceServiceError> {
-    match pool {
-        DatabasePool::Sqlite(pool, _) => {
-            let mut tx = pool
-                .begin()
-                .await
-                .map_err(store_error("begin inventory consume"))?;
-            let rows = sqlx::query(
-                "SELECT id, tenant_id, organization_id, sku_id, warehouse_id, fulfillment_node_id, quantity, status FROM commerce_inventory_reservation WHERE tenant_id = ? AND order_id = ? ORDER BY id",
-            )
-            .bind(tenant_id)
-            .bind(order_id)
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(store_error("load inventory reservations for consume"))?;
-            if rows.is_empty() {
-                return Err(CommerceServiceError::invalid_state(
-                    "physical order has no inventory reservation",
-                ));
-            }
-            let replayed = rows
-                .iter()
-                .all(|row| text_sqlite(row, "status").eq_ignore_ascii_case("consumed"));
-            if !replayed {
-                for row in &rows {
-                    let status = text_sqlite(row, "status");
-                    if status.eq_ignore_ascii_case("consumed") {
-                        continue;
-                    }
-                    if !status.eq_ignore_ascii_case("reserved") {
-                        return Err(CommerceServiceError::invalid_state(
-                            "inventory reservation cannot be consumed",
-                        ));
-                    }
-                    consume_stock_sqlite(&mut tx, row).await?;
-                    sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = ?, updated_at = ?, idempotency_key = ? WHERE id = ? AND status = 'reserved'")
-                        .bind(now_string()).bind(now_string()).bind(idempotency_key)
-                        .bind(text_sqlite(row, "id"))
-                        .execute(&mut *tx).await.map_err(store_error("consume inventory reservation"))?;
-                }
-            }
-            tx.commit()
-                .await
-                .map_err(store_error("commit inventory consume"))?;
-            Ok(PhysicalInventoryMutationOutcome {
-                accepted: true,
-                replayed,
-            })
-        }
-        DatabasePool::Postgres(pool, _) => {
-            let mut tx = pool
-                .begin()
-                .await
-                .map_err(store_error("begin inventory consume"))?;
-            let rows = sqlx::query(
-                "SELECT id, tenant_id, organization_id, sku_id, warehouse_id, fulfillment_node_id, quantity, status FROM commerce_inventory_reservation WHERE tenant_id = $1 AND order_id = $2 ORDER BY id FOR UPDATE",
-            )
-            .bind(tenant_id).bind(order_id).fetch_all(&mut *tx).await
-            .map_err(store_error("load inventory reservations for consume"))?;
-            if rows.is_empty() {
-                return Err(CommerceServiceError::invalid_state(
-                    "physical order has no inventory reservation",
-                ));
-            }
-            let replayed = rows
-                .iter()
-                .all(|row| text_postgres(row, "status").eq_ignore_ascii_case("consumed"));
-            if !replayed {
-                for row in &rows {
-                    let status = text_postgres(row, "status");
-                    if status.eq_ignore_ascii_case("consumed") {
-                        continue;
-                    }
-                    if !status.eq_ignore_ascii_case("reserved") {
-                        return Err(CommerceServiceError::invalid_state(
-                            "inventory reservation cannot be consumed",
-                        ));
-                    }
-                    consume_stock_postgres(&mut tx, row).await?;
-                    sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = $1, updated_at = $2, idempotency_key = $3 WHERE id = $4 AND status = 'reserved'")
-                        .bind(now_string()).bind(now_string()).bind(idempotency_key)
-                        .bind(text_postgres(row, "id"))
-                        .execute(&mut *tx).await.map_err(store_error("consume inventory reservation"))?;
-                }
-            }
-            tx.commit()
-                .await
-                .map_err(store_error("commit inventory consume"))?;
-            Ok(PhysicalInventoryMutationOutcome {
-                accepted: true,
-                replayed,
-            })
-        }
-    }
-}
-
-async fn reserve_sqlite(
-    pool: &sqlx::SqlitePool,
-    request: &ReservePhysicalOrderInventoryRequest,
-) -> Result<PhysicalInventoryMutationOutcome, CommerceServiceError> {
-    validate_reserve_request(request)?;
+    // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+    let DatabasePool::Postgres(pool, _) = pool else {
+        panic!("physical inventory consume requires a PostgreSQL pool");
+    };
     let mut tx = pool
-        .begin()
-        .await
-        .map_err(store_error("begin inventory reservation"))?;
-    let existing: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM commerce_inventory_reservation WHERE tenant_id = ? AND order_id = ?",
-    )
-    .bind(&request.tenant_id)
-    .bind(&request.order_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(store_error("count inventory reservations"))?;
-    if existing > 0 {
-        validate_reservation_replay_sqlite(&mut tx, request, existing).await?;
-        tx.commit()
+            .begin()
             .await
-            .map_err(store_error("commit inventory reservation replay"))?;
-        return Ok(PhysicalInventoryMutationOutcome {
-            accepted: true,
-            replayed: true,
-        });
-    }
-    for line in &request.lines {
-        let stock = sqlx::query("SELECT id, warehouse_id, fulfillment_node_id FROM commerce_inventory_stock WHERE tenant_id = ? AND organization_id = ? AND shop_id = ? AND sku_id = ? AND status = 'active' AND available_quantity - safety_stock_quantity >= ? ORDER BY available_quantity DESC, id LIMIT 1")
-            .bind(&request.tenant_id).bind(&request.merchant_organization_id).bind(&line.shop_id)
-            .bind(&line.sku_id).bind(line.quantity).fetch_optional(&mut *tx).await
-            .map_err(store_error("select reservable inventory stock"))?
-            .ok_or_else(|| CommerceServiceError::conflict("physical SKU inventory is insufficient"))?;
-        let stock_id = text_sqlite(&stock, "id");
-        let updated = sqlx::query("UPDATE commerce_inventory_stock SET available_quantity = available_quantity - ?, reserved_quantity = reserved_quantity + ?, version = version + 1, updated_at = ? WHERE id = ? AND available_quantity - safety_stock_quantity >= ?")
-            .bind(line.quantity).bind(line.quantity).bind(now_string()).bind(&stock_id).bind(line.quantity)
-            .execute(&mut *tx).await.map_err(store_error("reserve inventory stock"))?;
-        if updated.rows_affected() != 1 {
-            return Err(CommerceServiceError::conflict(
-                "physical SKU inventory is insufficient",
+            .map_err(store_error("begin inventory consume"))?;
+        let rows = sqlx::query(
+            "SELECT id, tenant_id, organization_id, sku_id, warehouse_id, fulfillment_node_id, quantity, status FROM commerce_inventory_reservation WHERE tenant_id = $1 AND order_id = $2 ORDER BY id FOR UPDATE",
+        )
+        .bind(tenant_id).bind(order_id).fetch_all(&mut *tx).await
+        .map_err(store_error("load inventory reservations for consume"))?;
+        if rows.is_empty() {
+            return Err(CommerceServiceError::invalid_state(
+                "physical order has no inventory reservation",
             ));
         }
-        insert_reservation_sqlite(&mut tx, request, line, &stock).await?;
-    }
-    tx.commit()
-        .await
-        .map_err(store_error("commit inventory reservation"))?;
-    Ok(PhysicalInventoryMutationOutcome {
-        accepted: true,
-        replayed: false,
-    })
+        let replayed = rows
+            .iter()
+            .all(|row| text_postgres(row, "status").eq_ignore_ascii_case("consumed"));
+        if !replayed {
+            for row in &rows {
+                let status = text_postgres(row, "status");
+                if status.eq_ignore_ascii_case("consumed") {
+                    continue;
+                }
+                if !status.eq_ignore_ascii_case("reserved") {
+                    return Err(CommerceServiceError::invalid_state(
+                        "inventory reservation cannot be consumed",
+                    ));
+                }
+                consume_stock_postgres(&mut tx, row).await?;
+                sqlx::query("UPDATE commerce_inventory_reservation SET status = 'consumed', consumed_quantity = quantity, consumed_at = $1, updated_at = $2, idempotency_key = $3 WHERE id = $4 AND status = 'reserved'")
+                    .bind(now_string()).bind(now_string()).bind(idempotency_key)
+                    .bind(text_postgres(row, "id"))
+                    .execute(&mut *tx).await.map_err(store_error("consume inventory reservation"))?;
+            }
+        }
+        tx.commit()
+            .await
+            .map_err(store_error("commit inventory consume"))?;
+        Ok(PhysicalInventoryMutationOutcome {
+            accepted: true,
+            replayed,
+        })
 }
+
 
 async fn reserve_postgres(
     pool: &sqlx::PgPool,
@@ -255,50 +158,6 @@ async fn reserve_postgres(
     })
 }
 
-async fn release_sqlite(
-    pool: &sqlx::SqlitePool,
-    request: &ReleasePhysicalOrderInventoryRequest,
-) -> Result<PhysicalInventoryMutationOutcome, CommerceServiceError> {
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(store_error("begin inventory release"))?;
-    let rows = sqlx::query("SELECT id, tenant_id, organization_id, sku_id, warehouse_id, fulfillment_node_id, quantity, status FROM commerce_inventory_reservation WHERE tenant_id = ? AND order_id = ? ORDER BY id")
-        .bind(&request.tenant_id).bind(&request.order_id).fetch_all(&mut *tx).await.map_err(store_error("load inventory reservations for release"))?;
-    if rows.is_empty() {
-        return Ok(PhysicalInventoryMutationOutcome {
-            accepted: true,
-            replayed: true,
-        });
-    }
-    let replayed = rows
-        .iter()
-        .all(|row| text_sqlite(row, "status").eq_ignore_ascii_case("released"));
-    if !replayed {
-        for row in &rows {
-            let status = text_sqlite(row, "status");
-            if status.eq_ignore_ascii_case("released") {
-                continue;
-            }
-            if !status.eq_ignore_ascii_case("reserved") {
-                return Err(CommerceServiceError::invalid_state(
-                    "consumed inventory cannot be released",
-                ));
-            }
-            release_stock_sqlite(&mut tx, row).await?;
-            sqlx::query("UPDATE commerce_inventory_reservation SET status = 'released', released_quantity = quantity, release_reason_code = ?, released_at = ?, updated_at = ?, idempotency_key = ? WHERE id = ? AND status = 'reserved'")
-                .bind(&request.reason_code).bind(now_string()).bind(now_string()).bind(&request.idempotency_key).bind(text_sqlite(row, "id"))
-                .execute(&mut *tx).await.map_err(store_error("release inventory reservation"))?;
-        }
-    }
-    tx.commit()
-        .await
-        .map_err(store_error("commit inventory release"))?;
-    Ok(PhysicalInventoryMutationOutcome {
-        accepted: true,
-        replayed,
-    })
-}
 
 async fn release_postgres(
     pool: &sqlx::PgPool,
@@ -375,20 +234,6 @@ fn validate_reserve_request(
     Ok(())
 }
 
-async fn validate_reservation_replay_sqlite(
-    tx: &mut Transaction<'_, Sqlite>,
-    request: &ReservePhysicalOrderInventoryRequest,
-    existing: i64,
-) -> Result<(), CommerceServiceError> {
-    let rows = sqlx::query("SELECT organization_id, sku_id, quantity, idempotency_key, status FROM commerce_inventory_reservation WHERE tenant_id = ? AND order_id = ? ORDER BY sku_id")
-        .bind(&request.tenant_id).bind(&request.order_id).fetch_all(&mut **tx).await.map_err(store_error("validate inventory reservation replay"))?;
-    if !reservation_replay_matches_sqlite(&rows, request, existing) {
-        return Err(CommerceServiceError::conflict(
-            "inventory reservation replay does not match the original order",
-        ));
-    }
-    Ok(())
-}
 
 async fn validate_reservation_replay_postgres(
     tx: &mut Transaction<'_, Postgres>,
@@ -405,20 +250,6 @@ async fn validate_reservation_replay_postgres(
     Ok(())
 }
 
-async fn insert_reservation_sqlite(
-    tx: &mut Transaction<'_, Sqlite>,
-    request: &ReservePhysicalOrderInventoryRequest,
-    line: &sdkwork_order_service::PhysicalInventoryLine,
-    stock: &sqlx::sqlite::SqliteRow,
-) -> Result<(), CommerceServiceError> {
-    let id = reservation_id(&request.order_id, &line.sku_id);
-    sqlx::query("INSERT INTO commerce_inventory_reservation (id, tenant_id, organization_id, reservation_no, order_id, reservation_source_type, reservation_source_id, reservation_type, sku_id, warehouse_id, fulfillment_node_id, quantity, reserved_quantity, consumed_quantity, released_quantity, status, request_no, idempotency_key, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'order', ?, 'sale', ?, ?, ?, ?, ?, 0, 0, 'reserved', ?, ?, ?, ?, ?)")
-        .bind(&id).bind(&request.tenant_id).bind(&request.merchant_organization_id).bind(&id).bind(&request.order_id).bind(&request.order_id)
-        .bind(&line.sku_id).bind(optional_text_sqlite(stock, "warehouse_id")).bind(optional_text_sqlite(stock, "fulfillment_node_id"))
-        .bind(line.quantity).bind(line.quantity).bind(&request.request_no).bind(&request.idempotency_key).bind(expires_at()).bind(now_string()).bind(now_string())
-        .execute(&mut **tx).await.map_err(store_error("insert inventory reservation"))?;
-    Ok(())
-}
 
 async fn insert_reservation_postgres(
     tx: &mut Transaction<'_, Postgres>,
@@ -435,53 +266,6 @@ async fn insert_reservation_postgres(
     Ok(())
 }
 
-async fn consume_stock_sqlite(
-    tx: &mut Transaction<'_, Sqlite>,
-    row: &sqlx::sqlite::SqliteRow,
-) -> Result<(), CommerceServiceError> {
-    mutate_stock_sqlite(tx, row, false).await
-}
-async fn release_stock_sqlite(
-    tx: &mut Transaction<'_, Sqlite>,
-    row: &sqlx::sqlite::SqliteRow,
-) -> Result<(), CommerceServiceError> {
-    mutate_stock_sqlite(tx, row, true).await
-}
-async fn mutate_stock_sqlite(
-    tx: &mut Transaction<'_, Sqlite>,
-    row: &sqlx::sqlite::SqliteRow,
-    release: bool,
-) -> Result<(), CommerceServiceError> {
-    let quantity = row.try_get::<i64, _>("quantity").unwrap_or(0);
-    let sql = if release {
-        "UPDATE commerce_inventory_stock SET available_quantity = available_quantity + ?, reserved_quantity = reserved_quantity - ?, version = version + 1, updated_at = ? WHERE tenant_id = ? AND organization_id = ? AND sku_id = ? AND ((warehouse_id = ?) OR (warehouse_id IS NULL AND ? IS NULL)) AND ((fulfillment_node_id = ?) OR (fulfillment_node_id IS NULL AND ? IS NULL)) AND reserved_quantity >= ?"
-    } else {
-        "UPDATE commerce_inventory_stock SET reserved_quantity = reserved_quantity - ?, sold_quantity = sold_quantity + ?, version = version + 1, updated_at = ? WHERE tenant_id = ? AND organization_id = ? AND sku_id = ? AND ((warehouse_id = ?) OR (warehouse_id IS NULL AND ? IS NULL)) AND ((fulfillment_node_id = ?) OR (fulfillment_node_id IS NULL AND ? IS NULL)) AND reserved_quantity >= ?"
-    };
-    let warehouse = optional_text_sqlite(row, "warehouse_id");
-    let fulfillment_node = optional_text_sqlite(row, "fulfillment_node_id");
-    let result = sqlx::query(sqlx::AssertSqlSafe(sql))
-        .bind(quantity)
-        .bind(quantity)
-        .bind(now_string())
-        .bind(text_sqlite(row, "tenant_id"))
-        .bind(text_sqlite(row, "organization_id"))
-        .bind(text_sqlite(row, "sku_id"))
-        .bind(warehouse.as_deref())
-        .bind(warehouse.as_deref())
-        .bind(fulfillment_node.as_deref())
-        .bind(fulfillment_node.as_deref())
-        .bind(quantity)
-        .execute(&mut **tx)
-        .await
-        .map_err(store_error("mutate reserved inventory stock"))?;
-    if result.rows_affected() != 1 {
-        return Err(CommerceServiceError::invalid_state(
-            "reserved inventory stock is inconsistent",
-        ));
-    }
-    Ok(())
-}
 async fn consume_stock_postgres(
     tx: &mut Transaction<'_, Postgres>,
     row: &sqlx::postgres::PgRow,
@@ -528,25 +312,6 @@ fn reservation_id(order_id: &str, sku_id: &str) -> String {
     format!("inventory-reservation-{order_id}-{sku_id}")
 }
 
-fn reservation_replay_matches_sqlite(
-    rows: &[sqlx::sqlite::SqliteRow],
-    request: &ReservePhysicalOrderInventoryRequest,
-    existing: i64,
-) -> bool {
-    reservation_replay_matches(
-        rows.iter().map(|row| {
-            (
-                text_sqlite(row, "organization_id"),
-                text_sqlite(row, "sku_id"),
-                row.try_get::<i64, _>("quantity").unwrap_or(0),
-                text_sqlite(row, "idempotency_key"),
-                text_sqlite(row, "status"),
-            )
-        }),
-        request,
-        existing,
-    )
-}
 
 fn reservation_replay_matches_postgres(
     rows: &[sqlx::postgres::PgRow],
@@ -613,12 +378,6 @@ fn expires_at() -> String {
         .unwrap_or(0)
         + 1800)
         .to_string()
-}
-fn text_sqlite(row: &sqlx::sqlite::SqliteRow, column: &str) -> String {
-    optional_text_sqlite(row, column).unwrap_or_default()
-}
-fn optional_text_sqlite(row: &sqlx::sqlite::SqliteRow, column: &str) -> Option<String> {
-    row.try_get::<Option<String>, _>(column).ok().flatten()
 }
 fn text_postgres(row: &sqlx::postgres::PgRow, column: &str) -> String {
     optional_text_postgres(row, column).unwrap_or_default()

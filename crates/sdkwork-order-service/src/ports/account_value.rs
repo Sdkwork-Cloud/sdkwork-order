@@ -123,6 +123,7 @@ pub enum CouponSubscriptionPeriod {
     Day,
     Week,
     Month,
+    Quarter,
     Year,
 }
 
@@ -161,6 +162,7 @@ impl CouponSubscriptionPeriod {
             "day" => Ok(Self::Day),
             "week" => Ok(Self::Week),
             "month" => Ok(Self::Month),
+            "quarter" => Ok(Self::Quarter),
             "year" => Ok(Self::Year),
             _ => Err(CommerceServiceError::validation(
                 "coupon subscription period is invalid",
@@ -173,6 +175,7 @@ impl CouponSubscriptionPeriod {
             Self::Day => "day",
             Self::Week => "week",
             Self::Month => "month",
+            Self::Quarter => "quarter",
             Self::Year => "year",
         }
     }

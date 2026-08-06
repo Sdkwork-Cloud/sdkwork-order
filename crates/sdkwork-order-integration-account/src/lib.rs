@@ -54,13 +54,11 @@ async fn build_store_adapter() -> Result<Arc<dyn AccountPointsCreditPort>, Strin
         .await
         .map_err(|error| format!("create account database pool failed: {error}"))?;
 
-    let adapter: Arc<dyn AccountPointsCreditPort> = match pool {
-        DatabasePool::Sqlite(pool, _) => Arc::new(StoreAccountPointsCreditAdapter::sqlite(pool)),
-        DatabasePool::Postgres(pool, _) => {
-            Arc::new(StoreAccountPointsCreditAdapter::postgres(pool))
-        }
+    // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+    let DatabasePool::Postgres(pool, _) = pool else {
+        return Err("account points credit adapter requires a PostgreSQL pool".to_owned());
     };
-    Ok(adapter)
+    Ok(Arc::new(StoreAccountPointsCreditAdapter::postgres(pool)))
 }
 
 async fn build_store_account_value_adapter() -> Result<Arc<dyn AccountValueLedgerPort>, String> {
@@ -71,11 +69,9 @@ async fn build_store_account_value_adapter() -> Result<Arc<dyn AccountValueLedge
         .await
         .map_err(|error| format!("create account database pool failed: {error}"))?;
 
-    let adapter: Arc<dyn AccountValueLedgerPort> = match pool {
-        DatabasePool::Sqlite(pool, _) => Arc::new(StoreAccountPointsCreditAdapter::sqlite(pool)),
-        DatabasePool::Postgres(pool, _) => {
-            Arc::new(StoreAccountPointsCreditAdapter::postgres(pool))
-        }
+    // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+    let DatabasePool::Postgres(pool, _) = pool else {
+        return Err("account value ledger adapter requires a PostgreSQL pool".to_owned());
     };
-    Ok(adapter)
+    Ok(Arc::new(StoreAccountPointsCreditAdapter::postgres(pool)))
 }

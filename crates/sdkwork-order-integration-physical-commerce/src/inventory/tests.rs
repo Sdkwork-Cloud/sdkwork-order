@@ -5,16 +5,32 @@ use sdkwork_order_service::{
     PhysicalInventoryLine, ReleasePhysicalOrderInventoryRequest,
     ReservePhysicalOrderInventoryRequest,
 };
-use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::postgres::PgPoolOptions;
 
-async fn fixture() -> (sqlx::SqlitePool, PhysicalInventoryAdapter) {
-    let pool = SqlitePoolOptions::new()
+/// 服务端测试必须使用 PostgreSQL（DATABASE_SPEC：authoritative-server）。
+/// 由 `SDKWORK_DATABASE_TEST_POSTGRES_URL` 提供连接；未配置时跳过。
+fn postgres_url() -> Option<String> {
+    std::env::var("SDKWORK_DATABASE_TEST_POSTGRES_URL")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
+/// 共享 PostgreSQL 实例下，串行化 DROP/CREATE schema 的初始化阶段。
+static SCHEMA_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+async fn fixture() -> Option<(sqlx::PgPool, PhysicalInventoryAdapter)> {
+    let url = postgres_url()?;
+    let _guard = SCHEMA_LOCK.lock().expect("schema lock");
+    let pool = PgPoolOptions::new()
         .max_connections(1)
-        .connect("sqlite::memory:")
+        .connect(&url)
         .await
-        .expect("sqlite pool");
+        .ok()?;
     sqlx::query(
         r#"
+        DROP TABLE IF EXISTS commerce_inventory_reservation;
+        DROP TABLE IF EXISTS commerce_inventory_stock;
         CREATE TABLE commerce_inventory_stock (
             id TEXT PRIMARY KEY,
             tenant_id TEXT NOT NULL,
@@ -67,13 +83,14 @@ async fn fixture() -> (sqlx::SqlitePool, PhysicalInventoryAdapter) {
     )
     .execute(&pool)
     .await
-    .expect("inventory fixture schema");
+    .ok()?;
+    drop(_guard);
 
     let context = PoolContext {
         config: DatabaseConfig::default(),
     };
-    let database_pool = DatabasePool::Sqlite(pool.clone(), context);
-    (pool, PhysicalInventoryAdapter::new(database_pool))
+    let database_pool = DatabasePool::Postgres(pool.clone(), context);
+    Some((pool, PhysicalInventoryAdapter::new(database_pool)))
 }
 
 fn reserve_request(order_id: &str, key: &str) -> ReservePhysicalOrderInventoryRequest {
@@ -93,7 +110,10 @@ fn reserve_request(order_id: &str, key: &str) -> ReservePhysicalOrderInventoryRe
 
 #[tokio::test]
 async fn reserve_replay_only_decrements_stock_once_and_rejects_changed_payload() {
-    let (pool, adapter) = fixture().await;
+    let Some((pool, adapter)) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let request = reserve_request("order-1", "reserve-key-1");
 
     let first = adapter
@@ -130,14 +150,17 @@ async fn reserve_replay_only_decrements_stock_once_and_rejects_changed_payload()
 
 #[tokio::test]
 async fn consume_replay_is_idempotent_and_consumed_stock_cannot_be_released() {
-    let (pool, adapter) = fixture().await;
+    let Some((pool, adapter)) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let request = reserve_request("order-2", "reserve-key-2");
     adapter
         .reserve_physical_order_inventory(request)
         .await
         .expect("reservation");
 
-    let database_pool = DatabasePool::Sqlite(
+    let database_pool = DatabasePool::Postgres(
         pool.clone(),
         PoolContext {
             config: DatabaseConfig::default(),
@@ -177,7 +200,10 @@ async fn consume_replay_is_idempotent_and_consumed_stock_cannot_be_released() {
 
 #[tokio::test]
 async fn release_replay_restores_stock_only_once() {
-    let (pool, adapter) = fixture().await;
+    let Some((pool, adapter)) = fixture().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let request = reserve_request("order-3", "reserve-key-3");
     adapter
         .reserve_physical_order_inventory(request)

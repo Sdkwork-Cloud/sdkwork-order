@@ -11,6 +11,29 @@ pub struct MembershipPurchaseSettlementSnapshot {
     pub action: String,
     pub order_no: String,
     pub package_id: i64,
+    /// 订阅期额度充值数量（仅 action=recharge）。
+    pub grant_quantity: Option<i64>,
+}
+
+/// 订阅期额度充值履约请求：向当前有效会员订阅的权益账户追加额度。
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MembershipQuotaRechargeFulfillmentRequest {
+    pub tenant_id: String,
+    pub organization_id: Option<String>,
+    pub owner_user_id: String,
+    pub order_id: String,
+    pub quantity: i64,
+    pub request_no: String,
+    pub idempotency_key: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MembershipQuotaRechargeFulfillmentOutcome {
+    pub accepted: bool,
+    pub replayed: bool,
+    pub subscription_id: String,
+    pub balance_after: i64,
+    pub fulfillment_status: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,10 +94,20 @@ pub trait MembershipPurchaseFulfillmentPort: Send + Sync {
         &'a self,
         request: CouponSubscriptionFulfillmentRequest,
     ) -> MembershipPurchaseFulfillmentFuture<'a, CouponSubscriptionFulfillmentOutcome>;
+
+    fn fulfill_membership_quota_recharge<'a>(
+        &'a self,
+        request: MembershipQuotaRechargeFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipQuotaRechargeFulfillmentOutcome>;
 }
 
 pub fn membership_purchase_fulfillment_idempotency_key(order_id: &str) -> String {
     format!("membership-purchase:fulfill:{order_id}")
+}
+
+/// 订阅期额度充值的结算幂等键。
+pub fn membership_quota_recharge_idempotency_key(order_id: &str) -> String {
+    format!("membership-quota-recharge:fulfill:{order_id}")
 }
 
 pub const MEMBERSHIP_PURCHASE_FULFILLMENT_PORT: &str = "membership.purchase.fulfillment";
@@ -103,6 +136,17 @@ impl MembershipPurchaseFulfillmentPort for NoopMembershipPurchaseFulfillmentPort
         Box::pin(async move {
             Err(CommerceServiceError::unsupported_capability(
                 "membership coupon subscription fulfillment port is not configured",
+            ))
+        })
+    }
+
+    fn fulfill_membership_quota_recharge<'a>(
+        &'a self,
+        _request: MembershipQuotaRechargeFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipQuotaRechargeFulfillmentOutcome> {
+        Box::pin(async move {
+            Err(CommerceServiceError::unsupported_capability(
+                "membership quota recharge fulfillment port is not configured",
             ))
         })
     }

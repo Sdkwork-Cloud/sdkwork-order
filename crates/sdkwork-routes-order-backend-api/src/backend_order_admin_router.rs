@@ -7,7 +7,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     CancelManagementOrderCommand, CloseManagementOrderCommand, OrderCancellationListQuery,
     OrderCancellationPage, OrderCancellationView, OrderManagementDetailQuery,
@@ -17,7 +17,7 @@ use sdkwork_order_service::{
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     conflict as api_conflict, map_service_error, not_found as api_not_found,
@@ -160,22 +160,8 @@ struct OrderCancellationResponse {
     created_at: String,
 }
 
-pub fn backend_order_admin_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    let credentials = ProviderCredentialBundle::from_env();
-    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
-        credentials.clone(),
-    ));
-    build_backend_order_admin_router(
-        BackendManagementOrderStore::Sqlite(Arc::new(SqliteCommerceOrderStore::new(pool.clone()))),
-        BackendManagementPaymentStore::Sqlite {
-            pool,
-            registry,
-            credentials,
-        },
-    )
-}
-
-pub fn backend_order_admin_router_with_postgres_pool(pool: PgPool) -> Router {
+pub fn backend_order_admin_router_with_postgres_pool(
+    pool: PgPool) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
@@ -222,9 +208,7 @@ impl BackendManagementOrderStore {
         query: OrderManagementListQuery,
     ) -> Result<OrderManagementListPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_orders(query).await,
-            Self::Sqlite(store) => store.list_management_orders(query).await,
-        }
+            Self::Postgres(store) => store.list_management_orders(query).await,        }
     }
 
     async fn retrieve_management_order(
@@ -232,9 +216,7 @@ impl BackendManagementOrderStore {
         query: OrderManagementDetailQuery,
     ) -> Result<Option<OrderOwnerDetail>, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.retrieve_management_order(query).await,
-            Self::Sqlite(store) => store.retrieve_management_order(query).await,
-        }
+            Self::Postgres(store) => store.retrieve_management_order(query).await,        }
     }
 
     async fn list_management_order_events(
@@ -242,9 +224,7 @@ impl BackendManagementOrderStore {
         query: OrderManagementEventListQuery,
     ) -> Result<OrderManagementEventPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_management_order_events(query).await,
-            Self::Sqlite(store) => store.list_management_order_events(query).await,
-        }
+            Self::Postgres(store) => store.list_management_order_events(query).await,        }
     }
 
     async fn list_order_cancellations(
@@ -252,9 +232,7 @@ impl BackendManagementOrderStore {
         query: OrderCancellationListQuery,
     ) -> Result<OrderCancellationPage, CommerceServiceError> {
         match self {
-            Self::Postgres(store) => store.list_order_cancellations(query).await,
-            Self::Sqlite(store) => store.list_order_cancellations(query).await,
-        }
+            Self::Postgres(store) => store.list_order_cancellations(query).await,        }
     }
 }
 

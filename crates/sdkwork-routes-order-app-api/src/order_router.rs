@@ -9,7 +9,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     CancelOwnerOrderCommand, OrderOwnerDetail, OrderOwnerDetailQuery, OrderOwnerEventListQuery,
     OrderOwnerEventPage, OrderOwnerEventView, OrderOwnerListPage, OrderOwnerListQuery,
@@ -19,14 +19,14 @@ use sdkwork_order_service::{
 };
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
-    PostgresCommercePaymentRecordStore, SqliteCommercePaymentRecordStore,
+    PostgresCommercePaymentRecordStore,
 };
 use sdkwork_payment_service::{
     PaymentRecordItem, PaymentRecordOrderListPage, PaymentRecordOrderListQuery,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_command,
@@ -312,35 +312,8 @@ struct OrderStatisticsResponse {
 }
 
 use crate::owner_order_payment_enrich::{
-    enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
+    enriched_postgres_owner_order_payments,
 };
-
-pub fn app_order_router_with_sqlite_pool(
-    pool: SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-) -> Router {
-    build_app_order_router_with_inventory(
-        Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-        enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials),
-        Arc::new(SqliteCommercePaymentRecordStore::new(pool)),
-        Arc::new(UnavailablePhysicalInventoryReservationPort),
-    )
-}
-
-pub fn app_order_router_with_sqlite_pool_and_inventory(
-    pool: SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-    inventory: Arc<dyn PhysicalInventoryReservationPort>,
-) -> Router {
-    build_app_order_router_with_inventory(
-        Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-        enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials),
-        Arc::new(SqliteCommercePaymentRecordStore::new(pool)),
-        inventory,
-    )
-}
 
 pub fn app_order_router_with_postgres_pool(
     pool: PgPool,
@@ -955,59 +928,6 @@ fn format_order_payment_status_name(status: &str) -> String {
     }
 }
 
-impl CommerceOrderStore for SqliteCommerceOrderStore {
-    fn list_owner_orders<'a>(
-        &'a self,
-        query: OrderOwnerListQuery,
-    ) -> CommerceOrderFuture<'a, OrderOwnerListPage> {
-        Box::pin(async move { self.list_owner_orders(query).await })
-    }
-
-    fn retrieve_owner_order<'a>(
-        &'a self,
-        query: OrderOwnerDetailQuery,
-    ) -> CommerceOrderFuture<'a, Option<OrderOwnerDetail>> {
-        Box::pin(async move { self.retrieve_owner_order(query).await })
-    }
-
-    fn retrieve_owner_order_payment_status<'a>(
-        &'a self,
-        query: OrderOwnerDetailQuery,
-    ) -> CommerceOrderFuture<'a, Option<OrderOwnerPaymentStatus>> {
-        Box::pin(async move { self.retrieve_owner_order_payment_status(query).await })
-    }
-
-    fn retrieve_owner_order_statistics<'a>(
-        &'a self,
-        tenant_id: String,
-        organization_id: Option<String>,
-        owner_user_id: String,
-    ) -> CommerceOrderFuture<'a, OrderOwnerStatistics> {
-        Box::pin(async move {
-            self.retrieve_owner_order_statistics(
-                tenant_id.as_str(),
-                organization_id.as_deref(),
-                owner_user_id.as_str(),
-            )
-            .await
-        })
-    }
-
-    fn list_owner_order_events<'a>(
-        &'a self,
-        query: OrderOwnerEventListQuery,
-    ) -> CommerceOrderFuture<'a, OrderOwnerEventPage> {
-        Box::pin(async move { self.list_owner_order_events(query).await })
-    }
-
-    fn cancel_owner_order<'a>(
-        &'a self,
-        command: CancelOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, ()> {
-        Box::pin(async move { self.cancel_owner_order(command).await })
-    }
-}
-
 impl CommerceOrderStore for PostgresCommerceOrderStore {
     fn list_owner_orders<'a>(
         &'a self,
@@ -1061,15 +981,6 @@ impl CommerceOrderStore for PostgresCommerceOrderStore {
     }
 }
 
-impl OrderPaymentRecordStore for SqliteCommercePaymentRecordStore {
-    fn list_payment_records_by_order<'a>(
-        &'a self,
-        query: PaymentRecordOrderListQuery,
-    ) -> CommerceOrderFuture<'a, PaymentRecordOrderListPage> {
-        Box::pin(async move { self.list_payment_records_by_order(query).await })
-    }
-}
-
 impl OrderPaymentRecordStore for PostgresCommercePaymentRecordStore {
     fn list_payment_records_by_order<'a>(
         &'a self,
@@ -1081,10 +992,6 @@ impl OrderPaymentRecordStore for PostgresCommercePaymentRecordStore {
 
 #[cfg(test)]
 mod tests {
-    use sdkwork_order_repository_sqlx::{
-        order_points_recharge_e2e_sqlite_memory_pool, SqliteCommerceOrderStore,
-    };
-
     use super::{
         order_payment_succeeded, payment_success_organization_scopes,
         retrieve_payment_success_order, AppRuntimeSubject,
@@ -1119,72 +1026,5 @@ mod tests {
         }));
     }
 
-    #[tokio::test]
-    async fn payment_success_lookup_reads_platform_scoped_recharge_without_cross_scope_access() {
-        let pool = order_points_recharge_e2e_sqlite_memory_pool().await;
-        sqlx::query(
-            r#"
-            INSERT INTO commerce_order
-                (id, tenant_id, organization_id, owner_user_id, order_no, status, subject,
-                 currency_code, payment_status, created_at, updated_at)
-            VALUES
-                ('order-platform-recharge', 'tenant-1', '0', 'user-1', 'RC-PLATFORM-1',
-                 'pending_payment', 'points_recharge', 'CNY', 'pending',
-                 '2026-07-16T00:00:00Z', '2026-07-16T00:00:00Z')
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("platform scoped recharge order");
-        sqlx::query(
-            r#"
-            INSERT INTO commerce_order_amount_breakdown
-                (id, tenant_id, organization_id, order_id, allocation_type,
-                 original_amount, discount_amount, payable_amount, currency_code, created_at)
-            VALUES
-                ('amount-platform-recharge', 'tenant-1', '0', 'order-platform-recharge',
-                 'order_total', '5000', '0', '5000', 'CNY', '2026-07-16T00:00:00Z')
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("platform scoped recharge amount");
 
-        let store = SqliteCommerceOrderStore::new(pool);
-        let unscoped_owner = AppRuntimeSubject {
-            tenant_id: "tenant-1".to_owned(),
-            organization_id: None,
-            user_id: "user-1".to_owned(),
-        };
-        let detail =
-            retrieve_payment_success_order(&store, &unscoped_owner, "order-platform-recharge")
-                .await
-                .expect("payment success lookup")
-                .expect("platform scoped owner order");
-        assert_eq!("pending_payment", detail.status);
-
-        let another_user = AppRuntimeSubject {
-            user_id: "user-2".to_owned(),
-            ..unscoped_owner.clone()
-        };
-        assert!(
-            retrieve_payment_success_order(&store, &another_user, "order-platform-recharge")
-                .await
-                .expect("cross-user lookup")
-                .is_none()
-        );
-
-        let another_organization = AppRuntimeSubject {
-            organization_id: Some("org-2".to_owned()),
-            ..unscoped_owner
-        };
-        assert!(retrieve_payment_success_order(
-            &store,
-            &another_organization,
-            "order-platform-recharge"
-        )
-        .await
-        .expect("cross-organization lookup")
-        .is_none());
-    }
 }

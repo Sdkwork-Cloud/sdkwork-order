@@ -27,5 +27,5 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
-sdkwork_order_repository_sqlx = { workspace = true, features = ["test-support"] }
-sdkwork_account_repository_sqlx = { workspace = true, features = ["test-support"] }
+sdkwork_order_repository_sqlx = { workspace = true }
+sdkwork_account_repository_sqlx = { workspace = true }

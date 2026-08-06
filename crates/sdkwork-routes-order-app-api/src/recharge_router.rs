@@ -12,8 +12,7 @@ use std::collections::BTreeMap;
 
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
-    SqliteCommerceRechargeStore,
+    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
 };
 use sdkwork_order_service::{
     default_fulfill_account_value_order_command, redeem_coupon_and_fulfill_account_value_order,
@@ -36,7 +35,7 @@ use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundl
 use sdkwork_utils_rust::{add_minutes, format_datetime, now};
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query,
@@ -47,7 +46,7 @@ use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::{CommerceOrderStore, OwnerOrderPaymentStore};
 use crate::owner_order_cancel::{cancel_owner_order_with_payments, compensate_failed_recharge_pay};
 use crate::owner_order_payment_enrich::{
-    enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
+    enriched_postgres_owner_order_payments,
 };
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
@@ -492,110 +491,6 @@ struct AccountValueRequestResponse {
     updated_at: String,
 }
 
-impl CommerceRechargeCheckoutStore for SqliteCommerceRechargeStore {
-    fn list_recharge_packages<'a>(
-        &'a self,
-        query: RechargePackageListQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, RechargePackageListPage> {
-        Box::pin(async move { self.list_recharge_packages(query).await })
-    }
-
-    fn create_points_recharge_order<'a>(
-        &'a self,
-        command: CreatePointsRechargeOrderCommand,
-    ) -> CommerceRechargeCheckoutFuture<'a, CreatePointsRechargeOrderOutcome> {
-        Box::pin(async move { self.create_points_recharge_order(command).await })
-    }
-
-    fn load_recharge_settings<'a>(
-        &'a self,
-        query: RechargeSettingsQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, RechargeSettingsSnapshot> {
-        Box::pin(async move { self.load_recharge_settings(query).await })
-    }
-
-    fn retrieve_checkout_status<'a>(
-        &'a self,
-        query: CheckoutStatusQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, Option<CheckoutStatusSnapshot>> {
-        Box::pin(async move { self.load_checkout_status(query).await })
-    }
-
-    fn list_token_bank_plans<'a>(
-        &'a self,
-        query: AccountValueCatalogListQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, TokenBankPlanListPage> {
-        Box::pin(async move { self.list_token_bank_plans(query).await })
-    }
-
-    fn create_account_recharge_order<'a>(
-        &'a self,
-        command: CreateAccountRechargeOrderCommand,
-    ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome> {
-        Box::pin(async move { self.create_account_recharge_order(command).await })
-    }
-
-    fn create_coupon_recharge_order<'a>(
-        &'a self,
-        command: CreateCouponRechargeOrderCommand,
-    ) -> CommerceRechargeCheckoutFuture<'a, CreateAccountRechargeOrderOutcome> {
-        Box::pin(async move { self.create_coupon_recharge_order(command).await })
-    }
-
-    fn load_account_value_order_by_idempotency<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        organization_id: Option<&'a str>,
-        owner_user_id: &'a str,
-        idempotency_key: &'a str,
-    ) -> CommerceRechargeCheckoutFuture<'a, Option<CreateAccountRechargeOrderOutcome>> {
-        Box::pin(async move {
-            self.load_account_value_order_by_idempotency(
-                tenant_id,
-                organization_id,
-                owner_user_id,
-                idempotency_key,
-            )
-            .await
-        })
-    }
-
-    fn list_order_refund_requests<'a>(
-        &'a self,
-        query: AccountValueRequestListQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRequestListPage> {
-        Box::pin(async move { self.list_order_refund_requests(query).await })
-    }
-
-    fn create_order_refund_request<'a>(
-        &'a self,
-        command: CreateOrderRefundRequestCommand,
-    ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRequestView> {
-        Box::pin(async move { self.create_order_refund_request(command).await })
-    }
-
-    fn retrieve_order_refund_request<'a>(
-        &'a self,
-        query: AccountValueRequestDetailQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, Option<AccountValueRequestView>> {
-        Box::pin(async move { self.retrieve_order_refund_request(query).await })
-    }
-
-    fn create_cash_withdrawal_request<'a>(
-        &'a self,
-        command: CreateCashWithdrawalRequestCommand,
-    ) -> CommerceRechargeCheckoutFuture<'a, AccountValueRequestView> {
-        Box::pin(async move { self.create_cash_withdrawal_request(command).await })
-    }
-
-    fn retrieve_cash_withdrawal_request<'a>(
-        &'a self,
-        query: AccountValueRequestDetailQuery,
-    ) -> CommerceRechargeCheckoutFuture<'a, Option<AccountValueRequestView>> {
-        Box::pin(async move { self.retrieve_cash_withdrawal_request(query).await })
-    }
-}
-
 impl CommerceRechargeCheckoutStore for PostgresCommerceRechargeStore {
     fn list_recharge_packages<'a>(
         &'a self,
@@ -698,24 +593,6 @@ impl CommerceRechargeCheckoutStore for PostgresCommerceRechargeStore {
     ) -> CommerceRechargeCheckoutFuture<'a, Option<AccountValueRequestView>> {
         Box::pin(async move { self.retrieve_cash_withdrawal_request(query).await })
     }
-}
-
-pub fn app_recharge_checkout_router_with_sqlite_pool(
-    pool: SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-) -> Router {
-    let pool_for_orders = pool.clone();
-    let store = Arc::new(SqliteCommerceRechargeStore::new(pool));
-    build_app_recharge_checkout_router_with_integrations(
-        store.clone(),
-        store,
-        Arc::new(NoopCouponRedemptionPort),
-        Arc::new(NoopAccountValueLedgerPort),
-        Arc::new(NoopMembershipPurchaseFulfillmentPort),
-        Arc::new(SqliteCommerceOrderStore::new(pool_for_orders.clone())),
-        enriched_sqlite_owner_order_payments(pool_for_orders, registry, credentials),
-    )
 }
 
 pub fn app_recharge_checkout_router_with_postgres_pool(

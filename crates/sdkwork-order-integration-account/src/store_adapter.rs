@@ -1,5 +1,5 @@
 use sdkwork_account_repository_sqlx::{
-    hold_request_hash, PostgresCommerceAccountStore, SqliteCommerceAccountStore,
+    hold_request_hash, PostgresCommerceAccountStore,
 };
 use sdkwork_account_service::{
     AppendLedgerEntryCommand, CreateAccountHoldCommand, HoldMutationOutcome,
@@ -16,10 +16,9 @@ use sdkwork_order_service::{
     POINTS_RECHARGE_LEDGER_BUSINESS_TYPE,
 };
 use sdkwork_utils_rust::sha256_hash;
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 enum StoreKind {
-    Sqlite(SqliteCommerceAccountStore),
     Postgres(PostgresCommerceAccountStore),
 }
 
@@ -28,12 +27,6 @@ pub struct StoreAccountPointsCreditAdapter {
 }
 
 impl StoreAccountPointsCreditAdapter {
-    pub fn sqlite(pool: SqlitePool) -> Self {
-        Self {
-            store: StoreKind::Sqlite(SqliteCommerceAccountStore::new(pool)),
-        }
-    }
-
     pub fn postgres(pool: PgPool) -> Self {
         Self {
             store: StoreKind::Postgres(PostgresCommerceAccountStore::new(pool)),
@@ -116,7 +109,6 @@ impl StoreAccountPointsCreditAdapter {
             &request.idempotency_key,
         )?;
         let outcome = match &self.store {
-            StoreKind::Sqlite(store) => store.append_ledger_entry(command, request_hash).await?,
             StoreKind::Postgres(store) => store.append_ledger_entry(command, request_hash).await?,
         };
         Ok(PointsRechargeCreditOutcome {
@@ -146,11 +138,6 @@ impl StoreAccountPointsCreditAdapter {
             &command.idempotency_key,
         )?;
         let outcome = match &self.store {
-            StoreKind::Sqlite(store) => {
-                store
-                    .append_ledger_entry(ledger_command, request_hash)
-                    .await?
-            }
             StoreKind::Postgres(store) => {
                 store
                     .append_ledger_entry(ledger_command, request_hash)
@@ -186,11 +173,6 @@ impl StoreAccountPointsCreditAdapter {
             None,
         )?;
         let outcome = match &self.store {
-            StoreKind::Sqlite(store) => {
-                store
-                    .create_account_hold(hold_command, request_hash)
-                    .await?
-            }
             StoreKind::Postgres(store) => {
                 store
                     .create_account_hold(hold_command, request_hash)
@@ -215,11 +197,6 @@ impl StoreAccountPointsCreditAdapter {
             &command.idempotency_key,
         )?;
         let outcome = match &self.store {
-            StoreKind::Sqlite(store) => {
-                store
-                    .settle_account_hold(hold_command, request_hash)
-                    .await?
-            }
             StoreKind::Postgres(store) => {
                 store
                     .settle_account_hold(hold_command, request_hash)
@@ -241,11 +218,6 @@ impl StoreAccountPointsCreditAdapter {
             &command.idempotency_key,
         )?;
         let outcome = match &self.store {
-            StoreKind::Sqlite(store) => {
-                store
-                    .release_account_hold(hold_command, request_hash)
-                    .await?
-            }
             StoreKind::Postgres(store) => {
                 store
                     .release_account_hold(hold_command, request_hash)

@@ -10,7 +10,7 @@ use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_order_repository_sqlx::{
     OrderPaymentSettlementContext, PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
-    SqliteCommerceOrderStore, SqliteCommerceRechargeStore,
+
 };
 use sdkwork_order_service::{
     settle_owner_order_after_payment_success, AccountPointsCreditPort, AccountValueLedgerPort,
@@ -24,33 +24,20 @@ use sdkwork_payment_providers::{
     ProviderAccountBinding, ProviderCredentialBundle,
 };
 use sdkwork_payment_repository_sqlx::{
-    ingest_provider_webhook_sqlite, load_active_provider_account_by_merchant_id_postgres,
-    load_active_provider_account_by_merchant_id_sqlite, load_active_provider_account_postgres,
-    load_active_provider_account_sqlite, load_webhook_attempt_context_by_out_trade_no_postgres,
-    load_webhook_attempt_context_by_out_trade_no_sqlite, IngestProviderWebhookCommand,
+    load_active_provider_account_by_merchant_id_postgres,
+    load_active_provider_account_postgres,
+    load_webhook_attempt_context_by_out_trade_no_postgres,
+    IngestProviderWebhookCommand,
     PaymentProviderAccountRecord, PaymentWebhookAttemptContext,
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+    PostgresCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_web_core::WebRequestContext;
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{map_service_error, success_command, validation};
 
 #[derive(Clone)]
 enum PaymentWebhookState {
-    Sqlite {
-        registry: Arc<PaymentProviderRegistry>,
-        credentials: ProviderCredentialBundle,
-        pool: SqlitePool,
-        payments: Arc<SqliteCommerceOwnerOrderPaymentStore>,
-        recharge: Arc<SqliteCommerceRechargeStore>,
-        orders: Arc<SqliteCommerceOrderStore>,
-        credit_port: Arc<dyn AccountPointsCreditPort>,
-        account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-        coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
-        membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-        physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
-    },
     Postgres {
         registry: Arc<PaymentProviderRegistry>,
         credentials: ProviderCredentialBundle,
@@ -89,70 +76,6 @@ struct WebhookProviderScope {
 struct WebhookProviderResolution {
     registry: PaymentProviderRegistry,
     scope: Option<WebhookProviderScope>,
-}
-
-pub fn app_payment_webhook_router_with_sqlite_pool(
-    pool: SqlitePool,
-    credit_port: Arc<dyn AccountPointsCreditPort>,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-) -> Router {
-    app_payment_webhook_router_with_sqlite_pool_and_coupon(
-        pool,
-        credit_port,
-        account_value_ledger_port,
-        Arc::new(NoopCouponRedemptionPort),
-        membership_port,
-    )
-}
-
-pub fn app_payment_webhook_router_with_sqlite_pool_and_coupon(
-    pool: SqlitePool,
-    credit_port: Arc<dyn AccountPointsCreditPort>,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
-    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-) -> Router {
-    app_payment_webhook_router_with_sqlite_pool_and_integrations(
-        pool,
-        credit_port,
-        account_value_ledger_port,
-        coupon_redemption_port,
-        membership_port,
-        Arc::new(UnavailablePhysicalGoodsFulfillmentPort),
-    )
-}
-
-pub fn app_payment_webhook_router_with_sqlite_pool_and_integrations(
-    pool: SqlitePool,
-    credit_port: Arc<dyn AccountPointsCreditPort>,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    coupon_redemption_port: Arc<dyn CouponRedemptionPort>,
-    membership_port: Arc<dyn MembershipPurchaseFulfillmentPort>,
-    physical_goods_port: Arc<dyn PhysicalGoodsFulfillmentPort>,
-) -> Router {
-    let credentials = ProviderCredentialBundle::from_env();
-    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
-        credentials.clone(),
-    ));
-    Router::new()
-        .route(
-            "/app/v3/api/orders/payments/webhooks/{providerCode}",
-            post(receive_provider_webhook),
-        )
-        .with_state(PaymentWebhookState::Sqlite {
-            registry,
-            credentials,
-            pool: pool.clone(),
-            payments: Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
-            recharge: Arc::new(SqliteCommerceRechargeStore::new(pool.clone())),
-            orders: Arc::new(SqliteCommerceOrderStore::new(pool)),
-            credit_port,
-            account_value_ledger_port,
-            coupon_redemption_port,
-            membership_port,
-            physical_goods_port,
-        })
 }
 
 pub fn app_payment_webhook_router_with_postgres_pool(
@@ -228,46 +151,6 @@ async fn receive_provider_webhook(
 ) -> Response {
     let ctx = request_context.as_ref().map(|Extension(value)| value);
     match state {
-        PaymentWebhookState::Sqlite {
-            registry,
-            credentials,
-            pool,
-            payments,
-            recharge,
-            orders,
-            credit_port,
-            account_value_ledger_port,
-            coupon_redemption_port,
-            membership_port,
-            physical_goods_port,
-        } => {
-            receive_provider_webhook_inner(
-                PaymentWebhookRuntime {
-                    deployment_registry: registry.as_ref(),
-                    credentials: &credentials,
-                    pool: &pool,
-                    order_context_loader: orders.as_ref(),
-                    settlement_ports: OwnerOrderSettlementPorts {
-                        payment_store: payments.as_ref(),
-                        order_state_store: orders.as_ref(),
-                        recharge_store: recharge.as_ref(),
-                        account_value_store: recharge.as_ref(),
-                        credit_port: credit_port.as_ref(),
-                        account_value_ledger_port: account_value_ledger_port.as_ref(),
-                        coupon_redemption_port: coupon_redemption_port.as_ref(),
-                        membership_port: membership_port.as_ref(),
-                        physical_goods_port: physical_goods_port.as_ref(),
-                    },
-                },
-                ProviderWebhookRequest {
-                    context: ctx,
-                    provider_code,
-                    headers,
-                    body,
-                },
-            )
-            .await
-        }
         PaymentWebhookState::Postgres {
             registry,
             credentials,
@@ -494,27 +377,6 @@ trait OrderSettlementContextLoader: Send + Sync {
     >;
 }
 
-impl OrderSettlementContextLoader for SqliteCommerceOrderStore {
-    fn load_order_payment_settlement_context<'a>(
-        &'a self,
-        tenant_id: &'a str,
-        organization_id: Option<&'a str>,
-        order_id: &'a str,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<
-                    Output = Result<Option<OrderPaymentSettlementContext>, CommerceServiceError>,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async move {
-            self.load_order_payment_settlement_context(tenant_id, organization_id, order_id)
-                .await
-        })
-    }
-}
-
 impl OrderSettlementContextLoader for PostgresCommerceOrderStore {
     fn load_order_payment_settlement_context<'a>(
         &'a self,
@@ -556,47 +418,6 @@ trait WebhookIngestPool {
             CommerceServiceError,
         >,
     > + Send;
-}
-
-async fn resolve_webhook_provider_account_sqlite(
-    pool: &SqlitePool,
-    credentials: &ProviderCredentialBundle,
-    deployment_registry: &PaymentProviderRegistry,
-    provider_code: &str,
-    body: &[u8],
-) -> Result<WebhookProviderResolution, CommerceServiceError> {
-    let peek = peek_webhook_routing_fields(provider_code, body);
-    let attempt_context = if let Some(out_trade_no) = peek.out_trade_no.as_deref() {
-        load_webhook_attempt_context_by_out_trade_no_sqlite(pool, provider_code, out_trade_no)
-            .await?
-    } else {
-        None
-    };
-    let fallback_scope = attempt_context
-        .as_ref()
-        .map(|context| WebhookProviderScope {
-            tenant_id: context.tenant_id.clone(),
-            organization_id: context.organization_id.clone(),
-        });
-    let account = if let Some(context) = attempt_context.as_ref() {
-        load_active_provider_account_sqlite(
-            pool,
-            &context.tenant_id,
-            context.organization_id.as_deref(),
-            &context.provider_code,
-        )
-        .await?
-    } else if let Some(merchant_id) = peek.merchant_id.as_deref() {
-        load_active_provider_account_by_merchant_id_sqlite(pool, provider_code, merchant_id).await?
-    } else {
-        None
-    };
-    Ok(webhook_provider_resolution(
-        deployment_registry,
-        credentials,
-        account,
-        fallback_scope,
-    ))
 }
 
 async fn resolve_webhook_provider_account_postgres(
@@ -676,25 +497,6 @@ fn provider_account_binding(record: &PaymentProviderAccountRecord) -> ProviderAc
     }
 }
 
-impl WebhookCredentialPool for SqlitePool {
-    async fn resolve_webhook_registry(
-        &self,
-        deployment_registry: &PaymentProviderRegistry,
-        credentials: &ProviderCredentialBundle,
-        provider_code: &str,
-        body: &[u8],
-    ) -> Result<WebhookProviderResolution, CommerceServiceError> {
-        resolve_webhook_provider_account_sqlite(
-            self,
-            credentials,
-            deployment_registry,
-            provider_code,
-            body,
-        )
-        .await
-    }
-}
-
 impl WebhookCredentialPool for PgPool {
     async fn resolve_webhook_registry(
         &self,
@@ -714,16 +516,6 @@ impl WebhookCredentialPool for PgPool {
     }
 }
 
-impl WebhookIngestPool for SqlitePool {
-    async fn ingest_provider_webhook(
-        &self,
-        command: IngestProviderWebhookCommand,
-    ) -> Result<sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome, CommerceServiceError>
-    {
-        ingest_provider_webhook_sqlite(self, command).await
-    }
-}
-
 impl WebhookIngestPool for PgPool {
     async fn ingest_provider_webhook(
         &self,
@@ -731,115 +523,5 @@ impl WebhookIngestPool for PgPool {
     ) -> Result<sdkwork_payment_repository_sqlx::IngestProviderWebhookOutcome, CommerceServiceError>
     {
         sdkwork_payment_repository_sqlx::ingest_provider_webhook_postgres(self, command).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::resolve_webhook_provider_account_sqlite;
-    use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
-
-    #[tokio::test]
-    async fn webhook_scope_falls_back_to_merchant_account_when_trade_is_unmatched() {
-        let pool = webhook_scope_test_pool().await;
-        sqlx::query(
-            r#"
-            INSERT INTO commerce_payment_provider_account
-                (id, tenant_id, organization_id, account_no, provider_code, merchant_id,
-                 environment, secret_ref, status)
-            VALUES ('provider-account-1', 'tenant-merchant', 'org-merchant', 'PA-1', 'alipay',
-                    'merchant-1', 'production', 'secret://alipay', 'active')
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("seed provider account");
-        let credentials = ProviderCredentialBundle::from_env();
-        let deployment_registry = PaymentProviderRegistry::from_credentials(credentials.clone());
-
-        let resolution = resolve_webhook_provider_account_sqlite(
-            &pool,
-            &credentials,
-            &deployment_registry,
-            "alipay",
-            b"out_trade_no=missing-trade&app_id=merchant-1&trade_status=TRADE_SUCCESS",
-        )
-        .await
-        .expect("resolve webhook account");
-        let scope = resolution.scope.expect("provider account scope");
-        assert_eq!(scope.tenant_id, "tenant-merchant");
-        assert_eq!(scope.organization_id.as_deref(), Some("org-merchant"));
-    }
-
-    #[tokio::test]
-    async fn webhook_scope_uses_exact_attempt_when_provider_account_is_absent() {
-        let pool = webhook_scope_test_pool().await;
-        sqlx::query(
-            r#"
-            INSERT INTO commerce_payment_attempt
-                (id, tenant_id, organization_id, provider_code, out_trade_no)
-            VALUES ('attempt-1', 'tenant-attempt', 'org-attempt', 'stripe', 'trade-1')
-            "#,
-        )
-        .execute(&pool)
-        .await
-        .expect("seed payment attempt");
-        let credentials = ProviderCredentialBundle::from_env();
-        let deployment_registry = PaymentProviderRegistry::from_credentials(credentials.clone());
-
-        let resolution = resolve_webhook_provider_account_sqlite(
-            &pool,
-            &credentials,
-            &deployment_registry,
-            "stripe",
-            br#"{"data":{"object":{"metadata":{"merchant_order_no":"trade-1"}}}}"#,
-        )
-        .await
-        .expect("resolve webhook attempt scope");
-        let scope = resolution.scope.expect("payment attempt scope");
-        assert_eq!(scope.tenant_id, "tenant-attempt");
-        assert_eq!(scope.organization_id.as_deref(), Some("org-attempt"));
-    }
-
-    async fn webhook_scope_test_pool() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("sqlite memory pool");
-        for statement in [
-            r#"
-            CREATE TABLE commerce_payment_attempt (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                organization_id TEXT,
-                provider_code TEXT NOT NULL,
-                out_trade_no TEXT NOT NULL,
-                deleted_at TEXT
-            )
-            "#,
-            r#"
-            CREATE TABLE commerce_payment_provider_account (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                organization_id TEXT,
-                account_no TEXT NOT NULL,
-                provider_code TEXT NOT NULL,
-                merchant_id TEXT,
-                environment TEXT NOT NULL,
-                secret_ref TEXT NOT NULL,
-                webhook_secret_ref TEXT,
-                certificate_ref TEXT,
-                status TEXT NOT NULL,
-                metadata TEXT NOT NULL DEFAULT '{}',
-                updated_at TEXT NOT NULL DEFAULT '2026-07-12T00:00:00Z',
-                deleted_at TEXT
-            )
-            "#,
-        ] {
-            sqlx::query(sqlx::AssertSqlSafe(statement))
-                .execute(&pool)
-                .await
-                .expect("create webhook scope test table");
-        }
-        pool
     }
 }

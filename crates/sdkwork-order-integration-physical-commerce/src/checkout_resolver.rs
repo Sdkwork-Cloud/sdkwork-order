@@ -2,24 +2,20 @@ use std::collections::HashSet;
 
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_database_sqlx::DatabasePool;
-use sdkwork_merchandise_repository_sqlx::{
-    PostgresCommerceCatalogStore, SqliteCommerceCatalogStore,
-};
+use sdkwork_merchandise_repository_sqlx::PostgresCommerceCatalogStore;
 use sdkwork_merchandise_service::{ProductSkuRetrieveQuery, ProductSpuRetrieveQuery, SkuRecord};
 use sdkwork_order_service::{
     PhysicalCheckoutResolverPort, PhysicalPurchaseFuture, ResolvePhysicalCheckoutRequest,
     ResolvedPhysicalCheckout, ResolvedPhysicalCheckoutLine,
 };
-use sdkwork_shop_repository_sqlx::{PostgresCommerceShopStore, SqliteCommerceShopStore};
+use sdkwork_shop_repository_sqlx::PostgresCommerceShopStore;
 use sdkwork_shop_service::{ShopScopeQuery, ShopSummaryView};
 
 enum CatalogStore {
-    Sqlite(SqliteCommerceCatalogStore),
     Postgres(PostgresCommerceCatalogStore),
 }
 
 enum ShopStore {
-    Sqlite(SqliteCommerceShopStore),
     Postgres(PostgresCommerceShopStore),
 }
 
@@ -30,20 +26,15 @@ pub struct PhysicalCheckoutAdapter {
 
 impl PhysicalCheckoutAdapter {
     pub fn new(merchandise_pool: DatabasePool, shop_pool: DatabasePool) -> Self {
-        let catalog = match merchandise_pool {
-            DatabasePool::Sqlite(pool, _) => {
-                CatalogStore::Sqlite(SqliteCommerceCatalogStore::new(pool))
-            }
-            DatabasePool::Postgres(pool, _) => {
-                CatalogStore::Postgres(PostgresCommerceCatalogStore::new(pool))
-            }
+        // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+        let DatabasePool::Postgres(pool, _) = merchandise_pool else {
+            panic!("physical checkout resolver requires a PostgreSQL merchandise pool");
         };
-        let shops = match shop_pool {
-            DatabasePool::Sqlite(pool, _) => ShopStore::Sqlite(SqliteCommerceShopStore::new(pool)),
-            DatabasePool::Postgres(pool, _) => {
-                ShopStore::Postgres(PostgresCommerceShopStore::new(pool))
-            }
+        let catalog = CatalogStore::Postgres(PostgresCommerceCatalogStore::new(pool));
+        let DatabasePool::Postgres(pool, _) = shop_pool else {
+            panic!("physical checkout resolver requires a PostgreSQL shop pool");
         };
+        let shops = ShopStore::Postgres(PostgresCommerceShopStore::new(pool));
         Self { catalog, shops }
     }
 
@@ -199,7 +190,6 @@ impl PhysicalCheckoutAdapter {
             sku_id: sku_id.to_owned(),
         };
         match &self.catalog {
-            CatalogStore::Sqlite(store) => store.retrieve_sku(&query).await,
             CatalogStore::Postgres(store) => store.retrieve_sku(&query).await,
         }
     }
@@ -214,7 +204,6 @@ impl PhysicalCheckoutAdapter {
             spu_id: spu_id.to_owned(),
         };
         match &self.catalog {
-            CatalogStore::Sqlite(store) => store.retrieve_spu(&query).await,
             CatalogStore::Postgres(store) => store.retrieve_spu(&query).await,
         }
     }
@@ -226,7 +215,6 @@ impl PhysicalCheckoutAdapter {
     ) -> Result<Option<ShopSummaryView>, CommerceServiceError> {
         let scope = ShopScopeQuery::new(tenant_id, Some(organization_id))?;
         match &self.shops {
-            ShopStore::Sqlite(store) => store.retrieve_current_shop(scope).await,
             ShopStore::Postgres(store) => store.retrieve_current_shop(scope).await,
         }
     }

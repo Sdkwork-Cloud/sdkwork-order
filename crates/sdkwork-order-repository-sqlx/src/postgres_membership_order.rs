@@ -11,6 +11,26 @@ use crate::recharge_platform_catalog::materialize_platform_catalog_sql;
 
 const PLATFORM_ORGANIZATION_SCOPE_SENTINEL: &str = "0";
 
+/// 订阅期额度充值的合成包标识（不依赖目录套餐）。
+const MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID: &str = "membership-quota-recharge";
+
+/// 订阅期额度充值合成包：数量与金额由请求声明，无时长。
+fn recharge_membership_package(command: &CreateMembershipOrderCommand) -> MembershipPackageCatalog {
+    MembershipPackageCatalog {
+        package_external_id: MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID.to_owned(),
+        package_name: "Membership quota recharge".to_owned(),
+        price_amount: command
+            .amount
+            .as_deref()
+            .and_then(|amount| CommerceMoney::new(amount).ok())
+            .expect("membership quota recharge amount is validated by the command"),
+        currency_code: "CNY".to_owned(),
+        duration_days: 0,
+        sku_id: MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID.to_owned(),
+        product_name: "Membership quota recharge".to_owned(),
+    }
+}
+
 fn catalog_sql(template: &'static str) -> String {
     materialize_platform_catalog_sql(template)
 }
@@ -130,7 +150,11 @@ impl PostgresCommerceMembershipOrderStore {
                 store_error("failed to begin membership order transaction", error)
             })?;
 
-        let package = load_membership_package(&mut tx, &command).await?;
+        let package = if command.action == "recharge" {
+            recharge_membership_package(&command)
+        } else {
+            load_membership_package(&mut tx, &command).await?
+        };
         // The H5 cashier can resolve its provider after the order is created.
         // Persist the requested method without requiring a pre-seeded method row.
         let method_key = normalize_method_key(&command.method);
@@ -307,7 +331,12 @@ async fn load_membership_order_in_tx(
     let order_no = string_cell(&row, "order_no");
     let out_trade_no = string_cell(&row, "out_trade_no");
     let amount = commerce_money_cell(&row, "amount", "membership order amount")?;
-    let duration_days = required_positive_integer_cell(&row, "duration_days")?;
+    // 订阅期额度充值无时长概念，回放时按 0 处理
+    let duration_days = if string_cell(&row, "membership_action") == "recharge" {
+        0
+    } else {
+        required_positive_integer_cell(&row, "duration_days")?
+    };
 
     let value = CreateMembershipOrderOutcome::new(
         &string_cell(&row, "order_id"),
@@ -543,7 +572,7 @@ fn membership_order_item_snapshot_json(
     command: &CreateMembershipOrderCommand,
     payment_method: &str,
 ) -> String {
-    serde_json::json!({
+    let mut snapshot = serde_json::json!({
         "skuId": package.sku_id,
         "productName": package.product_name,
         "packageId": package.package_external_id,
@@ -553,8 +582,13 @@ fn membership_order_item_snapshot_json(
         "action": command.action,
         "paymentMethod": payment_method,
         "paymentProduct": command.payment_product,
-    })
-    .to_string()
+    });
+    // 订阅期额度充值：快照携带充值数量与金额（结算分发时使用）
+    if let Some(quantity) = command.grant_quantity {
+        snapshot["grantQuantity"] = serde_json::json!(quantity);
+        snapshot["rechargeAmount"] = serde_json::json!(command.amount);
+    }
+    snapshot.to_string()
 }
 
 fn build_membership_order_outcome(

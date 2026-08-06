@@ -44,7 +44,6 @@
   "paymentPort": {
     "crate": "sdkwork-payment-repository-sqlx",
     "operations": [
-      "ingest_provider_webhook_sqlite",
       "ingest_provider_webhook_postgres",
       "confirm_owner_order_payment"
     ],

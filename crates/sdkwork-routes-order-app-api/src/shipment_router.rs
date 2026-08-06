@@ -8,7 +8,7 @@ use axum::routing::get;
 use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     ShipmentDetailQuery, ShipmentPackageListQuery, ShipmentPackagePage, ShipmentPackageView,
     ShipmentTrackingEventListQuery, ShipmentTrackingEventPage, ShipmentTrackingEventView,
@@ -16,7 +16,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::Serialize;
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_item, success_items,
@@ -94,29 +94,6 @@ struct ShipmentTrackingEventResponse {
     location_text: Option<String>,
 }
 
-impl CommerceShipmentStore for SqliteCommerceOrderStore {
-    fn retrieve_owner_shipment<'a>(
-        &'a self,
-        query: ShipmentDetailQuery,
-    ) -> CommerceShipmentFuture<'a, Option<ShipmentView>> {
-        Box::pin(async move { self.retrieve_owner_shipment(query).await })
-    }
-
-    fn list_owner_shipment_packages<'a>(
-        &'a self,
-        query: ShipmentPackageListQuery,
-    ) -> CommerceShipmentFuture<'a, ShipmentPackagePage> {
-        Box::pin(async move { self.list_owner_shipment_packages(query).await })
-    }
-
-    fn list_owner_shipment_tracking_events<'a>(
-        &'a self,
-        query: ShipmentTrackingEventListQuery,
-    ) -> CommerceShipmentFuture<'a, ShipmentTrackingEventPage> {
-        Box::pin(async move { self.list_owner_shipment_tracking_events(query).await })
-    }
-}
-
 impl CommerceShipmentStore for PostgresCommerceOrderStore {
     fn retrieve_owner_shipment<'a>(
         &'a self,
@@ -138,10 +115,6 @@ impl CommerceShipmentStore for PostgresCommerceOrderStore {
     ) -> CommerceShipmentFuture<'a, ShipmentTrackingEventPage> {
         Box::pin(async move { self.list_owner_shipment_tracking_events(query).await })
     }
-}
-
-pub fn app_shipment_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_app_shipment_router(Arc::new(SqliteCommerceOrderStore::new(pool)))
 }
 
 pub fn app_shipment_router_with_postgres_pool(pool: PgPool) -> Router {

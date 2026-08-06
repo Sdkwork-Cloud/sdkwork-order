@@ -9,7 +9,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     AfterSalesEventListQuery, AfterSalesEventPage, AfterSalesEventView,
     AfterSalesRequestDetailQuery, AfterSalesRequestListQuery, AfterSalesRequestPage,
@@ -19,7 +19,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_created_item,
@@ -147,57 +147,6 @@ struct AfterSalesEventResponse {
     to_status: String,
 }
 
-impl CommerceAfterSalesStore for SqliteCommerceOrderStore {
-    fn create_after_sales_request<'a>(
-        &'a self,
-        command: CreateAfterSalesRequestCommand,
-    ) -> CommerceAfterSalesFuture<'a, AfterSalesRequestView> {
-        Box::pin(async move { self.create_after_sales_request(command).await })
-    }
-
-    fn retrieve_after_sales_request<'a>(
-        &'a self,
-        query: AfterSalesRequestDetailQuery,
-    ) -> CommerceAfterSalesFuture<'a, Option<AfterSalesRequestView>> {
-        Box::pin(async move { self.retrieve_after_sales_request(query).await })
-    }
-
-    fn list_after_sales_requests<'a>(
-        &'a self,
-        query: AfterSalesRequestListQuery,
-    ) -> CommerceAfterSalesFuture<'a, AfterSalesRequestPage> {
-        Box::pin(async move { self.list_after_sales_requests(query).await })
-    }
-
-    fn list_after_sales_events<'a>(
-        &'a self,
-        query: AfterSalesEventListQuery,
-    ) -> CommerceAfterSalesFuture<'a, AfterSalesEventPage> {
-        Box::pin(async move { self.list_after_sales_events(query).await })
-    }
-
-    fn list_after_sales_return_shipments<'a>(
-        &'a self,
-        query: AfterSalesReturnShipmentListQuery,
-    ) -> CommerceAfterSalesFuture<'a, AfterSalesReturnShipmentPage> {
-        Box::pin(async move { self.list_after_sales_return_shipments(query).await })
-    }
-
-    fn create_after_sales_return_shipment<'a>(
-        &'a self,
-        command: CreateAfterSalesReturnShipmentCommand,
-    ) -> CommerceAfterSalesFuture<'a, AfterSalesReturnShipmentView> {
-        Box::pin(async move { self.create_after_sales_return_shipment(command).await })
-    }
-
-    fn update_after_sales_request<'a>(
-        &'a self,
-        command: UpdateAfterSalesRequestCommand,
-    ) -> CommerceAfterSalesFuture<'a, AfterSalesRequestView> {
-        Box::pin(async move { self.update_after_sales_request(command).await })
-    }
-}
-
 impl CommerceAfterSalesStore for PostgresCommerceOrderStore {
     fn create_after_sales_request<'a>(
         &'a self,
@@ -247,10 +196,6 @@ impl CommerceAfterSalesStore for PostgresCommerceOrderStore {
     ) -> CommerceAfterSalesFuture<'a, AfterSalesRequestView> {
         Box::pin(async move { self.update_after_sales_request(command).await })
     }
-}
-
-pub fn app_after_sales_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_app_after_sales_router(Arc::new(SqliteCommerceOrderStore::new(pool)))
 }
 
 pub fn app_after_sales_router_with_postgres_pool(pool: PgPool) -> Router {

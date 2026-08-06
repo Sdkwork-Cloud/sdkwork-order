@@ -1,6 +1,4 @@
-use sdkwork_commerce_promotion_repository_sqlx::{
-    PostgresCommercePromotionStore, SqliteCommercePromotionStore,
-};
+use sdkwork_commerce_promotion_repository_sqlx::PostgresCommercePromotionStore;
 use sdkwork_commerce_promotion_service::{
     PromotionCodeRedemptionCommand, PromotionOrderCouponBenefit, PromotionOrderCouponBenefitKind,
     PromotionSubscriptionPeriod,
@@ -14,9 +12,8 @@ use sdkwork_order_service::{
 use std::sync::Arc;
 
 #[derive(Clone)]
-enum PromotionStore {
-    Postgres(PostgresCommercePromotionStore),
-    Sqlite(SqliteCommercePromotionStore),
+struct PromotionStore {
+    postgres: PostgresCommercePromotionStore,
 }
 
 #[derive(Clone)]
@@ -26,15 +23,15 @@ pub struct PromotionCouponRedemptionAdapter {
 
 impl PromotionCouponRedemptionAdapter {
     pub fn from_database_pool(pool: &DatabasePool) -> Self {
-        let store = match pool {
-            DatabasePool::Postgres(pool, _) => {
-                PromotionStore::Postgres(PostgresCommercePromotionStore::new(pool.clone()))
-            }
-            DatabasePool::Sqlite(pool, _) => {
-                PromotionStore::Sqlite(SqliteCommercePromotionStore::new(pool.clone()))
-            }
+        // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+        let DatabasePool::Postgres(pool, _) = pool else {
+            panic!("order promotion adapter requires a PostgreSQL database pool");
         };
-        Self { store }
+        Self {
+            store: PromotionStore {
+                postgres: PostgresCommercePromotionStore::new(pool.clone()),
+            },
+        }
     }
 
     async fn preview(
@@ -42,14 +39,11 @@ impl PromotionCouponRedemptionAdapter {
         request: CouponRedemptionRequest,
     ) -> Result<CouponRedemptionOutcome, CommerceServiceError> {
         let command = promotion_command(&request)?;
-        let benefit = match &self.store {
-            PromotionStore::Postgres(store) => {
-                store.preview_promotion_code_for_order(command).await?
-            }
-            PromotionStore::Sqlite(store) => {
-                store.preview_promotion_code_for_order(command).await?
-            }
-        };
+        let benefit = self
+            .store
+            .postgres
+            .preview_promotion_code_for_order(command)
+            .await?;
         map_benefit(benefit)
     }
 
@@ -58,12 +52,11 @@ impl PromotionCouponRedemptionAdapter {
         request: CouponRedemptionRequest,
     ) -> Result<CouponRedemptionOutcome, CommerceServiceError> {
         let command = promotion_command(&request)?;
-        let benefit = match &self.store {
-            PromotionStore::Postgres(store) => {
-                store.redeem_promotion_code_for_order(command).await?
-            }
-            PromotionStore::Sqlite(store) => store.redeem_promotion_code_for_order(command).await?,
-        };
+        let benefit = self
+            .store
+            .postgres
+            .redeem_promotion_code_for_order(command)
+            .await?;
         map_benefit(benefit)
     }
 }
@@ -156,6 +149,7 @@ fn map_subscription_period(period: PromotionSubscriptionPeriod) -> CouponSubscri
         PromotionSubscriptionPeriod::Day => CouponSubscriptionPeriod::Day,
         PromotionSubscriptionPeriod::Week => CouponSubscriptionPeriod::Week,
         PromotionSubscriptionPeriod::Month => CouponSubscriptionPeriod::Month,
+        PromotionSubscriptionPeriod::Quarter => CouponSubscriptionPeriod::Quarter,
         PromotionSubscriptionPeriod::Year => CouponSubscriptionPeriod::Year,
     }
 }

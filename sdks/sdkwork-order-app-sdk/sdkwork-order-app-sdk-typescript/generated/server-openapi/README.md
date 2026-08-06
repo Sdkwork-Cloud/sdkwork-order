@@ -144,6 +144,8 @@ const body = {
   paymentProduct: 'mobile_cashier_h5',
   clientRequestNo: 'clientRequestNo',
   source: 'source',
+  grantQuantity: 1,
+  amount: 'amount',
 };
 const idempotencyKey = 'Idempotency-Key';
 const params = {

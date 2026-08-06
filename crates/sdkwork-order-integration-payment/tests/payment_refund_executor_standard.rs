@@ -1,13 +1,24 @@
 use sdkwork_contract_service::CommerceMoney;
 use sdkwork_order_integration_payment::StorePaymentRefundExecutorAdapter;
 use sdkwork_order_service::{PaymentRefundExecutionRequest, PaymentRefundExecutorPort};
-use sqlx::{Row, SqlitePool};
+use sqlx::{postgres::PgPoolOptions, Row};
+
+fn postgres_url() -> Option<String> {
+    std::env::var("SDKWORK_DATABASE_TEST_POSTGRES_URL")
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
 
 #[tokio::test]
 async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_reference() {
-    let pool = sqlite_payment_refund_pool().await;
+    // 服务端测试必须使用 PostgreSQL（DATABASE_SPEC：authoritative-server）
+    let Some(pool) = payment_refund_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     seed_paid_sandbox_order(&pool).await;
-    let adapter = StorePaymentRefundExecutorAdapter::sqlite(pool.clone());
+    let adapter = StorePaymentRefundExecutorAdapter::postgres(pool.clone());
 
     let outcome = adapter
         .execute_provider_refund(PaymentRefundExecutionRequest {
@@ -35,7 +46,7 @@ async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_refe
         r#"
         SELECT id, order_id, payment_attempt_id, amount, currency_code, status, idempotency_key
         FROM commerce_refund
-        WHERE id = ?
+        WHERE id = $1
         "#,
     )
     .bind(provider_reference_id)
@@ -58,9 +69,13 @@ async fn sandbox_refund_executor_creates_payment_refund_and_returns_payment_refe
 
 #[tokio::test]
 async fn sandbox_refund_executor_reuses_payment_refund_for_same_idempotency_key() {
-    let pool = sqlite_payment_refund_pool().await;
+    // 服务端测试必须使用 PostgreSQL（DATABASE_SPEC：authoritative-server）
+    let Some(pool) = payment_refund_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     seed_paid_sandbox_order(&pool).await;
-    let adapter = StorePaymentRefundExecutorAdapter::sqlite(pool.clone());
+    let adapter = StorePaymentRefundExecutorAdapter::postgres(pool.clone());
     let request = PaymentRefundExecutionRequest {
         tenant_id: "tenant-1".to_owned(),
         organization_id: Some("org-1".to_owned()),
@@ -92,20 +107,23 @@ async fn sandbox_refund_executor_reuses_payment_refund_for_same_idempotency_key(
     assert_eq!(count, 1);
 }
 
-async fn sqlite_payment_refund_pool() -> SqlitePool {
-    let pool = SqlitePool::connect("sqlite::memory:")
+async fn payment_refund_pool() -> Option<sqlx::PgPool> {
+    let url = postgres_url()?;
+    let pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&url)
         .await
-        .expect("sqlite memory pool");
+        .ok()?;
     for statement in split_sql_statements(PAYMENT_REFUND_SCHEMA) {
-        sqlx::query(&statement)
+        sqlx::query(sqlx::AssertSqlSafe(statement.as_str()))
             .execute(&pool)
             .await
             .unwrap_or_else(|error| panic!("schema failed on `{statement}`: {error}"));
     }
-    pool
+    Some(pool)
 }
 
-async fn seed_paid_sandbox_order(pool: &SqlitePool) {
+async fn seed_paid_sandbox_order(pool: &sqlx::PgPool) {
     let now = "2026-07-08T00:00:00Z";
     sqlx::query(
         r#"
@@ -114,7 +132,7 @@ async fn seed_paid_sandbox_order(pool: &SqlitePool) {
              currency_code, payment_status, paid_at, expired_at, created_at, updated_at)
         VALUES
             ('order-1', 'tenant-1', 'org-1', 'user-1', 'ORDER-1', 'paid',
-             'token_bank_recharge', 'USD', 'paid', ?, '2099-01-01T00:00:00Z', ?, ?)
+             'token_bank_recharge', 'USD', 'paid', $1, '2099-01-01T00:00:00Z', $2, $3)
         "#,
     )
     .bind(now)
@@ -131,7 +149,7 @@ async fn seed_paid_sandbox_order(pool: &SqlitePool) {
              discount_amount, currency_code, created_at)
         VALUES
             ('breakdown-1', 'tenant-1', 'org-1', 'order-1', 'order_total',
-             '1000', '0', 'USD', ?)
+             '1000', '0', 'USD', $1)
         "#,
     )
     .bind(now)
@@ -148,7 +166,7 @@ async fn seed_paid_sandbox_order(pool: &SqlitePool) {
         VALUES
             ('payment-attempt-1', 'tenant-1', 'org-1', 'user-1', 'payment-intent-1', 'order-1',
              'PAY-ATTEMPT-1', 'sandbox', 'sandbox', 'OUT-TRADE-1', '1000', 'USD',
-             'succeeded', '{}', ?, 'pay-request-1', 'pay-idem-1', ?, ?)
+             'succeeded', '{}', $1, 'pay-request-1', 'pay-idem-1', $2, $3)
         "#,
     )
     .bind(now)
@@ -168,6 +186,12 @@ fn split_sql_statements(sql: &str) -> Vec<String> {
 }
 
 const PAYMENT_REFUND_SCHEMA: &str = r#"
+DROP TABLE IF EXISTS commerce_refund_event;
+DROP TABLE IF EXISTS commerce_refund;
+DROP TABLE IF EXISTS commerce_payment_attempt;
+DROP TABLE IF EXISTS commerce_payment_channel;
+DROP TABLE IF EXISTS commerce_order_amount_breakdown;
+DROP TABLE IF EXISTS commerce_order;
 CREATE TABLE commerce_order (
     id TEXT NOT NULL PRIMARY KEY,
     tenant_id TEXT NOT NULL,
@@ -241,8 +265,8 @@ CREATE TABLE commerce_refund (
     request_no TEXT,
     idempotency_key TEXT NOT NULL,
     version INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     deleted_at TEXT
 );
 
@@ -263,6 +287,6 @@ CREATE TABLE commerce_refund_event (
     actor_id TEXT,
     request_id TEXT,
     idempotency_key TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL
 );
 "#;

@@ -6,14 +6,13 @@ use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 use sdkwork_payment_repository_sqlx::{
     cancel_owner_order_payments_with_provider_postgres,
-    cancel_owner_order_payments_with_provider_sqlite, enrich_owner_order_payment_postgres,
-    enrich_owner_order_payment_sqlite, OwnerOrderPaymentEnrichmentContext,
-    PostgresCommerceOwnerOrderPaymentStore, SqliteCommerceOwnerOrderPaymentStore,
+    enrich_owner_order_payment_postgres, OwnerOrderPaymentEnrichmentContext,
+    PostgresCommerceOwnerOrderPaymentStore,
 };
 use sdkwork_payment_service::{
     CancelOrderPaymentsCommand, PayOwnerOrderCommand, PayOwnerOrderOutcome,
 };
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::order_router::{CommerceOrderFuture, OwnerOrderPaymentStore};
 
@@ -25,31 +24,11 @@ const RUNTIME_ENVIRONMENT_KEYS: &[&str] = &[
     "SDKWORK_CLOUDROUTER_ENVIRONMENT",
 ];
 
-pub struct ProviderEnrichedSqliteOwnerOrderPayments {
-    inner: Arc<SqliteCommerceOwnerOrderPaymentStore>,
-    pool: SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-}
-
 pub struct ProviderEnrichedPostgresOwnerOrderPayments {
     inner: Arc<PostgresCommerceOwnerOrderPaymentStore>,
     pool: PgPool,
     registry: Arc<PaymentProviderRegistry>,
     credentials: ProviderCredentialBundle,
-}
-
-pub fn enriched_sqlite_owner_order_payments(
-    pool: SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-) -> Arc<dyn OwnerOrderPaymentStore> {
-    Arc::new(ProviderEnrichedSqliteOwnerOrderPayments {
-        inner: Arc::new(SqliteCommerceOwnerOrderPaymentStore::new(pool.clone())),
-        pool,
-        registry,
-        credentials,
-    })
 }
 
 pub fn enriched_postgres_owner_order_payments(
@@ -63,64 +42,6 @@ pub fn enriched_postgres_owner_order_payments(
         registry,
         credentials,
     })
-}
-
-impl OwnerOrderPaymentStore for ProviderEnrichedSqliteOwnerOrderPayments {
-    fn pay_owner_order<'a>(
-        &'a self,
-        command: PayOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, PayOwnerOrderOutcome> {
-        let registry = self.registry.clone();
-        let credentials = self.credentials.clone();
-        let pool = self.pool.clone();
-        let inner = self.inner.clone();
-        Box::pin(async move {
-            let tenant_id = command.tenant_id.clone();
-            let organization_id = command.organization_id.clone();
-            let order_id = command.order_id.clone();
-            let payment_scene = command.payment_scene.clone();
-            let outcome = inner.pay_owner_order(command).await?;
-            let fallback = outcome.clone();
-            let enriched = enrich_owner_order_payment_sqlite(
-                &pool,
-                OwnerOrderPaymentEnrichmentContext {
-                    deployment_registry: &registry,
-                    credentials: &credentials,
-                    tenant_id: &tenant_id,
-                    organization_id: organization_id.as_deref(),
-                    order_id: &order_id,
-                    payment_scene: payment_scene.as_deref(),
-                },
-                outcome,
-            )
-            .await;
-            checkout_enrichment_or_development_fallback(enriched, fallback)
-        })
-    }
-
-    fn cancel_owner_order_payments<'a>(
-        &'a self,
-        command: sdkwork_order_service::CancelOwnerOrderCommand,
-    ) -> CommerceOrderFuture<'a, ()> {
-        let pool = self.pool.clone();
-        let registry = self.registry.clone();
-        let credentials = self.credentials.clone();
-        Box::pin(async move {
-            let payment_command = CancelOrderPaymentsCommand::new(
-                &command.tenant_id,
-                command.organization_id.as_deref(),
-                &command.owner_user_id,
-                &command.order_id,
-            )?;
-            cancel_owner_order_payments_with_provider_sqlite(
-                &pool,
-                &registry,
-                &credentials,
-                payment_command,
-            )
-            .await
-        })
-    }
 }
 
 impl OwnerOrderPaymentStore for ProviderEnrichedPostgresOwnerOrderPayments {

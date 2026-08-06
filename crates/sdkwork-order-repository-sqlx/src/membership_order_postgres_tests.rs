@@ -1,6 +1,6 @@
 use sdkwork_order_service::CreateMembershipOrderCommand;
 
-use crate::test_sqlite_pool::order_points_recharge_e2e_postgres_pool_from_env;
+use crate::test_postgres_pool::order_points_recharge_e2e_postgres_pool_from_env;
 use crate::PostgresCommerceMembershipOrderStore;
 
 #[tokio::test]
@@ -42,6 +42,8 @@ async fn postgres_concurrent_membership_purchase_intent_has_one_active_order() {
             &format!("membership-postgres-idempotency-{index}"),
             Some(&format!("membership-postgres-client-{index}")),
             Some("postgres-concurrency-test"),
+            None,
+            None,
         )
         .expect("membership concurrency command");
         tasks.push(tokio::spawn(async move {

@@ -5,11 +5,13 @@ use sdkwork_database_sqlx::DatabasePool;
 use sdkwork_membership_repository_sqlx::{
     AppMembershipStore, AppMembershipSubject, FulfillPaidMembershipPurchaseCommand,
     GrantCouponSubscriptionCommand, PostgresCommerceMembershipStore,
+    RechargeSubscriptionQuotaCommand,
 };
 use sdkwork_order_service::{
     CouponSubscriptionFulfillmentOutcome, CouponSubscriptionFulfillmentRequest,
     MembershipPurchaseFulfillmentFuture, MembershipPurchaseFulfillmentOutcome,
     MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
+    MembershipQuotaRechargeFulfillmentOutcome, MembershipQuotaRechargeFulfillmentRequest,
 };
 
 #[derive(Clone)]
@@ -19,14 +21,13 @@ pub struct StoreMembershipFulfillmentAdapter {
 
 impl StoreMembershipFulfillmentAdapter {
     pub fn from_database_pool(pool: &DatabasePool) -> Result<Self, String> {
-        match pool {
-            DatabasePool::Postgres(pool, _) => Ok(Self {
-                store: PostgresCommerceMembershipStore::new(pool.clone()),
-            }),
-            DatabasePool::Sqlite(_, _) => {
-                Err("order membership fulfillment server requires PostgreSQL".to_owned())
-            }
-        }
+        // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+        let DatabasePool::Postgres(pool, _) = pool else {
+            return Err("order membership fulfillment server requires PostgreSQL".to_owned());
+        };
+        Ok(Self {
+            store: PostgresCommerceMembershipStore::new(pool.clone()),
+        })
     }
 }
 
@@ -95,6 +96,39 @@ impl MembershipPurchaseFulfillmentPort for StoreMembershipFulfillmentAdapter {
                 starts_at: outcome.starts_at,
                 expires_at: outcome.expires_at,
                 fulfillment_status: outcome.fulfillment_status,
+            })
+        })
+    }
+
+    fn fulfill_membership_quota_recharge<'a>(
+        &'a self,
+        request: MembershipQuotaRechargeFulfillmentRequest,
+    ) -> MembershipPurchaseFulfillmentFuture<'a, MembershipQuotaRechargeFulfillmentOutcome> {
+        Box::pin(async move {
+            let subject = membership_subject(
+                &request.tenant_id,
+                request.organization_id.as_deref(),
+                &request.owner_user_id,
+            )?;
+            let command = RechargeSubscriptionQuotaCommand {
+                subject,
+                order_id: request.order_id,
+                quantity: request.quantity,
+                request_no: request.request_no,
+                idempotency_key: request.idempotency_key,
+                requested_at: sdkwork_membership_repository_sqlx::shared::current_timestamp_string(),
+            };
+            let outcome = self.store.recharge_subscription_quota(command).await?;
+            Ok(MembershipQuotaRechargeFulfillmentOutcome {
+                accepted: outcome.accepted,
+                replayed: outcome.replayed,
+                subscription_id: outcome.subscription_id,
+                balance_after: outcome.balance_after,
+                fulfillment_status: if outcome.replayed {
+                    "replayed".to_owned()
+                } else {
+                    "fulfilled".to_owned()
+                },
             })
         })
     }

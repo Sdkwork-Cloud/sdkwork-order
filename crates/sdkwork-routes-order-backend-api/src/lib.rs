@@ -14,19 +14,15 @@ pub mod web_bootstrap;
 pub use backend_commerce_admin_router::{
     backend_commerce_admin_router_with_postgres_pool,
     backend_commerce_admin_router_with_postgres_pool_and_ports,
-    backend_commerce_admin_router_with_sqlite_pool,
-    backend_commerce_admin_router_with_sqlite_pool_and_ports,
+
 };
 pub use backend_order_admin_router::{
-    backend_order_admin_router_with_postgres_pool, backend_order_admin_router_with_sqlite_pool,
+    backend_order_admin_router_with_postgres_pool, 
 };
 pub use payment_confirmation_router::{
     payment_confirmation_router_with_postgres_pool,
     payment_confirmation_router_with_postgres_pool_and_coupon,
     payment_confirmation_router_with_postgres_pool_and_integrations,
-    payment_confirmation_router_with_sqlite_pool,
-    payment_confirmation_router_with_sqlite_pool_and_coupon,
-    payment_confirmation_router_with_sqlite_pool_and_integrations,
 };
 pub use routes::{build_order_backend_business_router, build_order_backend_router_with_framework};
 

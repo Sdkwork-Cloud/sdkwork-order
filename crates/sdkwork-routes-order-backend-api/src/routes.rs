@@ -5,11 +5,9 @@ use std::sync::Arc;
 
 use crate::{
     backend_commerce_admin_router_with_postgres_pool_and_ports,
-    backend_commerce_admin_router_with_sqlite_pool_and_ports,
-    backend_order_admin_router_with_postgres_pool, backend_order_admin_router_with_sqlite_pool,
+    backend_order_admin_router_with_postgres_pool,
     openapi_contract::mount_backend_openapi,
     payment_confirmation_router_with_postgres_pool_and_integrations,
-    payment_confirmation_router_with_sqlite_pool_and_integrations,
 };
 
 pub fn build_order_backend_router(host: Arc<OrderServiceHost>) -> Router {
@@ -26,46 +24,28 @@ pub fn build_order_backend_business_router(host: Arc<OrderServiceHost>) -> Route
     let physical_goods_port = host.physical_goods_fulfillment_port();
     let payment_refund_executor_port = host.payment_refund_executor_port();
     let payment_payout_executor_port = host.payment_payout_executor_port();
-    let router = match host.database_pool() {
-        DatabasePool::Postgres(pool, _) => Router::new()
-            .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
-            .merge(backend_commerce_admin_router_with_postgres_pool_and_ports(
-                pool.clone(),
-                account_value_ledger_port.clone(),
-                payment_refund_executor_port.clone(),
-                payment_payout_executor_port.clone(),
-            ))
-            .merge(
-                payment_confirmation_router_with_postgres_pool_and_integrations(
-                    pool.clone(),
-                    credit_port,
-                    account_value_ledger_port,
-                    coupon_redemption_port,
-                    membership_port,
-                    reconciliation_port,
-                    physical_goods_port,
-                ),
-            ),
-        DatabasePool::Sqlite(pool, _) => Router::new()
-            .merge(backend_order_admin_router_with_sqlite_pool(pool.clone()))
-            .merge(backend_commerce_admin_router_with_sqlite_pool_and_ports(
-                pool.clone(),
-                account_value_ledger_port.clone(),
-                payment_refund_executor_port,
-                payment_payout_executor_port,
-            ))
-            .merge(
-                payment_confirmation_router_with_sqlite_pool_and_integrations(
-                    pool.clone(),
-                    credit_port,
-                    account_value_ledger_port,
-                    coupon_redemption_port,
-                    membership_port,
-                    reconciliation_port,
-                    physical_goods_port,
-                ),
-            ),
+    let DatabasePool::Postgres(pool, _) = host.database_pool() else {
+        panic!("order backend router requires a PostgreSQL database pool");
     };
+    let router = Router::new()
+        .merge(backend_order_admin_router_with_postgres_pool(pool.clone()))
+        .merge(backend_commerce_admin_router_with_postgres_pool_and_ports(
+            pool.clone(),
+            account_value_ledger_port.clone(),
+            payment_refund_executor_port.clone(),
+            payment_payout_executor_port.clone(),
+        ))
+        .merge(
+            payment_confirmation_router_with_postgres_pool_and_integrations(
+                pool.clone(),
+                credit_port,
+                account_value_ledger_port,
+                coupon_redemption_port,
+                membership_port,
+                reconciliation_port,
+                physical_goods_port,
+            ),
+        );
     router
 }
 

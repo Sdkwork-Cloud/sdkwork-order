@@ -80,6 +80,8 @@ mod tests {
             "idem-1",
             None,
             None,
+            None,
+            None,
         )
         .expect("membership command")
     }

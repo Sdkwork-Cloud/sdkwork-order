@@ -12,7 +12,7 @@ use axum::{Json, Router};
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
-    PostgresCommerceMembershipOrderStore, SqliteCommerceMembershipOrderStore,
+    PostgresCommerceMembershipOrderStore,
 };
 use sdkwork_order_service::{CreateMembershipOrderCommand, CreateMembershipOrderOutcome};
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
@@ -21,14 +21,14 @@ use sdkwork_payment_service::{
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::api_response::{map_service_error, success_created_item, unauthorized, validation};
 use crate::command_headers::required_app_write_command_headers;
 use crate::order_router::OwnerOrderPaymentStore;
 use crate::owner_order_payment_enrich::{
-    enriched_postgres_owner_order_payments, enriched_sqlite_owner_order_payments,
+    enriched_postgres_owner_order_payments,
 };
 use crate::subject::{app_runtime_subject_from_contexts, AppRuntimeSubject};
 
@@ -62,6 +62,10 @@ struct CreateMembershipOrderRequest {
     payment_product: Option<String>,
     client_request_no: Option<String>,
     source: Option<String>,
+    /// 订阅期额度充值数量（仅 action=recharge）。
+    grant_quantity: Option<i64>,
+    /// 订阅期额度充值金额（仅 action=recharge，货币金额字符串）。
+    amount: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -86,6 +90,8 @@ struct CreateMembershipOrderResponse {
     status: String,
     reused: bool,
     cashier_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    grant_quantity: Option<i64>,
 }
 
 struct CreateMembershipCommandInput<'a> {
@@ -98,6 +104,8 @@ struct CreateMembershipCommandInput<'a> {
     idempotency_key: &'a str,
     client_request_no: Option<&'a str>,
     source: Option<&'a str>,
+    grant_quantity: Option<i64>,
+    amount: Option<&'a str>,
 }
 
 impl CreateMembershipOrderRequest {
@@ -124,14 +132,13 @@ impl CreateMembershipOrderRequest {
     fn source(&self) -> Option<&str> {
         self.source.as_deref()
     }
-}
 
-impl CommerceMembershipOrderStore for SqliteCommerceMembershipOrderStore {
-    fn create_membership_order<'a>(
-        &'a self,
-        command: CreateMembershipOrderCommand,
-    ) -> CommerceMembershipOrderFuture<'a, CreateMembershipOrderOutcome> {
-        Box::pin(async move { self.create_membership_order(command).await })
+    fn grant_quantity(&self) -> Option<i64> {
+        self.grant_quantity
+    }
+
+    fn amount(&self) -> Option<&str> {
+        self.amount.as_deref()
     }
 }
 
@@ -144,32 +151,12 @@ impl CommerceMembershipOrderStore for PostgresCommerceMembershipOrderStore {
     }
 }
 
-pub fn app_membership_order_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    let credentials = ProviderCredentialBundle::from_env();
-    let registry = Arc::new(PaymentProviderRegistry::from_credentials(
-        credentials.clone(),
-    ));
-    app_membership_order_router_with_sqlite_pool_and_payments(pool, registry, credentials)
-}
-
 pub fn app_membership_order_router_with_postgres_pool(pool: PgPool) -> Router {
     let credentials = ProviderCredentialBundle::from_env();
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
     app_membership_order_router_with_postgres_pool_and_payments(pool, registry, credentials)
-}
-
-pub fn app_membership_order_router_with_sqlite_pool_and_payments(
-    pool: SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-) -> Router {
-    let payments = enriched_sqlite_owner_order_payments(pool.clone(), registry, credentials);
-    build_app_membership_order_router_with_payments(
-        Arc::new(SqliteCommerceMembershipOrderStore::new(pool)),
-        payments,
-    )
 }
 
 pub fn app_membership_order_router_with_postgres_pool_and_payments(
@@ -219,13 +206,37 @@ async fn create_membership_order(
         Ok(subject) => subject,
         Err(message) => return unauthorized(ctx, message),
     };
-    let package_id = match validate_package_id(request.package_id()) {
-        Ok(value) => value,
-        Err(message) => return validation(ctx, message),
-    };
     let action = match validate_membership_action(request.action()) {
         Ok(value) => value,
         Err(message) => return validation(ctx, message),
+    };
+    let is_recharge = action == "recharge";
+    // 订阅期额度充值：数量与金额必填；非充值动作不得携带充值字段
+    let package_id = if is_recharge {
+        if request.grant_quantity().unwrap_or(0) <= 0 {
+            return validation(
+                ctx,
+                "grantQuantity must be a positive integer for membership quota recharge",
+            );
+        }
+        if !is_positive_money_text(request.amount()) {
+            return validation(
+                ctx,
+                "amount must be a positive money value for membership quota recharge",
+            );
+        }
+        MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID.to_owned()
+    } else {
+        if request.grant_quantity().is_some() || request.amount().is_some() {
+            return validation(
+                ctx,
+                "grantQuantity and amount are only valid for membership quota recharge",
+            );
+        }
+        match validate_package_id(request.package_id()) {
+            Ok(value) => value,
+            Err(message) => return validation(ctx, message),
+        }
     };
     let payment_product = match validate_payment_product(request.payment_product()) {
         Ok(value) => value,
@@ -251,6 +262,8 @@ async fn create_membership_order(
         idempotency_key: &write_headers.idempotency_key,
         client_request_no: request.client_request_no(),
         source: request.source(),
+        grant_quantity: request.grant_quantity(),
+        amount: request.amount(),
     }) {
         Ok(command) => command,
         Err(error) => return map_service_error(ctx, error),
@@ -264,7 +277,7 @@ async fn create_membership_order(
     if payment_product == DEFAULT_PAYMENT_PRODUCT {
         return success_created_item(
             ctx,
-            map_membership_order_outcome(outcome, &payment_product, None),
+            map_membership_order_outcome(outcome, &payment_product, None, request.grant_quantity()),
         );
     }
 
@@ -300,7 +313,12 @@ async fn create_membership_order(
     match payments.pay_owner_order(pay_command).await {
         Ok(payment) if provider_qr_code(&payment.payment_params).is_some() => success_created_item(
             ctx,
-            map_membership_order_outcome(outcome, &payment_product, Some(payment)),
+            map_membership_order_outcome(
+                outcome,
+                &payment_product,
+                Some(payment),
+                request.grant_quantity(),
+            ),
         ),
         Ok(_) => map_service_error(
             ctx,
@@ -322,10 +340,19 @@ fn validate_package_id(value: Option<&str>) -> Result<String, String> {
 
 fn validate_membership_action(value: Option<&str>) -> Result<String, String> {
     let action = value.unwrap_or("purchase").trim().to_ascii_lowercase();
-    if matches!(action.as_str(), "purchase" | "renew" | "upgrade") {
+    if matches!(action.as_str(), "purchase" | "renew" | "upgrade" | "recharge") {
         return Ok(action);
     }
-    Err("membership action must be one of: purchase, renew, upgrade".to_string())
+    Err("membership action must be one of: purchase, renew, upgrade, recharge".to_string())
+}
+
+/// 订阅期额度充值的合成包标识（不依赖目录套餐）。
+const MEMBERSHIP_QUOTA_RECHARGE_PACKAGE_ID: &str = "membership-quota-recharge";
+
+/// 轻量金额正数校验（命令层为权威校验）。
+fn is_positive_money_text(value: Option<&str>) -> bool {
+    let raw = value.unwrap_or_default().trim();
+    !raw.is_empty() && raw.parse::<f64>().map(|parsed| parsed > 0.0).unwrap_or(false)
 }
 
 fn validate_payment_product(value: Option<&str>) -> Result<String, String> {
@@ -434,6 +461,8 @@ fn build_create_membership_command(
         input.idempotency_key,
         input.client_request_no,
         input.source,
+        input.grant_quantity,
+        input.amount,
     )
 }
 
@@ -441,6 +470,7 @@ fn map_membership_order_outcome(
     value: CreateMembershipOrderOutcome,
     payment_product: &str,
     payment: Option<PayOwnerOrderOutcome>,
+    grant_quantity: Option<i64>,
 ) -> CreateMembershipOrderResponse {
     let cashier_url = value.cashier_url;
     let (payment_id, payment_params, payment_status) = payment
@@ -481,6 +511,7 @@ fn map_membership_order_outcome(
         status: payment_status.unwrap_or(value.status),
         reused: value.reused,
         cashier_url,
+        grant_quantity,
     }
 }
 
@@ -641,7 +672,7 @@ mod tests {
         )
         .expect("membership order outcome");
 
-        let response = map_membership_order_outcome(outcome, DEFAULT_PAYMENT_PRODUCT, None);
+        let response = map_membership_order_outcome(outcome, DEFAULT_PAYMENT_PRODUCT, None, None);
         let json = serde_json::to_value(response).expect("membership response JSON");
 
         assert_eq!(json["action"], "upgrade");

@@ -133,7 +133,7 @@ Track phases in [commerce-recharge.spec.json](./commerce-recharge.spec.json).
 ## 9. Verification
 
 - **Store E2E** (`cargo test -p sdkwork-order-integration-account points_recharge_store_e2e`): seeded recharge checkout → `mark_points_recharge_payment_succeeded` → `fulfill_points_recharge_order` with `StoreAccountPointsCreditAdapter` → wallet points balance + idempotent replay
-- **Cancel audit** (`cargo test -p sdkwork-order-repository-sqlx sqlite_cancel_owner_order`): SQLite parity; optional Postgres via `SDKWORK_DATABASE_TEST_POSTGRES_URL`
+- **Cancel audit** (`cargo test -p sdkwork-order-repository-sqlx cancel_owner_order`): PostgreSQL via `SDKWORK_DATABASE_TEST_POSTGRES_URL` (server test profile must be PostgreSQL per DATABASE_SPEC)
 - Order service unit tests: fulfillment saga idempotency keys and mock port orchestration (`points_recharge_fulfillment_standard.rs`)
 - Account saga contract: ledger adjustment command shape (`points_recharge_saga_contract.rs`)
 - OpenAPI parity for `recharges` tag paths; `pnpm align:openapi` + `pnpm sdk:generate` for order-app-sdk

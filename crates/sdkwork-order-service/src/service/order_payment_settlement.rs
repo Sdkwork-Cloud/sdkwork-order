@@ -4,14 +4,15 @@ use crate::{
     default_fulfill_account_value_order_command, default_fulfill_points_recharge_command,
     fulfill_account_value_order, fulfill_points_recharge_order,
     mark_points_recharge_payment_succeeded, membership_purchase_fulfillment_idempotency_key,
-    physical_goods_fulfillment_idempotency_key, points_recharge_payment_success_idempotency_key,
-    redeem_coupon_and_fulfill_account_value_order, AccountPointsCreditPort,
-    AccountValueFulfillmentStore, AccountValueLedgerPort, AccountValueOrderSubject,
-    CouponRedemptionPort, FulfillPaidPhysicalOrderRequest,
+    membership_quota_recharge_idempotency_key, physical_goods_fulfillment_idempotency_key,
+    points_recharge_payment_success_idempotency_key, redeem_coupon_and_fulfill_account_value_order,
+    AccountPointsCreditPort, AccountValueFulfillmentStore, AccountValueLedgerPort,
+    AccountValueOrderSubject, CouponRedemptionPort, FulfillPaidPhysicalOrderRequest,
     MarkPointsRechargePaymentSucceededCommand, MembershipPurchaseFulfillmentPort,
     MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
-    OrderPaymentSettlementAttempt, OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort,
-    PhysicalGoodsFulfillmentPort, PointsRechargeFulfillmentStore,
+    MembershipQuotaRechargeFulfillmentRequest, OrderPaymentSettlementAttempt,
+    OwnerOrderPaymentConfirmationPort, OwnerOrderPaymentStatePort, PhysicalGoodsFulfillmentPort,
+    PointsRechargeFulfillmentStore,
 };
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -480,6 +481,35 @@ async fn settle_membership_subject<M>(
 where
     M: MembershipPurchaseFulfillmentPort + ?Sized,
 {
+    // 订阅期额度充值：结算时向会员权益账户追加额度（幂等）
+    if snapshot.action == "recharge" {
+        let quantity = snapshot.grant_quantity.ok_or_else(|| {
+            CommerceServiceError::invalid_state(
+                "membership quota recharge settlement snapshot has no grant quantity",
+            )
+        })?;
+        let idempotency_key =
+            membership_quota_recharge_idempotency_key(&attempt.order_id);
+        let outcome = membership_port
+            .fulfill_membership_quota_recharge(
+                MembershipQuotaRechargeFulfillmentRequest {
+                    tenant_id: attempt.tenant_id.clone(),
+                    organization_id: attempt.organization_id.clone(),
+                    owner_user_id: attempt.owner_user_id.clone(),
+                    order_id: attempt.order_id.clone(),
+                    quantity,
+                    request_no: request_no.to_owned(),
+                    idempotency_key,
+                },
+            )
+            .await?;
+        return Ok(SubjectFulfillmentOutcome {
+            accepted: outcome.accepted,
+            replayed: outcome.replayed,
+            points_credited: 0,
+            status: outcome.fulfillment_status,
+        });
+    }
     let idempotency_key = membership_purchase_fulfillment_idempotency_key(&attempt.order_id);
     let outcome = membership_port
         .fulfill_membership_purchase(MembershipPurchaseFulfillmentRequest {

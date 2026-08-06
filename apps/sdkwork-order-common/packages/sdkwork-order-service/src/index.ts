@@ -77,13 +77,17 @@ export interface CreateSdkworkPhysicalPurchaseServiceOptions {
   appService?: SdkworkOrderAppService;
 }
 
-export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade";
+export type SdkworkMembershipCheckoutAction = "purchase" | "renew" | "upgrade" | "recharge";
 
 export interface SdkworkMembershipCheckoutInput {
   action: SdkworkMembershipCheckoutAction;
   packageId: number;
   paymentMethod?: string;
   paymentProduct?: "alipay_native" | "mobile_cashier_h5" | "wechat_native";
+  /** 订阅期额度充值数量（仅 action=recharge）。 */
+  grantQuantity?: number;
+  /** 订阅期额度充值金额（仅 action=recharge，货币金额字符串）。 */
+  amountCny?: string;
 }
 
 export interface SdkworkMembershipCheckoutPayment {
@@ -460,14 +464,23 @@ export function createSdkworkMembershipCheckoutService(
   return {
     createCheckout(input) {
       requireSdkworkOrderSession();
+      const isRecharge = input.action === "recharge";
+      // 订阅期额度充值：数量与金额必填，不依赖目录套餐
+      if (isRecharge) {
+        const grantQuantity = input.grantQuantity ?? 0;
+        const amount = input.amountCny?.trim() ?? "";
+        if (grantQuantity <= 0 || !amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
+          throw new Error("Membership quota recharge requires a positive grantQuantity and amount.");
+        }
+      }
       const packageId = String(input.packageId).trim();
-      if (!packageId || input.packageId <= 0) {
+      if (!isRecharge && (!packageId || input.packageId <= 0)) {
         throw new Error("A valid membership package is required.");
       }
 
       const paymentProduct = input.paymentProduct ?? "mobile_cashier_h5";
       const paymentMethod = normalizeMembershipPaymentMethod(input.paymentMethod, paymentProduct);
-      const singleFlightKey = [input.action, packageId, paymentMethod, paymentProduct].join(":");
+      const singleFlightKey = [input.action, packageId, paymentMethod, paymentProduct, input.grantQuantity ?? "", input.amountCny ?? ""].join(":");
       const existing = inFlightCheckouts.get(singleFlightKey);
       if (existing) {
         return existing;
@@ -477,6 +490,9 @@ export function createSdkworkMembershipCheckoutService(
         packageId,
         paymentMethod,
         paymentProduct,
+        ...(isRecharge
+          ? { grantQuantity: String(input.grantQuantity), amount: input.amountCny?.trim() }
+          : {}),
       };
       const checkout = (async () => {
         const params = createSdkworkIdempotencyParams();

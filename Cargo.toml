@@ -28,7 +28,7 @@ axum = "0.8"
 tokio = { version = "1.51", features = ["macros", "rt-multi-thread", "net", "sync"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "sqlite", "uuid", "chrono"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "json", "uuid", "chrono"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 tower = "0.5"
@@ -46,11 +46,11 @@ sdkwork-web-bootstrap = { path = "../sdkwork-web-framework/crates/sdkwork-web-bo
 sdkwork-iam-web-adapter = { path = "../sdkwork-iam/crates/sdkwork-iam-web-adapter" }
 sdkwork_iam_context_service = { path = "../sdkwork-iam/crates/sdkwork-iam-context-service", package = "sdkwork-iam-context-service" }
 sdkwork-database-config = { path = "../sdkwork-database/crates/sdkwork-database-config" }
-sdkwork-database-history = { path = "../sdkwork-database/crates/sdkwork-database-history", features = ["postgres", "sqlite"] }
-sdkwork-database-lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle", features = ["postgres", "sqlite"] }
+sdkwork-database-history = { path = "../sdkwork-database/crates/sdkwork-database-history", features = ["postgres"] }
+sdkwork-database-lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle", features = ["postgres"] }
 sdkwork-database-spi = { path = "../sdkwork-database/crates/sdkwork-database-spi" }
-sdkwork-database-sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx", features = ["postgres", "sqlite"] }
-sdkwork-database-id = { path = "../sdkwork-database/crates/sdkwork-database-id", features = ["postgres", "sqlite"] }
+sdkwork-database-sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx", features = ["postgres"] }
+sdkwork-database-id = { path = "../sdkwork-database/crates/sdkwork-database-id", features = ["postgres"] }
 sdkwork_order_service = { path = "crates/sdkwork-order-service", package = "sdkwork-order-service" }
 sdkwork_payment_service = { path = "../sdkwork-payment/crates/sdkwork-payment-service", package = "sdkwork-payment-service" }
 sdkwork_order_repository_sqlx = { path = "crates/sdkwork-order-repository-sqlx", package = "sdkwork-order-repository-sqlx" }

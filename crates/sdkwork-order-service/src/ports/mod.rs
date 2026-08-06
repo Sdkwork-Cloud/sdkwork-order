@@ -30,11 +30,13 @@ pub use account_value::{
     COUPON_REDEMPTION_PORT, PAYMENT_PAYOUT_EXECUTOR_PORT, PAYMENT_REFUND_EXECUTOR_PORT,
 };
 pub use membership_fulfillment::{
-    membership_purchase_fulfillment_idempotency_key, CouponSubscriptionFulfillmentOutcome,
-    CouponSubscriptionFulfillmentRequest, MembershipPurchaseFulfillmentFuture,
-    MembershipPurchaseFulfillmentOutcome, MembershipPurchaseFulfillmentPort,
-    MembershipPurchaseFulfillmentRequest, MembershipPurchaseSettlementSnapshot,
-    NoopMembershipPurchaseFulfillmentPort, MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
+    membership_purchase_fulfillment_idempotency_key, membership_quota_recharge_idempotency_key,
+    CouponSubscriptionFulfillmentOutcome, CouponSubscriptionFulfillmentRequest,
+    MembershipPurchaseFulfillmentFuture, MembershipPurchaseFulfillmentOutcome,
+    MembershipPurchaseFulfillmentPort, MembershipPurchaseFulfillmentRequest,
+    MembershipPurchaseSettlementSnapshot, MembershipQuotaRechargeFulfillmentOutcome,
+    MembershipQuotaRechargeFulfillmentRequest, NoopMembershipPurchaseFulfillmentPort,
+    MEMBERSHIP_PURCHASE_FULFILLMENT_PORT,
 };
 pub use owner_order_payment::{
     ConfirmOwnerOrderPaymentOutcome, OrderPaymentSettlementAttempt,

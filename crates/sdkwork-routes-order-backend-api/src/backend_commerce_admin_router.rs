@@ -10,8 +10,7 @@ use axum::{Json, Router};
 use sdkwork_contract_service::{CommerceMoney, CommerceServiceError};
 use sdkwork_iam_context_service::IamAppContext;
 use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
-    SqliteCommerceRechargeStore,
+    PostgresCommerceOrderStore, PostgresCommerceRechargeStore,
 };
 use sdkwork_order_service::{
     execute_account_value_request_review, AccountValueAssetCode, AccountValueCatalogListQuery,
@@ -29,7 +28,7 @@ use sdkwork_order_service::{
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, parse_offset_list_params_validated, success_command, success_created_item,
@@ -53,10 +52,6 @@ enum BackendCommerceAdminStore {
     Postgres {
         orders: Arc<PostgresCommerceOrderStore>,
         recharge: Arc<PostgresCommerceRechargeStore>,
-    },
-    Sqlite {
-        orders: Arc<SqliteCommerceOrderStore>,
-        recharge: Arc<SqliteCommerceRechargeStore>,
     },
 }
 
@@ -272,7 +267,6 @@ impl BackendCommerceAdminStore {
             Self::Postgres { orders, .. } => {
                 orders.list_management_after_sales_requests(query).await
             }
-            Self::Sqlite { orders, .. } => orders.list_management_after_sales_requests(query).await,
         }
     }
 
@@ -284,9 +278,6 @@ impl BackendCommerceAdminStore {
             Self::Postgres { orders, .. } => {
                 orders.retrieve_management_after_sales_request(query).await
             }
-            Self::Sqlite { orders, .. } => {
-                orders.retrieve_management_after_sales_request(query).await
-            }
         }
     }
 
@@ -296,7 +287,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<AfterSalesRequestView, CommerceServiceError> {
         match self {
             Self::Postgres { orders, .. } => orders.review_after_sales_request(command).await,
-            Self::Sqlite { orders, .. } => orders.review_after_sales_request(command).await,
         }
     }
 
@@ -306,7 +296,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<sdkwork_order_service::ShipmentManagementListPage, CommerceServiceError> {
         match self {
             Self::Postgres { orders, .. } => orders.list_management_shipments(query).await,
-            Self::Sqlite { orders, .. } => orders.list_management_shipments(query).await,
         }
     }
 
@@ -316,7 +305,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<Option<ShipmentView>, CommerceServiceError> {
         match self {
             Self::Postgres { orders, .. } => orders.retrieve_management_shipment(query).await,
-            Self::Sqlite { orders, .. } => orders.retrieve_management_shipment(query).await,
         }
     }
 
@@ -326,7 +314,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<sdkwork_order_service::ShipmentPackagePage, CommerceServiceError> {
         match self {
             Self::Postgres { orders, .. } => orders.list_management_shipment_packages(query).await,
-            Self::Sqlite { orders, .. } => orders.list_management_shipment_packages(query).await,
         }
     }
 
@@ -338,7 +325,6 @@ impl BackendCommerceAdminStore {
             Self::Postgres { orders, .. } => {
                 orders.create_management_shipment_package(command).await
             }
-            Self::Sqlite { orders, .. } => orders.create_management_shipment_package(command).await,
         }
     }
 
@@ -350,7 +336,6 @@ impl BackendCommerceAdminStore {
             Self::Postgres { orders, .. } => {
                 orders.update_management_shipment_package(command).await
             }
-            Self::Sqlite { orders, .. } => orders.update_management_shipment_package(command).await,
         }
     }
 
@@ -360,7 +345,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<AccountValuePackageListPage, CommerceServiceError> {
         match self {
             Self::Postgres { recharge, .. } => recharge.list_account_value_packages(query).await,
-            Self::Sqlite { recharge, .. } => recharge.list_account_value_packages(query).await,
         }
     }
 
@@ -370,7 +354,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<AccountValuePackageItem, CommerceServiceError> {
         match self {
             Self::Postgres { recharge, .. } => recharge.upsert_account_value_package(command).await,
-            Self::Sqlite { recharge, .. } => recharge.upsert_account_value_package(command).await,
         }
     }
 
@@ -380,7 +363,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<(), CommerceServiceError> {
         match self {
             Self::Postgres { recharge, .. } => recharge.retire_account_value_package(command).await,
-            Self::Sqlite { recharge, .. } => recharge.retire_account_value_package(command).await,
         }
     }
 
@@ -390,7 +372,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<TokenBankPlanListPage, CommerceServiceError> {
         match self {
             Self::Postgres { recharge, .. } => recharge.list_token_bank_plans(query).await,
-            Self::Sqlite { recharge, .. } => recharge.list_token_bank_plans(query).await,
         }
     }
 
@@ -400,7 +381,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<TokenBankPlanItem, CommerceServiceError> {
         match self {
             Self::Postgres { recharge, .. } => recharge.upsert_token_bank_plan(command).await,
-            Self::Sqlite { recharge, .. } => recharge.upsert_token_bank_plan(command).await,
         }
     }
 
@@ -410,7 +390,6 @@ impl BackendCommerceAdminStore {
     ) -> Result<(), CommerceServiceError> {
         match self {
             Self::Postgres { recharge, .. } => recharge.retire_token_bank_plan(command).await,
-            Self::Sqlite { recharge, .. } => recharge.retire_token_bank_plan(command).await,
         }
     }
 
@@ -423,13 +402,7 @@ impl BackendCommerceAdminStore {
             (Self::Postgres { recharge, .. }, AccountValueOrderSubject::RefundRequest) => {
                 recharge.list_order_refund_requests(query).await
             }
-            (Self::Sqlite { recharge, .. }, AccountValueOrderSubject::RefundRequest) => {
-                recharge.list_order_refund_requests(query).await
-            }
             (Self::Postgres { recharge, .. }, AccountValueOrderSubject::CashWithdrawal) => {
-                recharge.list_cash_withdrawal_requests(query).await
-            }
-            (Self::Sqlite { recharge, .. }, AccountValueOrderSubject::CashWithdrawal) => {
                 recharge.list_cash_withdrawal_requests(query).await
             }
             _ => Err(CommerceServiceError::validation(
@@ -456,44 +429,8 @@ impl BackendCommerceAdminStore {
                 )
                 .await
             }
-            Self::Sqlite { recharge, .. } => {
-                execute_account_value_request_review(
-                    recharge.as_ref(),
-                    ledger_port,
-                    refund_executor,
-                    payout_executor,
-                    command,
-                )
-                .await
-            }
         }
     }
-}
-
-pub fn backend_commerce_admin_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    backend_commerce_admin_router_with_sqlite_pool_and_ports(
-        pool,
-        Arc::new(NoopAccountValueLedgerPort),
-        Arc::new(NoopPaymentRefundExecutorPort),
-        Arc::new(NoopPaymentPayoutExecutorPort),
-    )
-}
-
-pub fn backend_commerce_admin_router_with_sqlite_pool_and_ports(
-    pool: SqlitePool,
-    account_value_ledger_port: Arc<dyn AccountValueLedgerPort>,
-    payment_refund_executor_port: Arc<dyn PaymentRefundExecutorPort>,
-    payment_payout_executor_port: Arc<dyn PaymentPayoutExecutorPort>,
-) -> Router {
-    build_backend_commerce_admin_router(
-        BackendCommerceAdminStore::Sqlite {
-            orders: Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-            recharge: Arc::new(SqliteCommerceRechargeStore::new(pool)),
-        },
-        account_value_ledger_port,
-        payment_refund_executor_port,
-        payment_payout_executor_port,
-    )
 }
 
 pub fn backend_commerce_admin_router_with_postgres_pool(pool: PgPool) -> Router {

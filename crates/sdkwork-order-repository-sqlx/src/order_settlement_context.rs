@@ -28,6 +28,35 @@ pub(crate) fn membership_purchase_snapshot(
     let value: serde_json::Value = serde_json::from_str(snapshot).map_err(|_| {
         CommerceServiceError::invalid_state("membership order item snapshot is invalid")
     })?;
+    let action = membership_action
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| value.get("action").and_then(serde_json::Value::as_str))
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !matches!(action.as_str(), "purchase" | "renew" | "upgrade" | "recharge") {
+        return Err(CommerceServiceError::invalid_state(
+            "membership order item snapshot action is invalid",
+        ));
+    }
+    if action == "recharge" {
+        // 订阅期额度充值：不依赖目录套餐，数量必填
+        let grant_quantity = value
+            .get("grantQuantity")
+            .and_then(json_positive_i64)
+            .ok_or_else(|| {
+                CommerceServiceError::invalid_state(
+                    "membership order item snapshot grant quantity is invalid",
+                )
+            })?;
+        return Ok(Some(MembershipPurchaseSettlementSnapshot {
+            action,
+            order_no: order_no.to_owned(),
+            package_id: 0,
+            grant_quantity: Some(grant_quantity),
+        }));
+    }
     let package_id = value
         .get("packageId")
         .and_then(json_positive_i64)
@@ -36,23 +65,12 @@ pub(crate) fn membership_purchase_snapshot(
                 "membership order item snapshot package id is invalid",
             )
         })?;
-    let action = membership_action
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .or_else(|| value.get("action").and_then(serde_json::Value::as_str))
-        .map(str::trim)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if !matches!(action.as_str(), "purchase" | "renew" | "upgrade") {
-        return Err(CommerceServiceError::invalid_state(
-            "membership order item snapshot action is invalid",
-        ));
-    }
 
     Ok(Some(MembershipPurchaseSettlementSnapshot {
         action,
         order_no: order_no.to_owned(),
         package_id,
+        grant_quantity: None,
     }))
 }
 
@@ -91,6 +109,33 @@ mod tests {
         assert_eq!(snapshot.action, "upgrade");
         assert_eq!(snapshot.order_no, "MB-1");
         assert_eq!(snapshot.package_id, 21);
+        assert_eq!(snapshot.grant_quantity, None);
+    }
+
+    #[test]
+    fn membership_snapshot_accepts_recharge_with_grant_quantity() {
+        let snapshot = membership_purchase_snapshot(
+            "membership",
+            "MB-2",
+            Some("recharge"),
+            Some(r#"{"action":"recharge","grantQuantity":1000}"#),
+        )
+        .expect("valid snapshot")
+        .expect("recharge snapshot");
+
+        assert_eq!(snapshot.action, "recharge");
+        assert_eq!(snapshot.grant_quantity, Some(1000));
+    }
+
+    #[test]
+    fn membership_snapshot_rejects_recharge_without_grant_quantity() {
+        assert!(membership_purchase_snapshot(
+            "membership",
+            "MB-3",
+            Some("recharge"),
+            Some(r#"{"action":"recharge"}"#),
+        )
+        .is_err());
     }
 
     #[test]

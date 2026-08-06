@@ -54,7 +54,7 @@ Buyers, Token Bank consumers, merchant operators, finance operators, fulfillment
 - Account value payment-settlement fulfillment: Token Bank recharge, Token Bank plan purchase and renewal, account recharge package, and coupon recharge use the order-owned settlement saga, `AccountValueFulfillmentStore`, and `AccountValueLedgerPort` to credit the target account asset after payment or coupon validation evidence exists.
 - Refund orchestration execution: backend review holds the granted account value through account, executes provider refund through payment, and settles or releases the account hold by outcome.
 - Withdrawal orchestration execution: backend review holds cash through account and reaches the `PaymentPayoutExecutorPort` boundary; production payout remains fail-closed until `sdkwork-payment` exposes a concrete provider payout executor contract.
-- SQL repositories for `commerce_*` order tables with PostgreSQL and SQLite parity.
+- SQL repositories for `commerce_*` order tables with PostgreSQL as the authoritative server engine (DATABASE_SPEC).
 - Payment settlement for subjects without order-owned fulfillment confirms payment only; fulfillment is owned by external commerce capabilities (`awaiting_external_fulfillment`).
 
 Primary API prefixes:
@@ -76,7 +76,7 @@ Primary API prefixes:
 
 - `cargo test --workspace` and `pnpm verify` pass.
 - Governance checks pass: API envelope, pagination, SDK consumer imports, repo composition, and documentation standard.
-- SQLite and optional PostgreSQL (`SDKWORK_DATABASE_TEST_POSTGRES_URL`) parity tests pass for critical lifecycles.
+- PostgreSQL lifecycle tests pass for critical lifecycles; when `SDKWORK_DATABASE_TEST_POSTGRES_URL` is unset, server e2e tests skip with a notice.
 - Account value order specs, OpenAPI contracts, SDK facades, domain sagas, and database table registry stay aligned.
 
 ## 7. Phases

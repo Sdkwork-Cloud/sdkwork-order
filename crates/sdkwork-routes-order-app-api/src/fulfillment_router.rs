@@ -8,13 +8,13 @@ use axum::routing::get;
 use axum::Router;
 use sdkwork_contract_service::CommerceServiceError;
 use sdkwork_iam_context_service::IamAppContext;
-use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, SqliteCommerceOrderStore};
+use sdkwork_order_repository_sqlx::PostgresCommerceOrderStore;
 use sdkwork_order_service::{
     FulfillmentDetailQuery, FulfillmentListPage, FulfillmentListQuery, FulfillmentView,
 };
 use sdkwork_web_core::WebRequestContext;
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, SqlitePool};
+use sqlx::PgPool;
 
 use crate::api_response::{
     map_service_error, not_found, offset_list_page_params_from_query, success_item, success_items,
@@ -61,22 +61,6 @@ struct FulfillmentResponse {
     status: String,
 }
 
-impl CommerceFulfillmentStore for SqliteCommerceOrderStore {
-    fn list_owner_fulfillments<'a>(
-        &'a self,
-        query: FulfillmentListQuery,
-    ) -> CommerceFulfillmentFuture<'a, FulfillmentListPage> {
-        Box::pin(async move { self.list_owner_fulfillments(query).await })
-    }
-
-    fn retrieve_owner_fulfillment<'a>(
-        &'a self,
-        query: FulfillmentDetailQuery,
-    ) -> CommerceFulfillmentFuture<'a, Option<FulfillmentView>> {
-        Box::pin(async move { self.retrieve_owner_fulfillment(query).await })
-    }
-}
-
 impl CommerceFulfillmentStore for PostgresCommerceOrderStore {
     fn list_owner_fulfillments<'a>(
         &'a self,
@@ -91,10 +75,6 @@ impl CommerceFulfillmentStore for PostgresCommerceOrderStore {
     ) -> CommerceFulfillmentFuture<'a, Option<FulfillmentView>> {
         Box::pin(async move { self.retrieve_owner_fulfillment(query).await })
     }
-}
-
-pub fn app_fulfillment_router_with_sqlite_pool(pool: SqlitePool) -> Router {
-    build_app_fulfillment_router(Arc::new(SqliteCommerceOrderStore::new(pool)))
 }
 
 pub fn app_fulfillment_router_with_postgres_pool(pool: PgPool) -> Router {

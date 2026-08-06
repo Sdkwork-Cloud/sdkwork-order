@@ -6,22 +6,16 @@ use std::sync::Arc;
 use crate::openapi_contract::mount_app_openapi;
 use crate::web_bootstrap::wrap_router_with_web_framework_from_env;
 use crate::{
-    app_after_sales_router_with_postgres_pool, app_after_sales_router_with_sqlite_pool,
-    app_fulfillment_router_with_postgres_pool, app_fulfillment_router_with_sqlite_pool,
+    app_after_sales_router_with_postgres_pool,
+    app_fulfillment_router_with_postgres_pool,
     app_membership_order_router_with_postgres_pool_and_payments,
-    app_membership_order_router_with_sqlite_pool_and_payments,
     app_order_router_with_postgres_pool_and_inventory,
-    app_order_router_with_sqlite_pool_and_inventory,
     app_payment_webhook_router_with_postgres_pool_and_integrations,
-    app_payment_webhook_router_with_sqlite_pool_and_integrations,
-    app_shipment_router_with_postgres_pool, app_shipment_router_with_sqlite_pool,
+    app_shipment_router_with_postgres_pool,
     build_app_checkout_router_with_integrations,
     build_app_recharge_checkout_router_with_integrations,
 };
-use sdkwork_order_repository_sqlx::{
-    PostgresCommerceOrderStore, PostgresCommerceRechargeStore, SqliteCommerceOrderStore,
-    SqliteCommerceRechargeStore,
-};
+use sdkwork_order_repository_sqlx::{PostgresCommerceOrderStore, PostgresCommerceRechargeStore};
 use sdkwork_order_service::{AccountValueLedgerPort, CouponRedemptionPort};
 use sdkwork_payment_providers::{PaymentProviderRegistry, ProviderCredentialBundle};
 
@@ -43,115 +37,49 @@ pub fn build_order_app_business_router(host: Arc<OrderServiceHost>) -> Router {
     let registry = Arc::new(PaymentProviderRegistry::from_credentials(
         credentials.clone(),
     ));
-    let router = match host.database_pool() {
-        DatabasePool::Postgres(pool, _) => {
-            let pool = pool.clone();
-            Router::new()
-                .merge(app_order_router_with_postgres_pool_and_inventory(
-                    pool.clone(),
-                    registry.clone(),
-                    credentials.clone(),
-                    physical_inventory.clone(),
-                ))
-                .merge(build_app_checkout_router_with_integrations(
-                    Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
-                    physical_checkout_resolver.clone(),
-                    physical_inventory.clone(),
-                ))
-                .merge(build_recharge_router_postgres(
-                    pool.clone(),
-                    registry.clone(),
-                    credentials.clone(),
-                    coupon_redemption_port.clone(),
-                    account_value_ledger_port.clone(),
-                    membership_port.clone(),
-                ))
-                .merge(app_membership_order_router_with_postgres_pool_and_payments(
-                    pool.clone(),
-                    registry,
-                    credentials,
-                ))
-                .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
-                .merge(app_shipment_router_with_postgres_pool(pool.clone()))
-                .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
-                .merge(
-                    app_payment_webhook_router_with_postgres_pool_and_integrations(
-                        pool,
-                        credit_port,
-                        account_value_ledger_port,
-                        coupon_redemption_port,
-                        membership_port,
-                        physical_goods,
-                    ),
-                )
-        }
-        DatabasePool::Sqlite(pool, _) => {
-            let pool = pool.clone();
-            Router::new()
-                .merge(app_order_router_with_sqlite_pool_and_inventory(
-                    pool.clone(),
-                    registry.clone(),
-                    credentials.clone(),
-                    physical_inventory.clone(),
-                ))
-                .merge(build_app_checkout_router_with_integrations(
-                    Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-                    physical_checkout_resolver,
-                    physical_inventory,
-                ))
-                .merge(build_recharge_router_sqlite(
-                    pool.clone(),
-                    registry.clone(),
-                    credentials.clone(),
-                    coupon_redemption_port.clone(),
-                    account_value_ledger_port.clone(),
-                    membership_port.clone(),
-                ))
-                .merge(app_membership_order_router_with_sqlite_pool_and_payments(
-                    pool.clone(),
-                    registry,
-                    credentials,
-                ))
-                .merge(app_fulfillment_router_with_sqlite_pool(pool.clone()))
-                .merge(app_shipment_router_with_sqlite_pool(pool.clone()))
-                .merge(app_after_sales_router_with_sqlite_pool(pool.clone()))
-                .merge(
-                    app_payment_webhook_router_with_sqlite_pool_and_integrations(
-                        pool,
-                        credit_port,
-                        account_value_ledger_port,
-                        coupon_redemption_port,
-                        membership_port,
-                        physical_goods,
-                    ),
-                )
-        }
+    let DatabasePool::Postgres(pool, _) = host.database_pool() else {
+        panic!("order app router requires a PostgreSQL database pool");
     };
-    router
-}
-
-fn build_recharge_router_sqlite(
-    pool: sqlx::SqlitePool,
-    registry: Arc<PaymentProviderRegistry>,
-    credentials: ProviderCredentialBundle,
-    coupon: Arc<dyn CouponRedemptionPort>,
-    ledger: Arc<dyn AccountValueLedgerPort>,
-    membership: Arc<dyn sdkwork_order_service::MembershipPurchaseFulfillmentPort>,
-) -> axum::Router {
-    let store = Arc::new(SqliteCommerceRechargeStore::new(pool.clone()));
-    build_app_recharge_checkout_router_with_integrations(
-        store.clone(),
-        store,
-        coupon,
-        ledger,
-        membership,
-        Arc::new(SqliteCommerceOrderStore::new(pool.clone())),
-        crate::owner_order_payment_enrich::enriched_sqlite_owner_order_payments(
-            pool,
+    let pool = pool.clone();
+    let router = Router::new()
+        .merge(app_order_router_with_postgres_pool_and_inventory(
+            pool.clone(),
+            registry.clone(),
+            credentials.clone(),
+            physical_inventory.clone(),
+        ))
+        .merge(build_app_checkout_router_with_integrations(
+            Arc::new(PostgresCommerceOrderStore::new(pool.clone())),
+            physical_checkout_resolver.clone(),
+            physical_inventory.clone(),
+        ))
+        .merge(build_recharge_router_postgres(
+            pool.clone(),
+            registry.clone(),
+            credentials.clone(),
+            coupon_redemption_port.clone(),
+            account_value_ledger_port.clone(),
+            membership_port.clone(),
+        ))
+        .merge(app_membership_order_router_with_postgres_pool_and_payments(
+            pool.clone(),
             registry,
             credentials,
-        ),
-    )
+        ))
+        .merge(app_fulfillment_router_with_postgres_pool(pool.clone()))
+        .merge(app_shipment_router_with_postgres_pool(pool.clone()))
+        .merge(app_after_sales_router_with_postgres_pool(pool.clone()))
+        .merge(
+            app_payment_webhook_router_with_postgres_pool_and_integrations(
+                pool,
+                credit_port,
+                account_value_ledger_port,
+                coupon_redemption_port,
+                membership_port,
+                physical_goods,
+            ),
+        );
+    router
 }
 
 fn build_recharge_router_postgres(

@@ -1,9 +1,9 @@
-use sdkwork_database_config::{DatabaseConfig, DatabaseEngine};
+use sdkwork_database_config::DatabaseConfig;
 use sdkwork_database_lifecycle::{lifecycle_options_from_env, LifecycleOrchestrator};
 use sdkwork_database_spi::{
     DatabaseAssetProvider, DatabaseManifest, DefaultDatabaseModule, SpiError,
 };
-use sdkwork_database_sqlx::{create_pool_from_config, DatabasePool, PoolContext};
+use sdkwork_database_sqlx::{create_pool_from_config, DatabasePool};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -21,16 +21,6 @@ impl OrderDatabaseHost {
                     .map_err(|error| format!("load order database module failed: {error}"))?,
             ),
         })
-    }
-
-    pub fn from_sqlite_pool(pool: sqlx::SqlitePool) -> Result<Self, String> {
-        let config = DatabaseConfig {
-            engine: DatabaseEngine::Sqlite,
-            url: "sqlite::memory:".to_owned(),
-            max_connections: 1,
-            ..Default::default()
-        };
-        Self::from_pool(DatabasePool::Sqlite(pool, PoolContext { config }))
     }
 
     pub fn pool(&self) -> &DatabasePool {
@@ -84,6 +74,7 @@ pub async fn bootstrap_order_database_from_env() -> Result<OrderDatabaseHost, St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sdkwork_database_config::DatabaseEngine;
     use sdkwork_database_spi::MigrationProvider;
 
     #[test]

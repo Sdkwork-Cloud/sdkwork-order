@@ -33,10 +33,11 @@ impl PhysicalFulfillmentAdapter {
         )
         .await?;
 
-        let order_replayed = match &self.order_pool {
-            DatabasePool::Sqlite(pool, _) => fulfill_sqlite(pool, &request).await?,
-            DatabasePool::Postgres(pool, _) => fulfill_postgres(pool, &request).await?,
+        // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+        let DatabasePool::Postgres(pool, _) = &self.order_pool else {
+            panic!("physical goods fulfillment requires a PostgreSQL order pool");
         };
+        let order_replayed = fulfill_postgres(pool, &request).await?;
 
         Ok(PhysicalGoodsFulfillmentOutcome {
             accepted: true,
@@ -54,60 +55,6 @@ impl PhysicalGoodsFulfillmentPort for PhysicalFulfillmentAdapter {
         Box::pin(async move { self.fulfill(request).await })
     }
 }
-
-async fn fulfill_sqlite(
-    pool: &sqlx::SqlitePool,
-    request: &FulfillPaidPhysicalOrderRequest,
-) -> Result<bool, CommerceServiceError> {
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(store_error("begin physical fulfillment"))?;
-    let fulfillment_id = fulfillment_id(&request.order_id);
-    let existing = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM commerce_fulfillment_order WHERE tenant_id = ? AND id = ?",
-    )
-    .bind(&request.tenant_id)
-    .bind(&fulfillment_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(store_error("load physical fulfillment replay"))?;
-    if existing > 0 {
-        tx.commit()
-            .await
-            .map_err(store_error("commit physical fulfillment replay"))?;
-        return Ok(true);
-    }
-
-    let order = sqlx::query("SELECT organization_id, owner_user_id, payment_status, shipping_address_snapshot_json FROM commerce_order WHERE tenant_id = ? AND id = ?")
-        .bind(&request.tenant_id).bind(&request.order_id).fetch_optional(&mut *tx).await
-        .map_err(store_error("load paid physical order"))?
-        .ok_or_else(|| CommerceServiceError::not_found("physical order was not found"))?;
-    validate_paid_order(
-        &order
-            .try_get::<Option<String>, _>("owner_user_id")
-            .ok()
-            .flatten()
-            .unwrap_or_default(),
-        &request.owner_user_id,
-        &order
-            .try_get::<Option<String>, _>("payment_status")
-            .ok()
-            .flatten()
-            .unwrap_or_default(),
-    )?;
-    let now = now_string();
-    sqlx::query("INSERT INTO commerce_fulfillment_order (id, tenant_id, organization_id, fulfillment_no, order_id, fulfillment_type, status, address_snapshot_id, provider_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'physical_shipment', 'awaiting_shipment', ?, 'merchant', ?, ?)")
-        .bind(&fulfillment_id).bind(&request.tenant_id).bind(order.try_get::<Option<String>, _>("organization_id").ok().flatten())
-        .bind(&fulfillment_id).bind(&request.order_id).bind(format!("address-{}", request.order_id)).bind(&now).bind(&now)
-        .execute(&mut *tx).await.map_err(store_error("create physical fulfillment"))?;
-    update_order_sqlite(&mut tx, request, &now).await?;
-    tx.commit()
-        .await
-        .map_err(store_error("commit physical fulfillment"))?;
-    Ok(false)
-}
-
 async fn fulfill_postgres(
     pool: &sqlx::PgPool,
     request: &FulfillPaidPhysicalOrderRequest,
@@ -162,19 +109,6 @@ async fn fulfill_postgres(
         .map_err(store_error("commit physical fulfillment"))?;
     Ok(false)
 }
-
-async fn update_order_sqlite(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-    request: &FulfillPaidPhysicalOrderRequest,
-    now: &str,
-) -> Result<(), CommerceServiceError> {
-    sqlx::query("UPDATE commerce_order SET fulfillment_status = 'awaiting_shipment', updated_at = ? WHERE tenant_id = ? AND id = ? AND payment_status IN ('success', 'succeeded', 'paid')")
-        .bind(now).bind(&request.tenant_id).bind(&request.order_id).execute(&mut **tx).await.map_err(store_error("advance physical order fulfillment"))?;
-    sqlx::query("UPDATE commerce_order_item SET fulfillment_status = 'awaiting_shipment' WHERE tenant_id = ? AND order_id = ?")
-        .bind(&request.tenant_id).bind(&request.order_id).execute(&mut **tx).await.map_err(store_error("advance physical order items"))?;
-    Ok(())
-}
-
 fn validate_paid_order(
     stored_owner: &str,
     expected_owner: &str,
