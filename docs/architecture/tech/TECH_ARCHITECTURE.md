@@ -220,7 +220,7 @@ Wallet recharge, refund, and withdrawal UI surfaces must delegate to order SDK r
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `ORDER_API_BIND` | Gateway listen address | `0.0.0.0:18093` |
-| `ORDER_CORS_ALLOW_ORIGINS` | Comma-separated browser origins | empty (same-origin only) |
+| `SDKWORK_CORS_ALLOWED_ORIGINS` | Comma-separated browser origins (canonical shared key) | empty (same-origin only) |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | Tenant id for public recharge package catalog fallback | `100001` |
 | `SDKWORK_ACCESS_TOKEN` | Bearer token for service-to-service wallet credit and membership fulfillment during order settlement | required in production |
 | `ORDER_PAYMENT_WEBHOOK_BASE_URL` | Public base URL registered with PSP for order-owned webhooks | required in production |

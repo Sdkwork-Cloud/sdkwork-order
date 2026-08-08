@@ -77,7 +77,7 @@ pnpm start
 # listens on ORDER_API_BIND (default 0.0.0.0:18093)
 ```
 
-Set `ORDER_CORS_ALLOW_ORIGINS` for browser clients. Readiness: platform health routes from `sdkwork-web-bootstrap` plus database `SELECT 1` probe.
+Set `SDKWORK_CORS_ALLOWED_ORIGINS` for browser clients. Readiness: platform health routes from `sdkwork-web-bootstrap` plus database `SELECT 1` probe.
 
 ## Verification
 

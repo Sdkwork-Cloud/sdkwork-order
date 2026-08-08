@@ -2,7 +2,7 @@
 //!
 //! Production-grade bootstrap:
 //! - Returns `Result` from host bootstrap so DB errors don't panic the process.
-//! - CORS is restricted to an explicit allow-list read from `ORDER_CORS_ALLOW_ORIGINS`.
+//! - CORS is restricted to an explicit allow-list read from `SDKWORK_CORS_ALLOWED_ORIGINS`.
 //! - Readiness probe reflects the real database health via `SELECT 1`.
 //! - Graceful shutdown drains in-flight requests on SIGINT / SIGTERM.
 

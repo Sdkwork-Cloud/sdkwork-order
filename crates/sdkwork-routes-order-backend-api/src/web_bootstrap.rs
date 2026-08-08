@@ -39,11 +39,7 @@ fn order_web_security_policy_from_env() -> (WebEnvironment, SecurityPolicy) {
             "ORDER_ENVIRONMENT",
             "SDKWORK_ENV",
         ],
-        &[
-            "SDKWORK_CORS_ALLOWED_ORIGINS",
-            "SDKWORK_ORDER_CORS_ALLOWED_ORIGINS",
-            "ORDER_CORS_ALLOW_ORIGINS",
-        ],
+        &["SDKWORK_CORS_ALLOWED_ORIGINS"],
     );
     for header in [
         "sdkwork-request-no",

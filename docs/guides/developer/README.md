@@ -11,7 +11,7 @@ pnpm start          # standalone gateway (default 0.0.0.0:18093)
 pnpm dev            # PC client at apps/sdkwork-order-pc
 ```
 
-Set `ORDER_CORS_ALLOW_ORIGINS` for browser clients. Use `ORDER_READ_MODEL_LENIENT=1` only for local scaffolding without full commerce DDL.
+Set `SDKWORK_CORS_ALLOWED_ORIGINS` for browser clients. Use `ORDER_READ_MODEL_LENIENT=1` only for local scaffolding without full commerce DDL.
 
 ## Verification
 

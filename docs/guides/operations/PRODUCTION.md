@@ -20,7 +20,7 @@ Run multiple instances behind a load balancer. All instances share the same Post
 | Variable | Required | Notes |
 | --- | --- | --- |
 | `ORDER_API_BIND` | No | Default `0.0.0.0:18093` |
-| `ORDER_CORS_ALLOW_ORIGINS` | Production | Comma-separated browser origins; unset denies CORS |
+| `SDKWORK_CORS_ALLOWED_ORIGINS` | Production | Comma-separated browser origins (canonical shared key); unset denies CORS |
 | `SDKWORK_ORDER_PLATFORM_CATALOG_TENANT_ID` | No | Platform recharge catalog tenant (default `100001`) |
 | `SDKWORK_ACCESS_TOKEN` | Production | Bootstrap access credential for approved SDK-backed service integrations; never used as an ad hoc bearer secret |
 | `ORDER_READ_MODEL_LENIENT` | No | **Forbidden in production.** Set `1` only for local scaffolding without commerce DDL |
@@ -59,7 +59,7 @@ Duplicate PSP deliveries with the same `provider_event_id` are idempotent at the
 
 1. Run **N ≥ 2** gateway replicas with the same DB connection pool limits tuned per instance.
 2. Use PostgreSQL with automated backups and point-in-time recovery.
-3. Configure `ORDER_CORS_ALLOW_ORIGINS` explicitly per environment.
+3. Configure `SDKWORK_CORS_ALLOWED_ORIGINS` explicitly per environment.
 4. Enable Redis-backed rate limiting at the platform gateway layer when `sdkwork-web-framework` production assembly requires it.
 5. Points-recharge fulfillment is idempotent; payment callbacks may retry safely. Commit failure after wallet credit triggers automatic compensation debit and releases the `processing` reservation; operators may still replay via `payment_confirmations` if compensation fails.
 6. Order cancellation and close (buyer or admin) close payment intents **before** mutating order status to avoid payable terminal orders.

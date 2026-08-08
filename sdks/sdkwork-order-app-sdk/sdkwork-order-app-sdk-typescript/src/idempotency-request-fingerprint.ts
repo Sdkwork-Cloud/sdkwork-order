@@ -1,4 +1,5 @@
 import type { RequestConfig } from '@sdkwork/sdk-common';
+import { sha256Hash } from '@sdkwork/utils';
 
 const CONTENT_SHA256_HEADER = 'X-Content-SHA256';
 const IDEMPOTENCY_FINGERPRINT_HEADER = 'X-Idempotency-Fingerprint';
@@ -119,15 +120,5 @@ async function serializeFormData(body: FormData): Promise<string> {
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) {
-    throw new Error('Web Crypto SHA-256 is required for SDKWork idempotent requests with a body.');
-  }
-
-  const digestInput = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(digestInput).set(bytes);
-  const digest = await subtle.digest('SHA-256', digestInput);
-  return Array.from(new Uint8Array(digest))
-    .map((value) => value.toString(16).padStart(2, '0'))
-    .join('');
+  return sha256Hash(bytes);
 }
